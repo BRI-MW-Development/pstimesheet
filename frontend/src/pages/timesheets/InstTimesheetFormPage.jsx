@@ -1,0 +1,526 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '../../api/client';
+import SearchSelect from '../../components/ui/SearchSelect';
+import TimeInput from '../../components/ui/TimeInput';
+import { useToast } from '../../context/ToastContext';
+import { useAuthStore } from '../../store/authStore';
+
+const EMPTY_LABOUR   = { employee: '', startTime: '', endTime: '', durationMinutes: 0 };
+const EMPTY_MATERIAL = { itemCode: '', description: '', uom: '', qty: '' };
+const EMPTY_VEHICLE  = { vehicle: '', km: '' };
+const EMPTY_ACCESS   = { equipment: '', hours: '' };
+
+function calcDuration(start, end) {
+  if (!start || !end) return 0;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins < 0) mins += 1440;
+  return Math.max(0, mins);
+}
+
+function minsToHm(mins) {
+  if (!mins) return '';
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+export default function InstTimesheetFormPage() {
+  const { id: docNo } = useParams();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const permissions = useAuthStore((s) => s.permissions);
+  const [searchParams] = useSearchParams();
+  const isEdit = Boolean(docNo);
+  const isView = useLocation().pathname.endsWith('/view');
+  const fromApprovals = searchParams.get('from') === 'approvals';
+  const isApprover = fromApprovals || permissions.some((p) => p.module === 'Installation Timesheets' && p.canReport === true);
+
+  const [header, setHeader] = useState({
+    tsType: 'INST',
+    projectId: '',
+    projectName: '',
+    workOrder: '',
+    department: '',
+    date: new Date().toISOString().slice(0, 10),
+    shift: '',
+  });
+  const [wocWarning, setWocWarning] = useState('');
+  const [labourRows,   setLabourRows]   = useState([{ ...EMPTY_LABOUR }]);
+  const [materialRows, setMaterialRows] = useState([{ ...EMPTY_MATERIAL }]);
+  const [vehicleRows,  setVehicleRows]  = useState([]);
+  const [accessRows,   setAccessRows]   = useState([]);
+
+  const entryPerson = user?.employeeCode ?? user?.username ?? '';
+
+  const { data: employees        = [] } = useQuery({ queryKey: ['employees', 'inst'],      queryFn: () => api.get('/employees', { params: { deptFilter: 'inst' } }).then((r) => r.data) });
+  const { data: departments      = [] } = useQuery({ queryKey: ['departments'],      queryFn: () => api.get('/departments').then((r) => r.data) });
+  const { data: allWorkOrders    = [] } = useQuery({ queryKey: ['work-orders', 'inst'], queryFn: () => api.get('/work-orders', { params: { subsidiaryIds: '1,3', statuses: 'In Process,Released' } }).then((r) => r.data) });
+  const { data: vehicles         = [] } = useQuery({ queryKey: ['vehicles'],         queryFn: () => api.get('/vehicles').then((r) => r.data) });
+  const { data: accessEquipment  = [] } = useQuery({ queryKey: ['access-equipment'], queryFn: () => api.get('/access-equipment').then((r) => r.data) });
+  const { data: shifts           = [] } = useQuery({ queryKey: ['shifts'],           queryFn: () => api.get('/system-settings/shifts').then((r) => r.data) });
+  const { data: projects         = [] } = useQuery({ queryKey: ['projects'],         queryFn: () => api.get('/projects').then((r) => r.data) });
+  const { data: items            = [] } = useQuery({ queryKey: ['items'],            queryFn: () => api.get('/items').then((r) => r.data) });
+  const { data: completedWos     = [] } = useQuery({ queryKey: ['wo-complete-list'], queryFn: () => api.get('/wo-complete').then((r) => r.data.map((w) => w.workOrderNumber)) });
+
+  const completedSet = new Set(completedWos);
+
+  const { data: existing } = useQuery({
+    queryKey: ['timesheet', docNo],
+    queryFn: () => api.get(`/timesheets/${docNo}`).then((r) => r.data),
+    enabled: isEdit,
+  });
+
+  useEffect(() => {
+    if (!existing) return;
+    const pid = existing.projectId ?? existing.project_code ?? '';
+    const proj = projects.find((p) => p.projectCode === pid);
+    setHeader({
+      tsType: 'INST',
+      projectId: pid,
+      projectName: (() => { const r = proj?.projectName ?? existing.projectName ?? ''; return r.includes(':') ? r.split(':').slice(1).join(':').trim() : r; })(),
+      workOrder: existing.workOrderNo ?? existing.workOrder ?? '',
+      department: existing.department_code ?? existing.department ?? '',
+      date: existing.entryDate?.slice(0, 10) ?? '',
+      shift: existing.shiftCode ?? existing.shift ?? '',
+    });
+    setLabourRows(
+      existing.labourLines?.length
+        ? existing.labourLines.map((l) => ({ employee: l.employeeCode ?? '', startTime: l.startTime ?? '', endTime: l.endTime ?? '', durationMinutes: l.durationMinutes ?? 0 }))
+        : [{ ...EMPTY_LABOUR }]
+    );
+    setMaterialRows(
+      existing.materialLines?.length
+        ? existing.materialLines.map((m) => ({ itemCode: m.itemCode ?? '', description: m.description ?? '', uom: m.uom ?? '', qty: m.qty ?? '' }))
+        : [{ ...EMPTY_MATERIAL }]
+    );
+    setVehicleRows(
+      existing.vehicleLines?.map((v) => ({ vehicle: v.vehicleCode ?? v.vehicle ?? '', km: v.km ?? '' })) ?? []
+    );
+    setAccessRows(
+      existing.accessLines?.map((a) => ({ equipment: a.equipment ?? '', hours: a.hours ?? '' })) ?? []
+    );
+  }, [existing, projects]);
+
+  function onProjectChange(pid) {
+    const proj = projects.find((p) => p.projectCode === pid);
+    const rawName = proj?.projectName ?? '';
+    const projectName = rawName.includes(':') ? rawName.split(':').slice(1).join(':').trim() : rawName;
+    setHeader((h) => ({ ...h, projectId: pid, projectName, workOrder: '' }));
+    setWocWarning('');
+  }
+
+  function onWorkOrderChange(wo) {
+    setHeader((h) => ({ ...h, workOrder: wo }));
+    if (wo && completedSet.has(wo)) {
+      setWocWarning(`Work order ${wo} has already been marked as complete. Please select a different work order.`);
+    } else {
+      setWocWarning('');
+    }
+    const matched = allWorkOrders.find((w) => w.workOrderNumber === wo);
+    if (matched?.departmentCode && !header.department) {
+      setHeader((h) => ({ ...h, workOrder: wo, department: matched.departmentCode }));
+    }
+  }
+
+  const filteredWOs = allWorkOrders.filter((w) => {
+    const woNo      = (w.workOrderNumber ?? '').trim();
+    const dept      = (w.departmentName       ?? '').toLowerCase();
+    const parentDept= (w.parentDepartmentName ?? '').toLowerCase();
+    const isInst    = dept === 'installation' || parentDept === 'installation';
+    if (!isInst) return false;
+    if (completedSet.has(woNo)) return false;
+    if (header.projectId && w.projectCode !== header.projectId) return false;
+    return true;
+  });
+
+  const { mutate: save, isPending: saving } = useMutation({
+    mutationFn: (payload) =>
+      isEdit
+        ? api.put(`/timesheets/${docNo}`, payload).then((r) => r.data)
+        : api.post('/timesheets', payload).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inst-timesheets'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
+      toast(isEdit ? 'Timesheet updated.' : 'Timesheet created.', 'success');
+      navigate(fromApprovals ? '/timesheets/pending-approvals' : '/timesheets/inst');
+    },
+    onError: (err) => toast(err?.response?.data?.message ?? 'Save failed.', 'error'),
+  });
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (wocWarning) return;
+    save({
+      tsType: 'INST',
+      projectId: header.projectId,
+      projectName: header.projectName,
+      workOrder: header.workOrder,
+      department: header.department,
+      date: header.date,
+      shift: header.shift,
+      entryPerson,
+      labourRows,
+      materialRows,
+      vehicleRows,
+      accessRows,
+    });
+  }
+
+  function setLabour(idx, field, val) {
+    setLabourRows((rows) => rows.map((r, i) => {
+      if (i !== idx) return r;
+      const u = { ...r, [field]: val };
+      if (field === 'startTime' || field === 'endTime')
+        u.durationMinutes = calcDuration(field === 'startTime' ? val : r.startTime, field === 'endTime' ? val : r.endTime);
+      return u;
+    }));
+  }
+
+  function setMaterial(idx, field, val) {
+    setMaterialRows((rows) => rows.map((r, i) => i === idx ? { ...r, [field]: val } : r));
+  }
+
+  function onItemSelect(idx, code) {
+    const item = String(code).startsWith('~') ? items[parseInt(code.slice(1))] : items.find((it) => it.itemcode === code);
+    setMaterialRows((rows) => rows.map((r, i) => i === idx
+      ? { ...r, itemCode: item?.itemcode ?? code, description: item?.description ?? item?.itemName ?? r.description, uom: item?.UOM ?? r.uom }
+      : r));
+  }
+
+  const projOptions  = projects.map((p) => ({ value: p.projectCode, label: p.projectCode, search: `${p.projectCode} ${p.projectName ?? ''}` }));
+  const woOptions    = filteredWOs.map((w) => ({ value: w.workOrderNumber, label: w.workOrderNumber, search: `${w.workOrderNumber} ${w.projectName ?? ''}` }));
+  const deptOptions  = departments
+    .filter((d) => {
+      if (!d.mainDepartment || d.isActive === false || d.isActive === 0) return false;
+      const md = d.mainDepartment.toLowerCase();
+      return md.includes('production') || md.includes('installation') || md.includes('digital');
+    })
+    .map((d) => ({ value: d.departmentCode ?? String(d.departmentId), label: d.departmentCode ?? String(d.departmentId) }));
+  const shiftOptions = shifts.map((s) => ({ value: s.shiftCode, label: `${s.shiftCode} — ${s.shiftName ?? ''}` }));
+  const instDepts  = ['production', 'installation', 'digital'];
+  const empOptions = employees
+    .filter((e) => instDepts.includes((e.departmentCode ?? '').toLowerCase()))
+    .map((e) => ({ value: e.employeeNo, label: `${e.employeeNo} – ${[e.firstName, e.lastname].filter(Boolean).join(' ')}` }));
+  const itemOptions  = items.map((it, idx) => ({ value: it.itemcode ?? `~${idx}`, label: it.itemName ?? it.description ?? it.itemcode ?? '' }));
+  const vehOptions   = vehicles.map((v) => ({ value: v.vehicleId ?? v.plateNo, label: `${v.plateNo} – ${v.vehicleType ?? ''}` }));
+  const accOptions   = accessEquipment.map((a) => ({ value: a.equipmentName ?? a.name, label: a.equipmentName ?? a.name }));
+
+  const tsStatus = existing?.status ?? null;
+  const isReadonly = isView || tsStatus === 'Approved' || tsStatus === 'Rejected' || (tsStatus === 'Submitted' && !isApprover);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="ts-modal-head" style={{ padding: '16px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div>
+              <div className="ts-modal-title">{isReadonly && isEdit ? `View ${docNo}` : isEdit ? `Edit ${docNo}` : 'New Installation Timesheet'}</div>
+              <div className="ts-modal-sub">{isReadonly ? (tsStatus === 'Approved' ? 'Approved — read-only' : tsStatus === 'Rejected' ? 'Rejected — read-only' : tsStatus === 'Submitted' ? 'Submitted — read-only' : 'Read-only view') : 'Fill in the details below and save'}</div>
+            </div>
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={() => navigate('/timesheets/inst')}>← Back</button>
+        </div>
+
+        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden', pointerEvents: isReadonly ? 'none' : undefined }}>
+          {/* Left panel — header fields */}
+          <div className="ts-form-panel">
+            <div className="ts-field-group">
+              <label className="ts-field-label">Project ID</label>
+              <SearchSelect
+                options={projOptions}
+                value={header.projectId}
+                onChange={onProjectChange}
+                placeholder="Type to search…"
+              />
+            </div>
+
+            <div className="ts-field-group">
+              <label className="ts-field-label">Project Name</label>
+              <input className="form-control ts-input ts-readonly" value={header.projectName} readOnly />
+            </div>
+
+            <div className="ts-field-group">
+              <label className="ts-field-label">Work Order</label>
+              <SearchSelect
+                options={woOptions}
+                value={header.workOrder}
+                onChange={onWorkOrderChange}
+                placeholder="Select work order…"
+              />
+            </div>
+
+            <div className="ts-field-group">
+              <label className="ts-field-label">Department</label>
+              <SearchSelect
+                options={deptOptions}
+                value={header.department}
+                onChange={(v) => setHeader((h) => ({ ...h, department: v }))}
+                placeholder="Select department…"
+              />
+            </div>
+
+            <div className="ts-field-group">
+              <label className="ts-field-label">Date</label>
+              <input type="date" required className="form-control ts-input" value={header.date}
+                onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))} />
+            </div>
+            <div className="ts-field-group">
+              <label className="ts-field-label">Shift</label>
+              <SearchSelect
+                options={shiftOptions}
+                value={header.shift}
+                onChange={(v) => setHeader((h) => ({ ...h, shift: v }))}
+                placeholder="Select shift…"
+              />
+            </div>
+
+            <div className="ts-field-group">
+              <label className="ts-field-label">Entry Person</label>
+              <input className="form-control ts-input ts-readonly" value={entryPerson} readOnly />
+            </div>
+
+            <div className="ts-divider"></div>
+
+            <div className="ts-summary">
+              <div className="ts-summary-row"><span>Labour rows</span><span>{labourRows.filter((r) => r.employee).length}</span></div>
+              <div className="ts-summary-row"><span>Material rows</span><span>{materialRows.filter((r) => r.itemCode).length}</span></div>
+              <div className="ts-summary-row"><span>Vehicle rows</span><span>{vehicleRows.filter((r) => r.vehicle).length}</span></div>
+              <div className="ts-summary-row"><span>Access Equipment</span><span>{accessRows.filter((r) => r.equipment).length}</span></div>
+            </div>
+          </div>
+
+          {/* Right panel — line sections */}
+          <div className="ts-lines-panel">
+            <div className="ts-scroll-panel">
+
+              {/* Labour Time */}
+              <div className="ts-section">
+                <div className="ts-section-head">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  Labour Time
+                  <span className="ts-section-badge">{labourRows.length}</span>
+                </div>
+                <table className="ts-line-table">
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th style={{ width: 108 }}>Start Time</th>
+                      <th style={{ width: 108 }}>End Time</th>
+                      <th style={{ width: 108 }}>Duration (min)</th>
+                      <th style={{ width: 34 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {labourRows.map((row, i) => (
+                      <tr key={i}>
+                        <td>
+                          <SearchSelect options={empOptions} value={row.employee}
+                            onChange={(v) => setLabour(i, 'employee', v)} placeholder="Employee…" />
+                        </td>
+                        <td>
+                          <TimeInput value={row.startTime} onChange={(v) => setLabour(i, 'startTime', v)} className="line-input" />
+                        </td>
+                        <td>
+                          <TimeInput value={row.endTime}   onChange={(v) => setLabour(i, 'endTime',   v)} className="line-input" />
+                        </td>
+                        <td>
+                          <input className="line-input" value={row.durationMinutes || ''} readOnly />
+                        </td>
+                        <td>
+                          {labourRows.length > 1 && (
+                            <button type="button" className="del-row-btn"
+                              onClick={() => setLabourRows((p) => p.filter((_, j) => j !== i))} title="Remove">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="ts-section-footer">
+                  <button type="button" className="ts-add-btn"
+                    onClick={() => setLabourRows((p) => [...p, { ...EMPTY_LABOUR }])}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add Employee
+                  </button>
+                </div>
+              </div>
+
+              {/* Consumed Material */}
+              <div className="ts-section">
+                <div className="ts-section-head">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+                  Consumed Material
+                  <span className="ts-section-badge">{materialRows.length}</span>
+                </div>
+                <table className="ts-line-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 140 }}>Item Code</th>
+                      <th>Description</th>
+                      <th style={{ width: 72 }}>UOM</th>
+                      <th style={{ width: 100 }}>Qty</th>
+                      <th style={{ width: 34 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {materialRows.map((row, i) => (
+                      <tr key={i}>
+                        <td>
+                          <SearchSelect options={itemOptions} value={row.itemCode}
+                            onChange={(v) => onItemSelect(i, v)} placeholder="Item code…" />
+                        </td>
+                        <td>
+                          <input className="line-input" value={row.description}
+                            onChange={(e) => setMaterial(i, 'description', e.target.value)} />
+                        </td>
+                        <td>
+                          <input className="line-input" value={row.uom}
+                            onChange={(e) => setMaterial(i, 'uom', e.target.value)} />
+                        </td>
+                        <td>
+                          <input type="number" className="line-input" value={row.qty} min="0" step="0.01"
+                            onChange={(e) => setMaterial(i, 'qty', e.target.value)} />
+                        </td>
+                        <td>
+                          <button type="button" className="del-row-btn"
+                            onClick={() => setMaterialRows((p) => p.filter((_, j) => j !== i))} title="Remove">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="ts-section-footer">
+                  <button type="button" className="ts-add-btn"
+                    onClick={() => setMaterialRows((p) => [...p, { ...EMPTY_MATERIAL }])}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add Material
+                  </button>
+                </div>
+              </div>
+
+              {/* Vehicle */}
+              <div className="ts-section">
+                <div className="ts-section-head">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                  Vehicle
+                  <span className="ts-section-badge">{vehicleRows.length}</span>
+                </div>
+                <table className="ts-line-table">
+                  <thead>
+                    <tr>
+                      <th>Vehicle</th>
+                      <th style={{ width: 120 }}>KM</th>
+                      <th style={{ width: 34 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vehicleRows.map((row, i) => (
+                      <tr key={i}>
+                        <td>
+                          <SearchSelect options={vehOptions} value={row.vehicle}
+                            onChange={(v) => setVehicleRows((p) => p.map((r, j) => j === i ? { ...r, vehicle: v } : r))}
+                            placeholder="Select vehicle…" />
+                        </td>
+                        <td>
+                          <input type="number" className="line-input" value={row.km} min="0" step="1"
+                            onChange={(e) => setVehicleRows((p) => p.map((r, j) => j === i ? { ...r, km: e.target.value } : r))} />
+                        </td>
+                        <td>
+                          <button type="button" className="del-row-btn"
+                            onClick={() => setVehicleRows((p) => p.filter((_, j) => j !== i))} title="Remove">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="ts-section-footer">
+                  <button type="button" className="ts-add-btn"
+                    onClick={() => setVehicleRows((p) => [...p, { ...EMPTY_VEHICLE }])}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add Vehicle
+                  </button>
+                </div>
+              </div>
+
+              {/* Access Equipment */}
+              <div className="ts-section">
+                <div className="ts-section-head">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                  Access Equipment
+                  <span className="ts-section-badge">{accessRows.length}</span>
+                </div>
+                <table className="ts-line-table">
+                  <thead>
+                    <tr>
+                      <th>Equipment</th>
+                      <th style={{ width: 120 }}>Hours</th>
+                      <th style={{ width: 34 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accessRows.map((row, i) => (
+                      <tr key={i}>
+                        <td>
+                          <SearchSelect options={accOptions} value={row.equipment}
+                            onChange={(v) => setAccessRows((p) => p.map((r, j) => j === i ? { ...r, equipment: v } : r))}
+                            placeholder="Select equipment…" />
+                        </td>
+                        <td>
+                          <input type="number" className="line-input" value={row.hours} min="0" step="0.5"
+                            onChange={(e) => setAccessRows((p) => p.map((r, j) => j === i ? { ...r, hours: e.target.value } : r))} />
+                        </td>
+                        <td>
+                          <button type="button" className="del-row-btn"
+                            onClick={() => setAccessRows((p) => p.filter((_, j) => j !== i))} title="Remove">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="ts-section-footer">
+                  <button type="button" className="ts-add-btn"
+                    onClick={() => setAccessRows((p) => [...p, { ...EMPTY_ACCESS }])}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add Access Equipment
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        {wocWarning && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '10px 14px', margin: '0 20px', fontSize: 13, color: '#b91c1c', fontWeight: 500, lineHeight: 1.4 }}>
+            {wocWarning}
+          </div>
+        )}
+
+        <div className="ts-modal-footer">
+          {isReadonly ? (
+            <button type="button" className="ts-footer-cancel" onClick={() => navigate('/timesheets/inst')}>← Back to List</button>
+          ) : (
+            <>
+              <button type="button" className="ts-footer-cancel" onClick={() => navigate('/timesheets/inst')}>Cancel</button>
+              <button type="submit" className="ts-footer-save" disabled={saving || Boolean(wocWarning)}>
+                {saving ? 'Saving…' : 'Save Timesheet'}
+              </button>
+            </>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+}

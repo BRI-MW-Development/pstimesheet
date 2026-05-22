@@ -1,0 +1,859 @@
+import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import type { ConnectionPool, Transaction } from 'mssql';
+import * as mssql from 'mssql';
+import { DEV_SQL_POOL, SQL_POOL } from '../database/database.constants';
+
+const n = (v: any) => (v === '' || v === undefined ? null : v ?? null);
+
+function hmToMinutes(hm: string | null | undefined): number {
+  if (!hm) return 0;
+  const [h, m] = hm.split(':').map(Number);
+  return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+}
+
+function minutesToHm(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function calcDurationMinutes(start: string | null, end: string | null): number | null {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  if (isNaN(sh) || isNaN(eh)) return null;
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins < 0) mins += 1440;
+  return mins;
+}
+
+function toHM(v: any): string | null {
+  if (v == null) return null;
+  if (typeof v === 'object' && typeof v.getUTCHours === 'function') {
+    return `${String(v.getUTCHours()).padStart(2, '0')}:${String(v.getUTCMinutes()).padStart(2, '0')}`;
+  }
+  const s = String(v);
+  // ISO string like "1970-01-01T08:00:00.000Z"
+  if (s.includes('T')) return s.split('T')[1]?.slice(0, 5) ?? null;
+  return s.length >= 5 ? s.slice(0, 5) : s;
+}
+
+function toDateStr(v: any): string | null {
+  if (v == null) return null;
+  if (typeof v === 'object' && typeof v.getUTCFullYear === 'function') {
+    const y = v.getUTCFullYear();
+    const m = String(v.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(v.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(v);
+  // ISO string like "2026-05-08T00:00:00.000Z"
+  if (s.includes('T')) return s.split('T')[0];
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
+@Injectable()
+export class TimesheetsService implements OnModuleInit {
+  private readonly logger = new Logger(TimesheetsService.name);
+
+  constructor(
+    @Inject(DEV_SQL_POOL) private readonly devPool: ConnectionPool,
+    @Inject(SQL_POOL)     private readonly livePool: ConnectionPool,
+  ) {}
+
+  async onModuleInit() {
+    try {
+      // Ensure sequence table exists with all required columns
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='psTsDocSequence' AND xtype='U')
+        CREATE TABLE psTsDocSequence (
+          docType        NVARCHAR(30) NOT NULL PRIMARY KEY,
+          prefix         NVARCHAR(30) NOT NULL,
+          yearNo         INT          NOT NULL DEFAULT 0,
+          currentNo      INT          NOT NULL DEFAULT 0,
+          sequenceDigits INT          NOT NULL DEFAULT 5
+        );
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('psTsDocSequence') AND name='sequenceDigits')
+          ALTER TABLE psTsDocSequence ADD sequenceDigits INT NOT NULL DEFAULT 5;
+      `);
+      // Seed default rows for all four doc types if missing
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM psTsDocSequence WHERE docType='PROD')
+          INSERT INTO psTsDocSequence (docType,prefix,yearNo,currentNo,sequenceDigits) VALUES ('PROD','TS-PROD',0,0,5);
+        IF NOT EXISTS (SELECT 1 FROM psTsDocSequence WHERE docType='INST')
+          INSERT INTO psTsDocSequence (docType,prefix,yearNo,currentNo,sequenceDigits) VALUES ('INST','TS-INST',0,0,5);
+        IF NOT EXISTS (SELECT 1 FROM psTsDocSequence WHERE docType='PROJ')
+          INSERT INTO psTsDocSequence (docType,prefix,yearNo,currentNo,sequenceDigits) VALUES ('PROJ','TS-PROJ',0,0,5);
+        IF NOT EXISTS (SELECT 1 FROM psTsDocSequence WHERE docType='WOC')
+          INSERT INTO psTsDocSequence (docType,prefix,yearNo,currentNo,sequenceDigits) VALUES ('WOC','WO-COMP',0,0,5);
+      `);
+      const res = await this.devPool.request().query(`
+        UPDATE PSTsHeader SET status = 'Submitted' WHERE status = 'Draft'
+      `);
+      if (res.rowsAffected[0] > 0)
+        this.logger.log(`Migrated ${res.rowsAffected[0]} timesheet(s) from Draft → Submitted`);
+    } catch (err) {
+      this.logger.warn(`Schema init skipped (will retry on next request): ${(err as Error)?.message}`);
+    }
+  }
+
+  // Normalize prefix: strip any trailing dash so doc format is always PREFIX-YEAR-SEQ
+  private normalizePrefix(raw: string): string {
+    return (raw || '').replace(/-+$/, '');
+  }
+
+  // ── Doc number via sequence table ──────────────────────────────
+  private async nextDocNo(docType: string, fallbackPrefix: string, yearNo: number): Promise<string> {
+    const upd = await this.devPool.request()
+      .input('docType', mssql.NVarChar(30), docType)
+      .input('yearNo',  mssql.Int, yearNo)
+      .query<{ currentNo: number; prefix: string; sequenceDigits: number }>(`
+        UPDATE psTsDocSequence
+        SET    currentNo = CASE WHEN yearNo = @yearNo THEN currentNo + 1 ELSE 1 END,
+               yearNo    = @yearNo
+        OUTPUT INSERTED.currentNo, INSERTED.prefix, INSERTED.sequenceDigits
+        WHERE  docType = @docType
+      `);
+
+    let seq: number;
+    let prefix: string;
+    let digits: number;
+    if (upd.recordset.length > 0) {
+      seq    = upd.recordset[0].currentNo;
+      prefix = this.normalizePrefix(upd.recordset[0].prefix || fallbackPrefix);
+      digits = upd.recordset[0].sequenceDigits ?? 5;
+    } else {
+      // Row missing entirely — bootstrap it
+      const ins = await this.devPool.request()
+        .input('docType', mssql.NVarChar(30), docType)
+        .input('prefix',  mssql.NVarChar(30), this.normalizePrefix(fallbackPrefix))
+        .input('yearNo',  mssql.Int, yearNo)
+        .query<{ currentNo: number; prefix: string; sequenceDigits: number }>(`
+          INSERT INTO psTsDocSequence (docType, prefix, yearNo, currentNo, sequenceDigits)
+          OUTPUT INSERTED.currentNo, INSERTED.prefix, INSERTED.sequenceDigits
+          VALUES (@docType, @prefix, @yearNo, 1, 5)
+        `);
+      seq    = ins.recordset[0]?.currentNo      ?? 1;
+      prefix = this.normalizePrefix(ins.recordset[0]?.prefix ?? fallbackPrefix);
+      digits = ins.recordset[0]?.sequenceDigits ?? 5;
+    }
+    return `${prefix}-${yearNo}-${String(seq).padStart(digits, '0')}`;
+  }
+
+  // ── Preview next doc number (read-only, no sequence increment) ──
+  async previewDocNo(tsType: string): Promise<{ docNo: string }> {
+    const type   = (tsType || 'PROD').toUpperCase();
+    const fallback = type === 'INST' ? 'TS-INST' : type === 'PROJ' ? 'TS-PROJ' : 'TS-PROD';
+    const year   = new Date().getFullYear();
+    const res    = await this.devPool.request()
+      .input('docType', mssql.NVarChar(30), type)
+      .query<{ currentNo: number; prefix: string; sequenceDigits: number; yearNo: number }>(`
+        SELECT currentNo, prefix, sequenceDigits, yearNo FROM psTsDocSequence
+        WHERE  docType = @docType
+      `);
+    const row    = res.recordset[0];
+    const next   = row ? (row.yearNo === year ? row.currentNo + 1 : 1) : 1;
+    const pfx    = this.normalizePrefix(row?.prefix || fallback);
+    const digits = row?.sequenceDigits ?? 5;
+    return { docNo: `${pfx}-${year}-${String(next).padStart(digits, '0')}` };
+  }
+
+  // ── Document Numbering settings ─────────────────────────────────
+  async getDocNumberingSettings(): Promise<any[]> {
+    const res = await this.devPool.request()
+      .query<{ docType: string; prefix: string; yearNo: number; currentNo: number; sequenceDigits: number }>(`
+        SELECT docType, prefix, yearNo, currentNo, sequenceDigits
+        FROM   psTsDocSequence
+        ORDER BY docType
+      `);
+    // Always return normalized prefix (no trailing dash) so frontend is consistent
+    return res.recordset.map((r) => ({ ...r, prefix: this.normalizePrefix(r.prefix) }));
+  }
+
+  async updateDocNumberingSettings(rows: { docType: string; prefix: string; sequenceDigits: number }[]): Promise<void> {
+    for (const row of rows) {
+      const cleanPrefix = this.normalizePrefix(row.prefix);
+      await this.devPool.request()
+        .input('docType',        mssql.NVarChar(30), row.docType)
+        .input('prefix',         mssql.NVarChar(30), cleanPrefix)
+        .input('sequenceDigits', mssql.Int,           row.sequenceDigits)
+        .query(`
+          IF EXISTS (SELECT 1 FROM psTsDocSequence WHERE docType = @docType)
+            UPDATE psTsDocSequence SET prefix = @prefix, sequenceDigits = @sequenceDigits WHERE docType = @docType
+          ELSE
+            INSERT INTO psTsDocSequence (docType, prefix, yearNo, currentNo, sequenceDigits)
+            VALUES (@docType, @prefix, 0, 0, @sequenceDigits)
+        `);
+    }
+  }
+
+  // ── Live DB: employee lookup ────────────────────────────────────
+  private async lookupEmployee(code: string): Promise<{ name: string; dept: string; designation: string }> {
+    if (!code) return { name: '', dept: '', designation: '' };
+    const r = await this.livePool.request()
+      .input('code', mssql.NVarChar(50), code)
+      .query<{ firstName: string; lastname: string; departmentCode: string; designation: string }>(`
+        SELECT me.firstName, me.lastname,
+               md.departmentCode,
+               mt.taxnomyName AS designation
+        FROM   ErpMasterEmployee me
+        LEFT JOIN ErpMasterDepartment md ON md.departmentId = me.departmentId
+        LEFT JOIN ErpMasterTaxnomy    mt ON mt.taxnomyId    = me.jobTitleId
+        WHERE  me.employeeNo = @code AND me.isDeleted = 0
+      `);
+    const e = r.recordset[0];
+    if (!e) return { name: '', dept: '', designation: '' };
+    return {
+      name:        [e.firstName, e.lastname].filter(Boolean).join(' '),
+      dept:        e.departmentCode  ?? '',
+      designation: e.designation     ?? '',
+    };
+  }
+
+  // ── Live DB: item lookup ────────────────────────────────────────
+  private async lookupItem(code: string): Promise<{ name: string; uom: string }> {
+    if (!code) return { name: '', uom: '' };
+    const r = await this.livePool.request()
+      .input('code', mssql.NVarChar(60), code)
+      .query<{ itemName: string; UOM: string }>(`
+        SELECT mi.itemName, mt.taxnomyCode AS UOM
+        FROM   ErpMasterItem    mi
+        LEFT JOIN ErpMasterTaxnomy mt ON mt.taxnomyId = mi.uomId
+        WHERE  mi.itemcode = @code AND mi.isActive = 1
+      `);
+    const item = r.recordset[0];
+    if (!item) return { name: '', uom: '' };
+    return { name: item.itemName ?? '', uom: item.UOM ?? '' };
+  }
+
+  // ── Insert lines helper (used by create & update) ───────────────
+  private async insertLines(tx: Transaction, tsId: number, body: any): Promise<void> {
+    const labourRows: any[] = body.labourRows ?? [];
+    for (let i = 0; i < labourRows.length; i++) {
+      const lr = labourRows[i];
+      if (!lr.employee && !lr.employeeName) continue;
+      const emp = lr.employee ? await this.lookupEmployee(lr.employee) : { name: '', dept: '', designation: '' };
+      await tx.request()
+        .input('tsId',           mssql.BigInt,        tsId)
+        .input('lineNumber',     mssql.Int,           i + 1)
+        .input('employeeCode',   mssql.NVarChar(50),  lr.employee   || null)
+        .input('employeeName',   mssql.NVarChar(200), emp.name      || lr.employeeName || lr.employee || null)
+        .input('departmentCode', mssql.NVarChar(50),  emp.dept      || null)
+        .input('designation',    mssql.NVarChar(100), emp.designation || null)
+        .input('startTime',      mssql.NVarChar(10),  lr.startTime || null)
+        .input('endTime',        mssql.NVarChar(10),  lr.endTime   || null)
+        .input('durationMinutes',mssql.Int,           parseInt(lr.duration, 10) || 0)
+        .query(`
+          INSERT INTO PSTsLabourLine
+            (tsId, lineNumber, employeeCode, employeeName, departmentCode,
+             designation, startTime, endTime, durationMinutes)
+          VALUES
+            (@tsId, @lineNumber, @employeeCode, @employeeName, @departmentCode,
+             @designation, @startTime, @endTime, @durationMinutes)
+        `);
+    }
+
+    const materialRows: any[] = body.materialRows ?? [];
+    for (let i = 0; i < materialRows.length; i++) {
+      const mr = materialRows[i];
+      if (!mr.itemCode && !mr.description) continue;
+      const item = mr.itemCode ? await this.lookupItem(mr.itemCode) : { name: '', uom: '' };
+      await tx.request()
+        .input('tsId',     mssql.BigInt,        tsId)
+        .input('lineNumber', mssql.Int,          i + 1)
+        .input('itemCode', mssql.NVarChar(60),  mr.itemCode || null)
+        .input('itemName', mssql.NVarChar(250), item.name || mr.description || null)
+        .input('uom',      mssql.NVarChar(30),  mr.uom ?? item.uom ?? null)
+        .input('qty',      mssql.Decimal(18,3), parseFloat(mr.qty) || 0)
+        .query(`
+          INSERT INTO PSTsMaterialLine (tsId, lineNumber, itemCode, itemName, uom, qty)
+          VALUES (@tsId, @lineNumber, @itemCode, @itemName, @uom, @qty)
+        `);
+    }
+
+    let eqLineNo = 0;
+    const machineryRows: any[] = body.machineryRows ?? [];
+    for (const mr of machineryRows) {
+      const machineName = mr.machineName ?? mr.machine;
+      if (!machineName) continue;
+      eqLineNo++;
+      await tx.request()
+        .input('tsId',          mssql.BigInt,        tsId)
+        .input('lineNumber',    mssql.Int,           eqLineNo)
+        .input('lineType',      mssql.NVarChar(20),  'MACHINERY')
+        .input('equipmentName', mssql.NVarChar(250), machineName)
+        .input('hoursUsed',     mssql.Int,           parseInt(mr.minutes ?? mr.hours, 10) || 0)
+        .query(`
+          INSERT INTO PSTsEquipmentLine (tsId, lineNumber, lineType, equipmentName, hoursUsed)
+          VALUES (@tsId, @lineNumber, @lineType, @equipmentName, @hoursUsed)
+        `);
+    }
+
+    const vehicleRows: any[] = body.vehicleRows ?? [];
+    for (const vr of vehicleRows) {
+      if (!vr.vehicle) continue;
+      eqLineNo++;
+      await tx.request()
+        .input('tsId',          mssql.BigInt,        tsId)
+        .input('lineNumber',    mssql.Int,           eqLineNo)
+        .input('lineType',      mssql.NVarChar(20),  'VEHICLE')
+        .input('equipmentName', mssql.NVarChar(250), vr.vehicle)
+        .input('hoursUsed',     mssql.Int,           parseInt(vr.km, 10) || 0)
+        .query(`
+          INSERT INTO PSTsEquipmentLine (tsId, lineNumber, lineType, equipmentName, hoursUsed)
+          VALUES (@tsId, @lineNumber, @lineType, @equipmentName, @hoursUsed)
+        `);
+    }
+
+    const accessRows: any[] = body.accessRows ?? [];
+    for (const ar of accessRows) {
+      if (!ar.equipment) continue;
+      eqLineNo++;
+      await tx.request()
+        .input('tsId',          mssql.BigInt,        tsId)
+        .input('lineNumber',    mssql.Int,           eqLineNo)
+        .input('lineType',      mssql.NVarChar(20),  'ACCESS')
+        .input('equipmentName', mssql.NVarChar(250), ar.equipment)
+        .input('hoursUsed',     mssql.Int,           parseInt(ar.hours, 10) || 0)
+        .query(`
+          INSERT INTO PSTsEquipmentLine (tsId, lineNumber, lineType, equipmentName, hoursUsed)
+          VALUES (@tsId, @lineNumber, @lineType, @equipmentName, @hoursUsed)
+        `);
+    }
+  }
+
+  // ── Create ──────────────────────────────────────────────────────
+  async create(body: any): Promise<{ docNo: string; tsId: number }> {
+    const year    = new Date().getFullYear();
+    const tsType  = (body.tsType || 'PROD').toUpperCase();
+
+    // Block Production and Installation timesheets if the work order is already WO Complete
+    if ((tsType === 'PROD' || tsType === 'INST') && body.workOrder) {
+      const wocCheck = await this.devPool.request()
+        .input('workOrderNo', mssql.NVarChar(100), body.workOrder)
+        .query<{ cnt: number }>(`
+          SELECT COUNT(*) AS cnt FROM PsWoComplete
+          WHERE workOrderNumber = @workOrderNo AND isDeleted = 0
+        `);
+      if ((wocCheck.recordset[0]?.cnt ?? 0) > 0) {
+        throw new BadRequestException(
+          `Work order ${body.workOrder} has already been marked complete. No further timesheet entries are allowed.`
+        );
+      }
+    }
+
+    const prefix  = tsType === 'INST' ? 'TS-INST' : tsType === 'PROJ' ? 'TS-PROJ' : 'TS-PROD';
+    const docNo   = await this.nextDocNo(tsType, prefix, year);
+
+    const tx: Transaction = this.devPool.transaction();
+    await tx.begin();
+    try {
+      const hdr = await tx.request()
+        .input('tsDocNo',        mssql.NVarChar(40),  docNo)
+        .input('tsType',         mssql.NVarChar(20),  n(body.tsType) ?? 'PROD')
+        .input('entryDate',      mssql.NVarChar(20),  n(body.date))
+        .input('projectId',      mssql.NVarChar(50),  n(body.projectId))
+        .input('projectName',    mssql.NVarChar(250), n(body.projectName))
+        .input('workOrderNo',    mssql.NVarChar(60),  n(body.workOrder))
+        .input('departmentCode', mssql.NVarChar(50),  n(body.department))
+        .input('shiftCode',      mssql.NVarChar(30),  n(body.shift))
+        .input('enteredByName',  mssql.NVarChar(150), n(body.entryPerson))
+        .input('remarks',        mssql.NVarChar(500), n(body.remarks))
+        .query<{ tsId: number }>(`
+          INSERT INTO PSTsHeader
+            (tsDocNo, tsType, entryDate, projectId, projectName, workOrderNo,
+             department_code, shiftCode, entered_by_name, remarks, status)
+          OUTPUT INSERTED.tsId
+          VALUES
+            (@tsDocNo, @tsType, @entryDate, @projectId, @projectName, @workOrderNo,
+             @departmentCode, @shiftCode, @enteredByName, @remarks,
+             CASE @tsType WHEN 'PROJ' THEN 'Approved' ELSE 'Draft' END)
+        `);
+
+      const tsId = hdr.recordset[0].tsId;
+      await this.insertLines(tx, tsId, body);
+
+      await tx.request()
+        .input('tsId',         mssql.BigInt,              tsId)
+        .input('eventType',    mssql.NVarChar(40),        'CREATE')
+        .input('entityName',   mssql.NVarChar(40),        'PSTsHeader')
+        .input('entityId',     mssql.NVarChar(80),        docNo)
+        .input('actionByName', mssql.NVarChar(150),       n(body.entryPerson))
+        .input('newValue',     mssql.NVarChar(mssql.MAX), JSON.stringify({ docNo, status: 'Draft' }))
+        .query(`
+          INSERT INTO PSTsSystemHistory
+            (tsId, eventType, entityName, entityId, actionByName, newValue)
+          VALUES
+            (@tsId, @eventType, @entityName, @entityId, @actionByName, @newValue)
+        `);
+
+      await tx.commit();
+      this.logger.log(`Created timesheet ${docNo} | tsId=${tsId}`);
+      return { docNo, tsId };
+    } catch (err) {
+      await tx.rollback();
+      this.logger.error('Create timesheet failed', err);
+      throw err;
+    }
+  }
+
+  // ── List ────────────────────────────────────────────────────────
+  async list(
+    type?: string,
+    workOrderNo?: string,
+    dateFrom?: string,
+    dateTo?: string,
+    status?: string,
+    department?: string,
+  ): Promise<any[]> {
+    const req = this.devPool.request();
+    if (type)        req.input('tsType',      mssql.NVarChar(20),  type);
+    if (workOrderNo) req.input('workOrderNo', mssql.NVarChar(60),  workOrderNo);
+    if (dateFrom)    req.input('dateFrom',    mssql.NVarChar(20),  dateFrom);
+    if (dateTo)      req.input('dateTo',      mssql.NVarChar(20),  dateTo);
+    if (status)      req.input('status',      mssql.NVarChar(30),  status);
+    if (department)  req.input('department',  mssql.NVarChar(50),  department);
+
+    const result = await req.query(`
+      SELECT
+        h.tsId,
+        h.tsDocNo  AS docNo,
+        h.tsType,
+        h.entryDate,
+        h.projectId   AS projectCode,
+        h.projectName,
+        h.workOrderNo,
+        h.department_code,
+        h.shiftCode,
+        h.entered_by_name,
+        h.status,
+        h.createdAt,
+        (SELECT COUNT(*)  FROM PSTsLabourLine   WHERE tsId = h.tsId) AS labourCount,
+        (SELECT COUNT(*)  FROM PSTsMaterialLine  WHERE tsId = h.tsId) AS materialCount,
+        (SELECT COUNT(*)  FROM PSTsEquipmentLine WHERE tsId = h.tsId) AS equipmentCount,
+        (SELECT TOP 1 employeeName    FROM PSTsLabourLine WHERE tsId = h.tsId ORDER BY lineNumber) AS employeeName,
+        (SELECT TOP 1 employeeCode    FROM PSTsLabourLine WHERE tsId = h.tsId ORDER BY lineNumber) AS employeeCode,
+        (SELECT COALESCE(SUM(durationMinutes),0) FROM PSTsLabourLine WHERE tsId = h.tsId) AS totalDuration
+      FROM PSTsHeader h
+      WHERE h.isDeleted = 0
+        ${type        ? 'AND h.tsType          = @tsType'      : ''}
+        ${workOrderNo ? 'AND h.workOrderNo      = @workOrderNo' : ''}
+        ${dateFrom    ? 'AND h.entryDate       >= @dateFrom'    : ''}
+        ${dateTo      ? 'AND h.entryDate       <= @dateTo'      : ''}
+        ${status      ? 'AND h.status           = @status'      : ''}
+        ${department  ? 'AND h.department_code  = @department'  : ''}
+      ORDER BY h.entryDate DESC, h.createdAt DESC
+    `);
+
+    const rows = result.recordset.map(r => ({
+      ...r,
+      entryDate:  toDateStr(r.entryDate),
+      projectId:  r.projectCode,   // keep both names: PROJ list uses projectId, PROD/INST use projectCode
+      totalHours: r.totalDuration != null ? r.totalDuration / 60 : null,
+    }));
+
+    // Enrich with customerName from live ERP (batch lookup by workOrderNo)
+    const woNums = [...new Set(rows.map(r => r.workOrderNo).filter(Boolean))];
+    if (woNums.length > 0) {
+      try {
+        const woReq = this.livePool.request();
+        woNums.forEach((wo, i) => woReq.input(`wo${i}`, mssql.NVarChar(100), wo));
+        const inClause = woNums.map((_, i) => `@wo${i}`).join(',');
+        const woRes = await woReq.query(`
+          SELECT workorderNumber AS workOrderNo, ec.customerName
+          FROM ErpOperationWorkOrder ow
+          LEFT JOIN ErpMasterCustomer ec ON ec.custId = ow.customerId
+          WHERE ow.workorderNumber IN (${inClause})
+          UNION ALL
+          SELECT WorkOrderNumber, ec.customerName
+          FROM erpinstallationworkorder iw
+          LEFT JOIN ErpMasterCustomer ec ON ec.custId = iw.customerId
+          WHERE iw.WorkOrderNumber IN (${inClause})
+        `);
+        const custMap = new Map(woRes.recordset.map(r => [r.workOrderNo, r.customerName]));
+        return rows.map(r => ({ ...r, customerName: custMap.get(r.workOrderNo) ?? null }));
+      } catch {
+        // Live DB unavailable — return without customerName
+      }
+    }
+
+    return rows;
+  }
+
+  // ── Detail Report ────────────────────────────────────────────────
+  async reportDetail(filters: {
+    dateFrom?: string; dateTo?: string; type?: string;
+    status?: string; department?: string; workOrderNo?: string;
+  }): Promise<any> {
+    const { dateFrom, dateTo, type, status, department, workOrderNo } = filters;
+    const req = this.devPool.request();
+    if (type)        req.input('tsType',     mssql.NVarChar(20),  type);
+    if (workOrderNo) req.input('workOrderNo',mssql.NVarChar(60),  workOrderNo);
+    if (dateFrom)    req.input('dateFrom',   mssql.NVarChar(20),  dateFrom);
+    if (dateTo)      req.input('dateTo',     mssql.NVarChar(20),  dateTo);
+    if (status)      req.input('status',     mssql.NVarChar(30),  status);
+    if (department)  req.input('department', mssql.NVarChar(50),  department);
+
+    const where = `WHERE h.isDeleted = 0
+      ${type        ? 'AND h.tsType         = @tsType'      : ''}
+      ${workOrderNo ? 'AND h.workOrderNo    = @workOrderNo' : ''}
+      ${dateFrom    ? 'AND h.entryDate     >= @dateFrom'    : ''}
+      ${dateTo      ? 'AND h.entryDate     <= @dateTo'      : ''}
+      ${status      ? 'AND h.status         = @status'      : ''}
+      ${department  ? 'AND h.department_code= @department'  : ''}`;
+
+    const result = await req.query(`
+      SELECT
+        h.tsDocNo, h.tsType, CONVERT(VARCHAR(10),h.entryDate,120) AS entryDate,
+        h.department_code, h.workOrderNo, h.projectId, h.projectName, h.shiftCode,
+        h.entered_by_name, h.status,
+        'LABOUR' AS lineType,
+        l.lineNumber, l.employeeCode, l.employeeName,
+        l.departmentCode AS lineDept, l.designation,
+        l.startTime, l.endTime, l.durationMinutes AS qty,
+        NULL AS itemCode, NULL AS itemName, NULL AS uom,
+        NULL AS equipmentName, NULL AS hoursUsed
+      FROM PSTsHeader h
+      JOIN PSTsLabourLine l ON l.tsId = h.tsId
+      ${where}
+      UNION ALL
+      SELECT
+        h.tsDocNo, h.tsType, CONVERT(VARCHAR(10),h.entryDate,120) AS entryDate,
+        h.department_code, h.workOrderNo, h.projectId, h.projectName, h.shiftCode,
+        h.entered_by_name, h.status,
+        'MATERIAL' AS lineType,
+        m.lineNumber, NULL AS employeeCode, NULL AS employeeName,
+        NULL AS lineDept, NULL AS designation,
+        NULL AS startTime, NULL AS endTime, m.qty,
+        m.itemCode, m.itemName, m.uom,
+        NULL AS equipmentName, NULL AS hoursUsed
+      FROM PSTsHeader h
+      JOIN PSTsMaterialLine m ON m.tsId = h.tsId
+      ${where}
+      UNION ALL
+      SELECT
+        h.tsDocNo, h.tsType, CONVERT(VARCHAR(10),h.entryDate,120) AS entryDate,
+        h.department_code, h.workOrderNo, h.projectId, h.projectName, h.shiftCode,
+        h.entered_by_name, h.status,
+        e.lineType AS lineType,
+        e.lineNumber, NULL AS employeeCode, NULL AS equipmentName,
+        NULL AS lineDept, NULL AS designation,
+        NULL AS startTime, NULL AS endTime, e.hoursUsed AS qty,
+        NULL AS itemCode, e.equipmentName AS itemName, NULL AS uom,
+        e.equipmentName, e.hoursUsed
+      FROM PSTsHeader h
+      JOIN PSTsEquipmentLine e ON e.tsId = h.tsId
+      ${where}
+      ORDER BY entryDate DESC, tsDocNo, lineType, lineNumber
+    `);
+
+    return result.recordset.map(r => ({
+      ...r,
+      startTime: toHM(r.startTime),
+      endTime:   toHM(r.endTime),
+    }));
+  }
+
+  // ── Summary Report (header-level with counts) ────────────────────
+  async reportSummary(filters: {
+    dateFrom?: string; dateTo?: string; type?: string;
+    status?: string; department?: string;
+  }): Promise<any> {
+    const { dateFrom, dateTo, type, status, department } = filters;
+    const req = this.devPool.request();
+    if (type)       req.input('tsType',     mssql.NVarChar(20), type);
+    if (dateFrom)   req.input('dateFrom',   mssql.NVarChar(20), dateFrom);
+    if (dateTo)     req.input('dateTo',     mssql.NVarChar(20), dateTo);
+    if (status)     req.input('status',     mssql.NVarChar(30), status);
+    if (department) req.input('department', mssql.NVarChar(50), department);
+
+    const where = `WHERE h.isDeleted = 0
+      ${type       ? 'AND h.tsType          = @tsType'     : ''}
+      ${dateFrom   ? 'AND h.entryDate      >= @dateFrom'   : ''}
+      ${dateTo     ? 'AND h.entryDate      <= @dateTo'     : ''}
+      ${status     ? 'AND h.status          = @status'     : ''}
+      ${department ? 'AND h.department_code = @department' : ''}`;
+
+    const result = await req.query(`
+      SELECT
+        h.tsDocNo AS docNo,
+        h.tsType,
+        CONVERT(VARCHAR(10), h.entryDate, 120) AS entryDate,
+        h.department_code,
+        h.workOrderNo,
+        h.projectId,
+        h.projectName,
+        h.shiftCode,
+        h.entered_by_name,
+        h.status,
+        ISNULL((SELECT COUNT(*) FROM PSTsLabourLine l WHERE l.tsId = h.tsId), 0) AS labourCount,
+        ISNULL((SELECT SUM(CAST(l.durationMinutes AS FLOAT)) / 60.0 FROM PSTsLabourLine l WHERE l.tsId = h.tsId), 0) AS totalHours,
+        ISNULL((SELECT COUNT(*) FROM PSTsMaterialLine m WHERE m.tsId = h.tsId), 0) AS materialCount,
+        ISNULL((SELECT COUNT(*) FROM PSTsEquipmentLine e WHERE e.tsId = h.tsId), 0) AS equipmentCount
+      FROM PSTsHeader h
+      ${where}
+      ORDER BY h.entryDate DESC, h.tsDocNo
+    `);
+
+    return result.recordset;
+  }
+
+  // ── Get by docNo ─────────────────────────────────────────────────
+  async get(docNo: string): Promise<any> {
+    const hdrRes = await this.devPool.request()
+      .input('tsDocNo', mssql.NVarChar(40), docNo)
+      .query(`SELECT * FROM PSTsHeader WHERE tsDocNo = @tsDocNo AND isDeleted = 0`);
+
+    const hdr = hdrRes.recordset[0];
+    if (!hdr) return null;
+
+    const tsId = hdr.tsId;
+    const [labour, material, equipment] = await Promise.all([
+      this.devPool.request().input('tsId', mssql.BigInt, tsId)
+        .query(`SELECT * FROM PSTsLabourLine   WHERE tsId = @tsId ORDER BY lineNumber`),
+      this.devPool.request().input('tsId', mssql.BigInt, tsId)
+        .query(`SELECT * FROM PSTsMaterialLine  WHERE tsId = @tsId ORDER BY lineNumber`),
+      this.devPool.request().input('tsId', mssql.BigInt, tsId)
+        .query(`SELECT * FROM PSTsEquipmentLine WHERE tsId = @tsId ORDER BY lineNumber`),
+    ]);
+
+    const allEquipment = equipment.recordset;
+    return {
+      ...hdr,
+      entryDate: toDateStr(hdr.entryDate),
+      labourLines: labour.recordset.map(r => {
+        const start = toHM(r.startTime);
+        const end   = toHM(r.endTime);
+        const durationMinutes = calcDurationMinutes(start, end) ?? (r.durationMinutes ?? 0);
+        return { ...r, startTime: start, endTime: end, durationMinutes, duration_hm: minutesToHm(durationMinutes) };
+      }),
+      materialLines:  material.recordset,
+      equipmentLines: allEquipment.filter(r => (r.lineType || 'MACHINERY') === 'MACHINERY'),
+      vehicleLines:   allEquipment.filter(r => r.lineType === 'VEHICLE'),
+      accessLines:    allEquipment.filter(r => r.lineType === 'ACCESS'),
+    };
+  }
+
+  // ── Update ───────────────────────────────────────────────────────
+  async update(docNo: string, body: any): Promise<{ docNo: string }> {
+    const tsType = (body.tsType || '').toUpperCase();
+    if ((tsType === 'PROD' || tsType === 'INST') && body.workOrder) {
+      const wocCheck = await this.devPool.request()
+        .input('workOrderNo', mssql.NVarChar(100), body.workOrder)
+        .query<{ cnt: number }>(`
+          SELECT COUNT(*) AS cnt FROM PsWoComplete
+          WHERE workOrderNumber = @workOrderNo AND isDeleted = 0
+        `);
+      if ((wocCheck.recordset[0]?.cnt ?? 0) > 0) {
+        throw new BadRequestException(
+          `Work order ${body.workOrder} has already been marked complete. No further timesheet entries are allowed.`
+        );
+      }
+    }
+
+    const hdrRes = await this.devPool.request()
+      .input('tsDocNo', mssql.NVarChar(40), docNo)
+      .query<{ tsId: number }>(`
+        SELECT tsId FROM PSTsHeader WHERE tsDocNo = @tsDocNo AND isDeleted = 0
+      `);
+    const hdr = hdrRes.recordset[0];
+    if (!hdr) throw new Error(`Timesheet ${docNo} not found`);
+    const tsId = hdr.tsId;
+
+    const tx: Transaction = this.devPool.transaction();
+    await tx.begin();
+    try {
+      await tx.request()
+        .input('tsId',           mssql.BigInt,        tsId)
+        .input('entryDate',      mssql.NVarChar(20),  n(body.date))
+        .input('projectId',      mssql.NVarChar(50),  n(body.projectId))
+        .input('projectName',    mssql.NVarChar(250), n(body.projectName))
+        .input('workOrderNo',    mssql.NVarChar(60),  n(body.workOrder))
+        .input('departmentCode', mssql.NVarChar(50),  n(body.department))
+        .input('shiftCode',      mssql.NVarChar(30),  n(body.shift))
+        .input('enteredByName',  mssql.NVarChar(150), n(body.entryPerson))
+        .input('remarks',        mssql.NVarChar(500), n(body.remarks))
+        .query(`
+          UPDATE PSTsHeader SET
+            entryDate       = @entryDate,
+            projectId       = @projectId,
+            projectName     = @projectName,
+            workOrderNo     = @workOrderNo,
+            department_code = @departmentCode,
+            shiftCode       = @shiftCode,
+            entered_by_name = @enteredByName,
+            remarks         = @remarks,
+            updatedAt       = SYSUTCDATETIME()
+          WHERE tsId = @tsId
+        `);
+
+      for (const tbl of ['PSTsLabourLine', 'PSTsMaterialLine', 'PSTsEquipmentLine']) {
+        await tx.request()
+          .input('tsId', mssql.BigInt, tsId)
+          .query(`DELETE FROM ${tbl} WHERE tsId = @tsId`);
+      }
+      await this.insertLines(tx, tsId, body);
+
+      await tx.request()
+        .input('tsId',         mssql.BigInt,              tsId)
+        .input('eventType',    mssql.NVarChar(40),        'UPDATE')
+        .input('entityName',   mssql.NVarChar(40),        'PSTsHeader')
+        .input('entityId',     mssql.NVarChar(80),        docNo)
+        .input('actionByName', mssql.NVarChar(150),       n(body.entryPerson))
+        .input('newValue',     mssql.NVarChar(mssql.MAX), JSON.stringify(body))
+        .query(`
+          INSERT INTO PSTsSystemHistory
+            (tsId, eventType, entityName, entityId, actionByName, newValue)
+          VALUES
+            (@tsId, @eventType, @entityName, @entityId, @actionByName, @newValue)
+        `);
+
+      await tx.commit();
+      this.logger.log(`Updated timesheet ${docNo}`);
+      return { docNo };
+    } catch (err) {
+      await tx.rollback();
+      this.logger.error(`Update timesheet ${docNo} failed`, err);
+      throw err;
+    }
+  }
+
+  // ── Batch create (weekly entry → individual daily records) ──────
+  async batchCreate(records: any[]): Promise<{ results: { docNo: string; tsId: number }[] }> {
+    const results: { docNo: string; tsId: number }[] = [];
+    for (const record of records) {
+      const r = await this.create(record);
+      results.push(r);
+    }
+    this.logger.log(`Batch created ${results.length} PROJ timesheets`);
+    return { results };
+  }
+
+  // ── Approval actions ─────────────────────────────────────────────
+  async submitForApproval(docNo: string, byName: string): Promise<void> {
+    const res = await this.devPool.request()
+      .input('docNo',  mssql.NVarChar(40),  docNo)
+      .input('byName', mssql.NVarChar(150), byName || null)
+      .query(`
+        UPDATE PSTsHeader
+        SET status = 'Submitted', rejectionReason = NULL, approvedBy = NULL, approvedAt = NULL,
+            submittedAt = GETDATE(), updatedAt = SYSUTCDATETIME()
+        WHERE tsDocNo = @docNo AND isDeleted = 0 AND status IN ('Draft','Rejected')
+      `);
+    if (res.rowsAffected[0] === 0) throw new Error(`Cannot submit: ${docNo} not found or not in Draft/Rejected status`);
+  }
+
+  async approve(docNo: string, byName: string, editBody?: any): Promise<void> {
+    if (editBody && Object.keys(editBody).length > 0) {
+      await this.update(docNo, editBody);
+    }
+    await this.devPool.request()
+      .input('docNo',  mssql.NVarChar(40),  docNo)
+      .input('byName', mssql.NVarChar(200), byName || null)
+      .query(`
+        UPDATE PSTsHeader
+        SET status = 'Approved', approvedBy = @byName, approvedAt = GETDATE(), rejectionReason = NULL, updatedAt = SYSUTCDATETIME()
+        WHERE tsDocNo = @docNo AND isDeleted = 0
+      `);
+  }
+
+  async reject(docNo: string, byName: string, reason: string): Promise<void> {
+    await this.devPool.request()
+      .input('docNo',  mssql.NVarChar(40),  docNo)
+      .input('byName', mssql.NVarChar(200), byName || null)
+      .input('reason', mssql.NVarChar(500), reason || null)
+      .query(`
+        UPDATE PSTsHeader
+        SET status = 'Rejected', rejectionReason = @reason, approvedBy = @byName, approvedAt = GETDATE(), updatedAt = SYSUTCDATETIME()
+        WHERE tsDocNo = @docNo AND isDeleted = 0
+      `);
+  }
+
+  async getTsEmployees(): Promise<any[]> {
+    // Employees from the live master filtered by Production / Installation departments.
+    // mainDepartment is not a column — it is the parent dept's departmentCode (self-join).
+    const masterRes = await this.livePool.request().query(`
+      SELECT
+        me.employeeNo   AS employeeCode,
+        LTRIM(RTRIM(ISNULL(me.firstName,'') + ' ' + ISNULL(me.lastname,''))) AS employeeName,
+        md.departmentCode,
+        parentDept.departmentCode AS mainDepartment
+      FROM ErpMasterEmployee me
+      LEFT JOIN ErpMasterDepartment md         ON md.departmentId         = me.departmentId
+      LEFT JOIN ErpMasterDepartment parentDept ON parentDept.departmentId = md.parentDepartmentId
+      WHERE me.isActive = 1 AND me.isDeleted = 0
+        AND me.employeeNo IS NOT NULL AND me.employeeNo <> ''
+        AND (
+          LOWER(ISNULL(parentDept.departmentCode,'')) LIKE '%production%'
+          OR LOWER(ISNULL(parentDept.departmentCode,'')) LIKE '%install%'
+        )
+      ORDER BY employeeName
+    `);
+
+    this.logger.log(`getTsEmployees: master rows=${masterRes.recordset.length}`);
+
+    // Also pull any employees already used in PROD/INST labour lines (catches manually entered names)
+    const labourRes = await this.devPool.request().query(`
+      SELECT DISTINCT l.employeeCode, l.employeeName
+      FROM PSTsLabourLine l
+      JOIN PSTsHeader h ON h.tsId = l.tsId
+      WHERE h.tsType IN ('PROD','INST') AND h.isDeleted = 0
+        AND l.employeeCode IS NOT NULL AND l.employeeCode <> ''
+    `);
+
+    // Merge: master list takes priority; add labour-line employees not already present
+    const seen = new Set<string>();
+    const result: any[] = [];
+    for (const r of masterRes.recordset) {
+      if (!seen.has(r.employeeCode)) { seen.add(r.employeeCode); result.push(r); }
+    }
+    for (const r of labourRes.recordset) {
+      if (!seen.has(r.employeeCode)) { seen.add(r.employeeCode); result.push(r); }
+    }
+    return result.sort((a, b) => (a.employeeName || '').localeCompare(b.employeeName || ''));
+  }
+
+  async getDistinctProjectCodes(): Promise<{ projectId: string; projectName: string }[]> {
+    const res = await this.devPool.request().query(`
+      SELECT DISTINCT projectId, MAX(ISNULL(projectName,'')) AS projectName
+      FROM PSTsHeader
+      WHERE isDeleted = 0 AND projectId IS NOT NULL AND projectId <> ''
+      GROUP BY projectId
+      ORDER BY projectId
+    `);
+    return res.recordset;
+  }
+
+  async getPendingApprovals(department?: string): Promise<any[]> {
+    const req = this.devPool.request();
+    if (department) req.input('dept', mssql.NVarChar(100), department);
+    const res = await req.query(`
+      SELECT h.tsId, h.tsDocNo, h.tsType, h.entryDate, h.department_code, h.workOrderNo,
+             h.projectId, h.entered_by_name, h.status, h.createdAt, h.submittedAt, h.shiftCode,
+             (SELECT COALESCE(SUM(durationMinutes),0) FROM PSTsLabourLine WHERE tsId = h.tsId) AS totalDuration
+      FROM PSTsHeader h
+      WHERE h.isDeleted = 0
+        AND h.status = 'Submitted'
+        AND h.tsType IN ('PROD','INST')
+        ${department ? 'AND h.department_code = @dept' : ''}
+      ORDER BY h.createdAt ASC
+    `);
+    return res.recordset.map(r => ({ ...r, entryDate: toDateStr(r.entryDate) }));
+  }
+
+  async getEmailByDisplayName(displayName: string): Promise<string | null> {
+    const res = await this.devPool.request()
+      .input('name', mssql.NVarChar(200), displayName)
+      .query(`SELECT TOP 1 email FROM PSTsUsers WHERE displayName = @name AND email IS NOT NULL`);
+    return res.recordset[0]?.email ?? null;
+  }
+
+  // ── Soft delete ─────────────────────────────────────────────────
+  async remove(docNo: string): Promise<void> {
+    const res = await this.devPool.request()
+      .input('tsDocNo', mssql.NVarChar(40), docNo)
+      .query(`UPDATE PSTsHeader SET isDeleted = 1, updatedAt = SYSUTCDATETIME() WHERE tsDocNo = @tsDocNo`);
+    if (res.rowsAffected[0] === 0) throw new Error(`Timesheet ${docNo} not found`);
+    this.logger.log(`Soft-deleted timesheet ${docNo}`);
+  }
+}

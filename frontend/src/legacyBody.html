@@ -1,0 +1,2913 @@
+
+<!-- ══ LOGIN OVERLAY ══ -->
+<div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:9999;overflow:hidden;">
+
+  <!-- Animated background -->
+  <div style="position:absolute;inset:0;background:linear-gradient(135deg,#1a1208 0%,#0f1117 50%,#12190f 100%)"></div>
+  <div class="lp-orb lp-orb1"></div>
+  <div class="lp-orb lp-orb2"></div>
+  <div class="lp-orb lp-orb3"></div>
+
+  <!-- Two-panel card -->
+  <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:100%;height:100%;padding:16px">
+    <div style="display:flex;width:100%;max-width:860px;min-height:520px;border-radius:20px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.07)">
+
+      <!-- LEFT — Brand panel -->
+      <div class="lp-brand" style="flex:1;min-width:0;background:linear-gradient(160deg,#2a1f0e 0%,#1a1208 60%,#0e1a0b 100%);padding:48px 40px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden">
+        <!-- Subtle grid texture -->
+        <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(196,125,40,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(196,125,40,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none"></div>
+        <!-- Accent bar -->
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent,#c47d28),#e8963a,transparent)"></div>
+
+        <div style="position:relative">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:48px">
+            <img src="BRI_PS_60x60.png" alt="logo" style="width:44px;height:44px;border-radius:10px;border:1px solid rgba(196,125,40,.3)"/>
+            <div>
+              <div style="font-size:17px;font-weight:700;color:#f5f0e8;letter-spacing:-.3px">TimesheetPro</div>
+              <div style="font-size:11px;color:rgba(196,125,40,.8);letter-spacing:.5px;text-transform:uppercase">by BRI Professional Signs</div>
+            </div>
+          </div>
+
+          <div style="font-size:28px;font-weight:700;color:#f5f0e8;line-height:1.25;margin-bottom:14px;letter-spacing:-.5px">Workforce time,<br>tracked precisely.</div>
+          <div style="font-size:13px;color:rgba(200,190,175,.6);line-height:1.7;max-width:260px">Production &amp; installation timesheets, equipment logs, and project reporting — all in one place.</div>
+        </div>
+
+        <!-- Feature pills -->
+        <div style="position:relative;display:flex;flex-direction:column;gap:10px">
+          <div class="lp-feature">
+            <div class="lp-feature-icon">⏱</div>
+            <span>Real-time timesheet entry</span>
+          </div>
+          <div class="lp-feature">
+            <div class="lp-feature-icon">🔒</div>
+            <span>Role-based access control</span>
+          </div>
+          <div class="lp-feature">
+            <div class="lp-feature-icon">📊</div>
+            <span>Department &amp; project reporting</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT — Form panel -->
+      <div style="width:360px;flex-shrink:0;background:#12151e;padding:48px 40px;display:flex;flex-direction:column;justify-content:center;position:relative">
+        <div style="margin-bottom:32px">
+          <div style="font-size:22px;font-weight:700;color:#f1f5f9;letter-spacing:-.4px;margin-bottom:6px">Welcome back</div>
+          <div style="font-size:13px;color:#64748b">Sign in to your account</div>
+        </div>
+
+        <!-- Error banner -->
+        <div id="loginError" style="display:none;background:rgba(185,28,28,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:11px 14px;font-size:12.5px;line-height:1.5;margin-bottom:20px;display:none">
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <span style="flex-shrink:0;margin-top:1px">⚠</span>
+            <span id="loginErrorText"></span>
+          </div>
+        </div>
+
+        <!-- Username field -->
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:11.5px;font-weight:600;color:#94a3b8;letter-spacing:.4px;text-transform:uppercase;margin-bottom:7px">Username</label>
+          <div style="position:relative">
+            <svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#475569;pointer-events:none" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <input id="loginUsername" type="text" autocomplete="username" placeholder="Enter your username"
+              style="width:100%;background:#1e2330;border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:11px 12px 11px 36px;font-size:13.5px;color:#f1f5f9;outline:none;transition:border-color .15s,box-shadow .15s;box-sizing:border-box"
+              onfocus="this.style.borderColor='rgba(196,125,40,.6)';this.style.boxShadow='0 0 0 3px rgba(196,125,40,.1)'"
+              onblur="this.style.borderColor='rgba(255,255,255,.08)';this.style.boxShadow='none'"
+              onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()"/>
+          </div>
+        </div>
+
+        <!-- Password field -->
+        <div style="margin-bottom:24px">
+          <label style="display:block;font-size:11.5px;font-weight:600;color:#94a3b8;letter-spacing:.4px;text-transform:uppercase;margin-bottom:7px">Password</label>
+          <div style="position:relative">
+            <svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#475569;pointer-events:none" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Enter your password"
+              style="width:100%;background:#1e2330;border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:11px 40px 11px 36px;font-size:13.5px;color:#f1f5f9;outline:none;transition:border-color .15s,box-shadow .15s;box-sizing:border-box"
+              onfocus="this.style.borderColor='rgba(196,125,40,.6)';this.style.boxShadow='0 0 0 3px rgba(196,125,40,.1)'"
+              onblur="this.style.borderColor='rgba(255,255,255,.08)';this.style.boxShadow='none'"
+              onkeydown="if(event.key==='Enter')submitLogin()"/>
+            <button type="button" id="togglePwBtn" onclick="toggleLoginPw()"
+              style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#475569;padding:4px;display:flex;align-items:center"
+              title="Show/hide password">
+              <svg id="pwEyeIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Sign in button -->
+        <button id="loginBtn" type="button" onclick="submitLogin()"
+          style="width:100%;height:44px;background:linear-gradient(135deg,var(--accent,#c47d28),#e8963a);border:none;border-radius:10px;font-size:14px;font-weight:700;color:#fff;cursor:pointer;transition:opacity .15s,transform .1s;letter-spacing:.2px;box-shadow:0 4px 20px rgba(196,125,40,.35)"
+          onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'"
+          onmousedown="this.style.transform='scale(.98)'" onmouseup="this.style.transform='scale(1)'">
+          Sign In
+        </button>
+
+        <!-- Forgot password -->
+        <div style="text-align:center;margin-top:14px">
+          <button type="button" onclick="showForgotPasswordInfo()"
+            style="background:none;border:none;cursor:pointer;font-size:12px;color:#64748b;text-decoration:underline;padding:0">
+            Forgot password?
+          </button>
+        </div>
+
+        <!-- Lock / forgot / info message -->
+        <div id="loginLockMsg" style="display:none;text-align:center;font-size:12px;color:#64748b;margin-top:10px"></div>
+
+        <!-- Footer -->
+        <div style="margin-top:28px;padding-top:20px;border-top:1px solid rgba(255,255,255,.06);text-align:center;font-size:11px;color:#334155">
+          Protected by session-based auth &amp; account lockout
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="logo">
+    <img class="brand-logo" src="BRI_PS_60x60.png" alt="BRI Professional Signs logo" />
+    TimesheetPro
+  </div>
+  <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Toggle navigation">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="topbar-center">
+    <input id="globalSearchInput" class="search-bar" placeholder="🔍  Search Doc#, Work Order, Project ID, Employee…" />
+    <div id="globalSearchResults" class="global-search-results" style="display:none"></div>
+    <span id="topbarDateTime" style="font-size:11px;color:var(--text3);white-space:nowrap">--</span>
+  </div>
+  <div class="topbar-right">
+    <button class="profile-trigger" onclick="toggleProfileMenu(event)">
+      <div id="topbarAvatar" class="avatar">AM</div>
+      <img id="topbarAvatarImage" class="avatar-img" alt="Profile" style="display:none" />
+    </button>
+    <div class="user-info" onclick="toggleProfileMenu(event)" style="cursor:pointer">
+      <div class="user-name">Ahmed M.</div>
+      <div class="user-role">Site Manager</div>
+    </div>
+    <div id="profileMenu" class="profile-menu" style="display:none">
+      <button class="profile-menu-item" onclick="openProfileView()">Profile View</button>
+      <button class="profile-menu-item" onclick="openChangePwModal()">Change Password</button>
+      <div class="profile-menu-label">Theme</div>
+      <select id="quickThemeSelect" class="profile-menu-select" onchange="changeUserTheme(this.value)">
+        <option value="industrial">Industrial</option>
+        <option value="ocean">Ocean Blue</option>
+        <option value="forest">Forest Green</option>
+        <option value="graphite">Graphite Gray</option>
+      </select>
+      <button class="profile-menu-item" onclick="logoutUser()">Logout</button>
+    </div>
+  </div>
+</header>
+<div class="top-group-menu">
+  <div class="top-group" onclick="toggleTopGroup(this)">
+    <div class="top-group-heading">Dashboard</div>
+    <div class="top-group-dropdown">
+      <button class="top-menu-link active" data-page="dashboard" onclick="showPage('dashboard')">Dashboard</button>
+    </div>
+  </div>
+  <div class="top-group" onclick="toggleTopGroup(this)">
+    <div class="top-group-heading">Timesheets <span class="top-group-arrow">▾</span></div>
+    <div class="top-group-dropdown">
+      <button class="top-menu-link" data-page="prod-list" onclick="showPage('prod-list')">Production</button>
+      <button class="top-menu-link" data-page="inst-list" onclick="showPage('inst-list')">Installation</button>
+      <button class="top-menu-link" data-page="projects-team" onclick="showPage('projects-team')">Projects Team</button>
+      <button class="top-menu-link" data-page="wo-complete" onclick="showPage('wo-complete')">WO Complete</button>
+    </div>
+  </div>
+  <div class="top-group" onclick="toggleTopGroup(this)">
+    <div class="top-group-heading">Master Data <span class="top-group-arrow">▾</span></div>
+    <div class="top-group-dropdown">
+      <button class="top-menu-link" data-page="employees" onclick="showPage('employees')">Employees</button>
+      <button class="top-menu-link" data-page="departments" onclick="showPage('departments')">Department</button>
+      <button class="top-menu-link" data-page="items" onclick="showPage('items')">Items</button>
+      <button class="top-menu-link" data-page="machinery" onclick="showPage('machinery')">Machinery</button>
+      <button class="top-menu-link" data-page="vehicles" onclick="showPage('vehicles')">Vehicles</button>
+      <button class="top-menu-link" data-page="access-equipment" onclick="showPage('access-equipment')">Access Equipment</button>
+      <button class="top-menu-link" data-page="projects" onclick="showPage('projects')">Projects</button>
+      <button class="top-menu-link" data-page="workorders" onclick="showPage('workorders')">Work Orders</button>
+      <button class="top-menu-link" data-page="task-type-master" onclick="showPage('task-type-master')">Task Type</button>
+    </div>
+  </div>
+  <div class="top-group" onclick="toggleTopGroup(this)">
+    <div class="top-group-heading">Access Control <span class="top-group-arrow">▾</span></div>
+    <div class="top-group-dropdown">
+      <button class="top-menu-link" data-page="user-list" onclick="showPage('user-list')">User List</button>
+      <button class="top-menu-link" data-page="role-list" onclick="showPage('role-list')">Role List</button>
+      <button class="top-menu-link" data-page="login-history" onclick="showPage('login-history')">Login History</button>
+    </div>
+  </div>
+  <div class="top-group" onclick="toggleTopGroup(this)">
+    <div class="top-group-heading">Reports <span class="top-group-arrow">▾</span></div>
+    <div class="top-group-dropdown">
+      <button class="top-menu-link" data-page="reports" onclick="showPage('reports')">Reports</button>
+      <button class="top-menu-link" data-page="audit" onclick="showPage('audit')">Audit Trail</button>
+    </div>
+  </div>
+  <div class="top-group" onclick="toggleTopGroup(this)">
+    <div class="top-group-heading">Approvals <span class="top-group-arrow">▾</span></div>
+    <div class="top-group-dropdown">
+      <button class="top-menu-link" data-page="pending-approvals" onclick="showPage('pending-approvals')">Pending Approvals</button>
+      <button class="top-menu-link" data-page="approval-settings" onclick="showPage('approval-settings')">Approval Settings</button>
+    </div>
+  </div>
+  <div class="top-group" onclick="toggleTopGroup(this)">
+    <div class="top-group-heading">Settings <span class="top-group-arrow">▾</span></div>
+    <div class="top-group-dropdown">
+      <button class="top-menu-link" data-page="email-settings" onclick="showPage('email-settings')">Email Settings</button>
+      <button class="top-menu-link" data-page="doc-numbering" onclick="showPage('doc-numbering')">Doc Numbering</button>
+      <button class="top-menu-link" data-page="shift-setup" onclick="showPage('shift-setup')">Shift Setup</button>
+    </div>
+  </div>
+</div>
+<div id="mobileMenuBackdrop" class="mobile-menu-backdrop" onclick="closeMobileMenu()"></div>
+
+<div class="app-shell">
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-section-label">Main</div>
+    <div class="nav-item active" onclick="showPage('dashboard')">
+      <span class="nav-icon">📊</span> Dashboard
+    </div>
+
+    <div class="nav-section-label">Timesheets</div>
+    <div class="nav-item" onclick="showPage('prod-list')">
+      <span class="nav-icon">🏭</span> Production
+    </div>
+    <div class="nav-item" onclick="showPage('inst-list')">
+      <span class="nav-icon">🔧</span> Installation
+    </div>
+    <div class="nav-item" onclick="showPage('projects-team')">
+      <span class="nav-icon">👥</span> Projects Team
+    </div>
+    <div class="nav-item" onclick="showPage('wo-complete')">
+      <span class="nav-icon">✅</span> WO Complete
+    </div>
+
+    <div class="nav-section-label">Master Data</div>
+    <div class="nav-item" onclick="showPage('employees')">
+      <span class="nav-icon">👷</span> Employees
+    </div>
+    <div class="nav-item" onclick="showPage('departments')">
+      <span class="nav-icon">🏢</span> Department
+    </div>
+    <div class="nav-item" onclick="showPage('items')">
+      <span class="nav-icon">📦</span> Items
+    </div>
+    <div class="nav-item" onclick="showPage('machinery')">
+      <span class="nav-icon">⚙️</span> Machinery
+    </div>
+    <div class="nav-item" onclick="showPage('vehicles')">
+      <span class="nav-icon">🚗</span> Vehicles
+    </div>
+    <div class="nav-item" onclick="showPage('access-equipment')">
+      <span class="nav-icon">🪜</span> Access Equipment
+    </div>
+    <div class="nav-item" onclick="showPage('projects')">
+      <span class="nav-icon">🏗️</span> Projects
+    </div>
+    <div class="nav-item" onclick="showPage('workorders')">
+      <span class="nav-icon">📝</span> Work Orders
+    </div>
+    <div class="nav-item" onclick="showPage('task-type-master')">
+      <span class="nav-icon">🗂️</span> Task Type Master
+    </div>
+
+    <div class="nav-section-label">Access Control</div>
+    <div class="nav-item" onclick="showPage('user-list')">
+      <span class="nav-icon">👤</span> User List
+    </div>
+    <div class="nav-item" onclick="showPage('role-list')">
+      <span class="nav-icon">🛡️</span> Role List
+    </div>
+
+    <div class="nav-section-label">Reports</div>
+    <div class="nav-item" onclick="showPage('reports')">
+      <span class="nav-icon">📈</span> Reports
+    </div>
+    <div class="nav-item" onclick="showPage('audit')">
+      <span class="nav-icon">🔍</span> Audit Trail
+    </div>
+
+    <div class="nav-section-label">Approvals</div>
+    <div class="nav-item" id="navPendingApprovals" onclick="showPage('pending-approvals')">
+      <span class="nav-icon">✅</span> Pending Approvals <span id="pendingApprovalsCount" class="badge badge-submitted" style="margin-left:auto;font-size:10px;display:none"></span>
+    </div>
+
+    <div class="nav-section-label">System Settings</div>
+    <div class="nav-item" onclick="showPage('doc-numbering')">
+      <span class="nav-icon">🔢</span> Document Numbering
+    </div>
+    <div class="nav-item" onclick="showPage('shift-setup')">
+      <span class="nav-icon">🕒</span> Shift Setup
+    </div>
+    <div class="nav-item" onclick="showPage('approval-settings')">
+      <span class="nav-icon">🔑</span> Approval Settings
+    </div>
+    <div class="nav-item" onclick="showPage('email-settings')">
+      <span class="nav-icon">📧</span> Email Settings
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- ══════════════════════════════════════════════════════ DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div>
+          <div class="page-title" id="dashGreeting">Welcome</div>
+          <div style="font-size:12px;color:var(--text3)" id="dashDate"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadDashboard()" title="Refresh" style="gap:6px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Refresh
+        </button>
+      </div>
+
+      <!-- Recent Timesheets + Quick Access -->
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:20px">
+        <!-- Recent Timesheets -->
+        <div id="dashRecentTsCard" class="card" style="display:none">
+          <div class="card-head">
+            <div class="card-title">Recent Timesheets</div>
+          </div>
+          <table class="data-table" style="font-size:12px">
+            <thead><tr>
+              <th>Doc No</th><th>Type</th><th>Date</th><th>Status</th>
+            </tr></thead>
+            <tbody id="dashRecentTsBody">
+              <tr><td colspan="4" style="text-align:center;color:var(--text3);padding:16px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Quick Access -->
+        <div id="dashQuickCard" class="card" style="display:none">
+          <div class="card-head"><div class="card-title">Quick Access</div></div>
+          <div id="dashQuickLinks" class="card-body" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+      </div>
+
+      <!-- Bottom row: Login Audit -->
+      <div class="card" id="dashLoginAuditCard">
+        <div class="card-head">
+          <div class="card-title">My Login Audit</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:12px 16px 16px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">Previous Login</div>
+            <div id="auditPrevLogin" style="font-size:13px;font-weight:500;color:var(--text1)">—</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">Successful Today</div>
+            <div id="auditSuccessToday" style="font-size:22px;font-weight:700;color:var(--green)">—</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">Failed Today</div>
+            <div id="auditFailToday" style="font-size:22px;font-weight:700;color:var(--red)">—</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">Last Password Change</div>
+            <div id="auditPwChange" style="font-size:13px;font-weight:500;color:var(--text1)">—</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">Previous Mobile Login</div>
+            <div id="auditPrevMobile" style="font-size:13px;font-weight:500;color:var(--text1)">—</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">Password Expiration</div>
+            <div id="auditPwExpiry" style="font-size:13px;font-weight:500">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ PRODUCTION LIST -->
+    <div class="page" id="page-prod-list">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Production Timesheets</div>
+          <div class="wip-list-meta" id="prodListMeta">5 Items · Updated just now</div>
+        </div>
+        <div class="wip-list-actions">
+          <!-- Filter icon with dropdown -->
+          <div class="wip-filter-wrap" id="prodFilterWrap">
+            <button class="wip-filter-btn" id="prodFilterBtn" onclick="toggleProdFilter()" title="Filters">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              <span id="prodFilterBadge" class="wip-filter-badge" style="display:none"></span>
+            </button>
+            <div class="wip-filter-panel" id="prodFilterPanel" style="display:none">
+              <div class="wip-filter-title">Filters</div>
+              <div class="wip-filter-row">
+                <label class="wip-filter-label">Date From</label>
+                <input id="prodListDateFrom" type="date" class="wip-filter-input" onchange="applyProdFilters()"/>
+              </div>
+              <div class="wip-filter-row">
+                <label class="wip-filter-label">Date To</label>
+                <input id="prodListDateTo" type="date" class="wip-filter-input" onchange="applyProdFilters()"/>
+              </div>
+              <div class="wip-filter-row">
+                <label class="wip-filter-label">Department</label>
+                <select id="prodListDeptFilter" class="wip-filter-input" onchange="applyProdFilters()">
+                  <option value="">All Departments</option>
+                </select>
+              </div>
+              <div class="wip-filter-row">
+                <label class="wip-filter-label">Status</label>
+                <select id="prodListStatusFilter" class="wip-filter-input" onchange="applyProdFilters()">
+                  <option value="">All Status</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Submitted">Submitted</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-top:10px">
+                <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="clearProdFilters()">Clear</button>
+              </div>
+            </div>
+          </div>
+          <!-- Search -->
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input id="prodListSearch" class="wip-search-input" placeholder="Search this list" oninput="filterProdList(this.value)"/>
+          </div>
+          <button class="btn btn-primary btn-sm" style="height:28px;padding:0 12px;font-size:12px" onclick="showPage('new-prod')">+ New Timesheet</button>
+        </div>
+      </div>
+
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="prodListTable">
+          <thead>
+            <tr>
+              <th class="wip-th-num">#</th>
+              <th class="wip-th-sort" onclick="sortWipTable(1)">Document No <span class="wip-sort-icon">↕</span></th>
+              <th class="wip-th-sort" onclick="sortWipTable(2)">Project Code <span class="wip-sort-icon">↕</span></th>
+              <th class="wip-th-sort" onclick="sortWipTable(3)">Customer <span class="wip-sort-icon">↕</span></th>
+              <th class="wip-th-sort" onclick="sortWipTable(4)">Project Name <span class="wip-sort-icon">↕</span></th>
+              <th class="wip-th-sort" onclick="sortWipTable(5)">Work Order <span class="wip-sort-icon">↕</span></th>
+              <th class="wip-th-sort" onclick="sortWipTable(6)">Department <span class="wip-sort-icon">↕</span></th>
+              <th class="wip-th-sort" onclick="sortWipTable(7)">Date <span class="wip-sort-icon">↕</span></th>
+              <th class="wip-th-sort" onclick="sortWipTable(8)">Shift <span class="wip-sort-icon">↕</span></th>
+              <th class="wip-th-sort" onclick="sortWipTable(9)">Entry Person <span class="wip-sort-icon">↕</span></th>
+              <th style="width:90px">Status</th>
+              <th style="width:82px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="prodListBody">
+            <tr><td colspan="12" style="text-align:center;color:var(--text3);padding:20px">Loading timesheets...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ NEW PRODUCTION TIMESHEET FORM -->
+    <div class="page" id="page-new-prod"></div>
+
+<!-- ══════════════════════════════════════════════════════ EMPLOYEES -->
+    <div class="page" id="page-employees">
+      <div class="wip-list-header">
+        <div><div class="wip-list-title">Employee Master</div><div class="wip-list-meta" id="empListMeta">5 items · Updated just now</div></div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input id="empSearch" class="wip-search-input" placeholder="Search this list" oninput="filterWipTable('empSearch','empTable','empListMeta')"/></div>
+          <button class="btn btn-primary btn-sm" style="height:28px;padding:0 12px;font-size:12px" onclick="createNewEmployee()">+ New Employee</button>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="empTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'empTable',1)">Employee No <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'empTable',2)">Full Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'empTable',3)">Designation <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'empTable',4)">Department <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'empTable',5)">Email <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'empTable',6)">Subsidiary <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'empTable',7)">Location <span class="wip-sort-icon">↕</span></th>
+            <th style="width:80px;text-align:center">Actions</th>
+          </tr></thead>
+          <tbody id="empBody">
+            <tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px">Loading employees...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- EMPLOYEE VIEW MODAL -->
+    <div id="empViewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;align-items:center;justify-content:center">
+      <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--sh-lg);width:min(520px,96vw);max-height:90vh;overflow-y:auto;padding:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--text)" id="empViewName">Employee Details</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px" id="empViewNo"></div>
+          </div>
+          <button onclick="document.getElementById('empViewModal').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:20px;line-height:1">✕</button>
+        </div>
+        <div style="padding:20px">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+            <div id="empViewAvatar" style="width:54px;height:54px;border-radius:50%;background:var(--accent-glow);color:var(--accent);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0"></div>
+            <div>
+              <div style="font-size:16px;font-weight:600;color:var(--text)" id="empViewFullName"></div>
+              <div style="font-size:12px;color:var(--text3)" id="empViewDesignation"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group" style="margin:0"><label class="form-label">Employee No</label><input class="form-control" id="empViewEmpNo" readonly/></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Department</label><input class="form-control" id="empViewDept" readonly/></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Email</label><input class="form-control" id="empViewEmail" readonly/></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Subsidiary</label><input class="form-control" id="empViewSubsidiary" readonly/></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Emirates / State</label><input class="form-control" id="empViewEmirates" readonly/></div>
+            <div class="form-group" style="margin:0"><label class="form-label">City</label><input class="form-control" id="empViewCity" readonly/></div>
+          </div>
+        </div>
+        <div style="padding:12px 20px 18px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border)">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('empViewModal').style.display='none'">Close</button>
+          <button class="btn btn-primary btn-sm" id="empViewEditBtn" onclick="">Edit Employee</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- EMPLOYEE CREATE/EDIT PAGE -->
+    <div class="page" id="page-employee-form">
+      <div class="page-header">
+        <div><div class="page-title">Employee Form</div><div class="page-sub" id="employeeFormSub">Create new employee</div></div>
+        <div class="btn-row"><button class="btn btn-outline btn-sm" onclick="showPage('employees')">← Back to Employee List</button></div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div id="employeeFormMode" class="alert alert-success" style="display:none;margin-bottom:12px"></div>
+          <div class="form-grid-2">
+            <div class="form-group"><label class="form-label">Employee Code</label><input id="empCode" class="form-control" placeholder="EMP-NEW" /></div>
+            <div class="form-group"><label class="form-label">Employee Full Name</label><input id="empName" class="form-control" placeholder="Full name" /></div>
+            <div class="form-group"><label class="form-label">Department</label><select id="empDept" class="form-control"><option>Production</option><option>Installation</option></select></div>
+            <div class="form-group"><label class="form-label">Sub-Department</label><input id="empSubDept" class="form-control" placeholder="Sub-Department" /></div>
+            <div class="form-group"><label class="form-label">Category</label><input id="empCategory" class="form-control" placeholder="Category" /></div>
+            <div class="form-group"><label class="form-label">Image</label><input id="empImage" type="file" class="form-control" accept="image/*" /></div>
+            <div class="form-group"><label class="form-label">Status</label><select id="empStatus" class="form-control"><option>Active</option><option>Inactive</option></select></div>
+          </div>
+          <button id="empSaveBtn" class="btn btn-primary btn-sm" style="margin-top:12px">Save Employee</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ PROJECTS -->
+    <div class="page" id="page-projects">
+      <div class="wip-list-header">
+        <div><div class="wip-list-title">Project Master</div><div class="wip-list-meta" id="projListMeta">3 items · Updated just now</div></div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input id="projSearch" class="wip-search-input" placeholder="Search this list" oninput="filterWipTable('projSearch','projectsTable','projListMeta')"/></div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="projectsTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projectsTable',1)">Project ID <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projectsTable',2)">Project Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projectsTable',3)">Salesperson <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projectsTable',4)">Customer <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projectsTable',5)">Business Unit <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projectsTable',6)">Project Manager <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projectsTable',7)">Owner <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projectsTable',8)">Status <span class="wip-sort-icon">↕</span></th>
+          </tr></thead>
+          <tbody id="projectsBody">
+            <tr><td class="wip-td-num">1</td><td><span class="wip-link">PJT-1001</span></td><td><span class="wip-project-name">Al Maktoum Terminal Block C</span></td><td style="color:#6b7280">Ali Kareem</td><td style="color:#6b7280">DCAA</td><td><span class="wip-dept-badge wip-dept-digit">Aviation</span></td><td style="color:#374151">Ahmed Mansoor</td><td style="color:#6b7280">Faisal N.</td><td><span class="badge badge-active">Active</span></td></tr>
+            <tr><td class="wip-td-num">2</td><td><span class="wip-link">PJT-1002</span></td><td><span class="wip-project-name">Dubai South Warehouse</span></td><td style="color:#6b7280">Fatima Noor</td><td style="color:#6b7280">DP World</td><td><span class="wip-dept-badge wip-dept-inst">Logistics</span></td><td style="color:#374151">Sara Khalid</td><td style="color:#6b7280">Omar T.</td><td><span class="badge badge-pending">At Risk</span></td></tr>
+            <tr><td class="wip-td-num">3</td><td><span class="wip-link">PJT-1003</span></td><td><span class="wip-project-name">KSA Logistics Hub</span></td><td style="color:#6b7280">Rashid Khan</td><td style="color:#6b7280">SABIC</td><td><span class="wip-dept-badge wip-dept-prod">Industrial</span></td><td style="color:#374151">Khalid Rahman</td><td style="color:#6b7280">Majid A.</td><td><span class="badge badge-approved">On Track</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ DEPARTMENTS -->
+    <div class="page" id="page-departments">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Department Master</div>
+          <div class="wip-list-meta" id="deptsMeta">Loading…</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search departments" oninput="filterWipTable('deptsSearch','departmentsTable','deptsMeta')" id="deptsSearch"/>
+          </div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="departmentsTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'departmentsTable',1)">Department Code <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'departmentsTable',2)">Main Department <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'departmentsTable',3)">Status <span class="wip-sort-icon">↕</span></th>
+            <th style="width:70px;text-align:center">Actions</th>
+          </tr></thead>
+          <tbody id="departmentsBody">
+            <tr><td class="wip-td-num">—</td><td colspan="4" style="color:#9ca3af;font-size:12px">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DEPARTMENT EDIT MODAL -->
+    <div id="deptEditModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;align-items:center;justify-content:center">
+      <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--sh-lg);width:min(420px,96vw);padding:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--text)">Edit Department</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px" id="deptEditCode"></div>
+          </div>
+          <button onclick="document.getElementById('deptEditModal').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:20px;line-height:1">✕</button>
+        </div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Main Department</label>
+            <input id="deptEditMainDept" class="form-control" placeholder="Main department code"/>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Status</label>
+            <select id="deptEditStatus" class="form-control">
+              <option value="1">Active</option>
+              <option value="0">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div style="padding:12px 20px 18px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border)">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('deptEditModal').style.display='none'">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveDeptProfile()">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ ITEMS -->
+    <div class="page" id="page-items">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Item Master</div>
+          <div class="wip-list-meta" id="itemsMeta">4 items</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search items" oninput="filterWipTable('itemsSearch','itemsTable','itemsMeta')" id="itemsSearch"/>
+          </div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="itemsTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'itemsTable',1)">Item Code <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'itemsTable',2)">Item Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'itemsTable',3)">Description <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'itemsTable',4)">UOM <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'itemsTable',5)">Subsidiary <span class="wip-sort-icon">↕</span></th>
+          </tr></thead>
+          <tbody id="itemsBody">
+            <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Loading items...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ MACHINERY -->
+    <div class="page" id="page-machinery">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Machinery Master</div>
+          <div class="wip-list-meta" id="machineryMeta">Loading…</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search machinery" oninput="filterWipTable('machinerySearch','machineryTable','machineryMeta')" id="machinerySearch"/>
+          </div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="machineryTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'machineryTable',1)">Machine Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'machineryTable',2)">Department Code <span class="wip-sort-icon">↕</span></th>
+          </tr></thead>
+          <tbody id="machineryBody">
+            <tr><td class="wip-td-num">—</td><td colspan="2" style="color:#9ca3af;font-size:12px">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ ACCESS EQUIPMENT -->
+    <div class="page" id="page-access-equipment">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Access Equipment Master</div>
+          <div class="wip-list-meta" id="accessEqMeta">Loading…</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search equipment" oninput="filterWipTable('accessEqSearch','accessEquipmentTable','accessEqMeta')" id="accessEqSearch"/>
+          </div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="accessEquipmentTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'accessEquipmentTable',1)">Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'accessEquipmentTable',2)">Department <span class="wip-sort-icon">↕</span></th>
+          </tr></thead>
+          <tbody id="accessEquipmentBody">
+            <tr><td class="wip-td-num">—</td><td colspan="2" style="color:#9ca3af;font-size:12px">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VEHICLE MASTER LIST -->
+    <div class="page" id="page-vehicles">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Vehicle Master</div>
+          <div class="wip-list-meta" id="vehiclesMeta">Loading…</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search vehicles" oninput="filterWipTable('vehiclesSearch','vehiclesTable','vehiclesMeta')" id="vehiclesSearch"/>
+          </div>
+          <button class="btn btn-primary btn-sm" style="height:28px;padding:0 12px;font-size:12px" onclick="createNewVehicle()">+ New Vehicle</button>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="vehiclesTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'vehiclesTable',1)">Vehicle ID <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'vehiclesTable',2)">Plate No <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'vehiclesTable',3)">Type <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'vehiclesTable',4)">Make / Model <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'vehiclesTable',5)">Year <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'vehiclesTable',6)">Status <span class="wip-sort-icon">↕</span></th>
+            <th style="width:80px">Actions</th>
+          </tr></thead>
+          <tbody id="vehiclesBody">
+            <tr><td class="wip-td-num">—</td><td colspan="7" style="color:#9ca3af;font-size:12px">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VEHICLE CREATE / EDIT PAGE -->
+    <div class="page" id="page-vehicle-form">
+      <div class="page-header">
+        <div><div class="page-title" id="vehicleFormTitle">New Vehicle</div><div class="page-sub">Vehicle Master record</div></div>
+        <div class="btn-row"><button class="btn btn-outline btn-sm" onclick="showPage('vehicles')">← Back to Vehicle List</button></div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <input type="hidden" id="vehicleEditId"/>
+          <div class="form-grid-2">
+            <div class="form-group"><label class="form-label">Vehicle ID</label><input id="vehicleIdField" class="form-control" readonly style="background:var(--bg2);color:var(--text3)"/></div>
+            <div class="form-group"><label class="form-label">Plate No</label><input id="vehiclePlateNo" class="form-control" placeholder="e.g. DXB-12345" style="text-transform:uppercase"/></div>
+            <div class="form-group"><label class="form-label">Vehicle Type</label>
+              <select id="vehicleType" class="form-control">
+                <option value="Pickup">Pickup</option>
+                <option value="Van">Van</option>
+                <option value="Truck">Truck</option>
+                <option value="Flatbed">Flatbed</option>
+                <option value="Crane Truck">Crane Truck</option>
+                <option value="Bus">Bus</option>
+                <option value="Car">Car</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group"><label class="form-label">Make</label><input id="vehicleMake" class="form-control" placeholder="e.g. Toyota"/></div>
+            <div class="form-group"><label class="form-label">Model</label><input id="vehicleModel" class="form-control" placeholder="e.g. Hilux"/></div>
+            <div class="form-group"><label class="form-label">Year</label><input id="vehicleYear" class="form-control" type="number" min="1990" max="2030" placeholder="e.g. 2022"/></div>
+            <div class="form-group"><label class="form-label">Status</label><select id="vehicleStatus" class="form-control"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+            <div class="form-group" style="grid-column:1/-1"><label class="form-label">Remarks</label><input id="vehicleRemarks" class="form-control" placeholder="Optional notes"/></div>
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="saveVehicle()">Save Vehicle</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MACHINERY CREATE/VIEW/EDIT PAGE -->
+    <div class="page" id="page-machinery-form">
+      <div class="page-header">
+        <div><div class="page-title">Machinery Form</div><div class="page-sub" id="machineryFormSub">Create new machine</div></div>
+        <div class="btn-row"><button class="btn btn-outline btn-sm" onclick="showPage('machinery')">← Back to Machinery List</button></div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div id="machineryFormMode" class="alert alert-success" style="display:none;margin-bottom:12px"></div>
+          <div class="form-grid-2">
+            <div class="form-group"><label class="form-label">Machine ID</label><input id="machId" class="form-control" placeholder="MCH-NEW" /></div>
+            <div class="form-group"><label class="form-label">Machine Name</label><input id="machName" class="form-control" placeholder="Machine name" /></div>
+            <div class="form-group"><label class="form-label">Department</label><select id="machDept" class="form-control"><option>Production</option><option>Installation</option></select></div>
+            <div class="form-group"><label class="form-label">Status</label><select id="machStatus" class="form-control"><option>Operational</option><option>Service Due</option><option>Off-service</option><option>Cert. Due</option></select></div>
+          </div>
+          <button id="machSaveBtn" class="btn btn-primary btn-sm" style="margin-top:12px">Save Machine</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ WORK ORDERS -->
+    <div class="page" id="page-workorders">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Work Order Master</div>
+          <div class="wip-list-meta" id="woMeta">Loading…</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search work orders" oninput="filterWipTable('woSearch','workOrdersTable','woMeta')" id="woSearch"/>
+          </div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="workOrdersTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'workOrdersTable',1)">WO ID <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'workOrdersTable',2)">Project ID <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'workOrdersTable',3)">Project Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'workOrdersTable',4)">Customer <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'workOrdersTable',5)">Sign Type <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'workOrdersTable',6)">Department <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'workOrdersTable',7)">Status <span class="wip-sort-icon">↕</span></th>
+          </tr></thead>
+          <tbody id="workOrdersBody">
+            <tr><td class="wip-td-num">1</td><td><span class="wip-link">WO-2026-0042</span></td><td style="color:#6b7280">PJT-1001</td><td><span class="wip-project-name">Al Maktoum Block C</span></td><td style="color:#6b7280">Emaar</td><td style="color:#6b7280">Channel Letter</td><td><span class="wip-dept-badge wip-dept-prod">Production</span></td><td><span class="badge badge-submitted">In Progress</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ WO COMPLETE -->
+    <div class="page" id="page-wo-complete">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">WO Complete</div>
+          <div class="wip-list-meta" id="woCompleteMeta">Loading…</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search records…" oninput="filterWipTable('wocSearch','wocTable','woCompleteMeta')" id="wocSearch"/>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openWocCreateModal()">+ Create</button>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="wocTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'wocTable',1)">Doc No <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'wocTable',2)">Date <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'wocTable',3)">Project ID <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'wocTable',4)">Project Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'wocTable',5)">Department <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'wocTable',6)">Work Order <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'wocTable',7)">Status <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'wocTable',8)">Entered By <span class="wip-sort-icon">↕</span></th>
+            <th></th>
+          </tr></thead>
+          <tbody id="wocBody">
+            <tr><td colspan="10" style="text-align:center;color:var(--text3);padding:20px">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- WO Complete Create Modal -->
+    <div class="modal-overlay" id="wocModal" style="display:none" onclick="if(event.target===this)closeWocModal()">
+      <div class="woc-modal">
+        <!-- Header -->
+        <div class="woc-modal-header">
+          <div class="woc-modal-title-row">
+            <span class="woc-modal-icon">✅</span>
+            <div>
+              <div class="woc-modal-title" id="wocModalTitle">Mark WO Complete</div>
+              <div class="woc-modal-sub" id="wocDocNo">New Record</div>
+            </div>
+          </div>
+          <button class="woc-close-btn" onclick="closeWocModal()">✕</button>
+        </div>
+
+        <div class="woc-modal-body">
+          <!-- Section: Record Info -->
+          <div class="woc-section-label">Record Info</div>
+          <div class="woc-form-row">
+            <div class="form-group">
+              <label class="form-label">Date <span class="req">*</span></label>
+              <input id="wocDate" type="date" class="form-control"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Status <span class="req">*</span></label>
+              <select id="wocStatus" class="form-control">
+                <option value="">Select status…</option>
+                <option value="WO Completed">WO Completed</option>
+                <option value="Data Entry Completed">Data Entry Completed</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Entered By</label>
+              <input id="wocEnteredBy" class="form-control" readonly/>
+            </div>
+          </div>
+
+          <!-- Section: Project & WO -->
+          <div class="woc-section-label">Project &amp; Work Order</div>
+          <div class="woc-form-row">
+            <div class="form-group" style="position:relative">
+              <label class="form-label">Project ID <span class="req">*</span></label>
+              <input id="wocProjectId" class="form-control" placeholder="Type project ID…" autocomplete="off" oninput="onWocProjectInput()" onblur="setTimeout(()=>{const m=document.getElementById('wocProjectMenu');if(m)m.style.display='none'},150)"/>
+              <div class="project-id-menu" id="wocProjectMenu" style="display:none"></div>
+            </div>
+            <div class="form-group" style="flex:1.4">
+              <label class="form-label">Project Name</label>
+              <input id="wocCustomerName" class="form-control" readonly/>
+            </div>
+          </div>
+          <div class="woc-form-row">
+            <div class="form-group">
+              <label class="form-label">Department <span class="req">*</span></label>
+              <select id="wocDepartment" class="form-control" onchange="onWocDepartmentChange()">
+                <option value="">Select department…</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1.4">
+              <label class="form-label">Work Order <span class="req">*</span></label>
+              <select id="wocWorkOrder" class="form-control" onchange="onWocWorkOrderChange()">
+                <option value="">Select project first…</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Section: Remarks -->
+          <div class="woc-form-row">
+            <div class="form-group" style="flex:1">
+              <label class="form-label">Remarks</label>
+              <input id="wocRemarks" class="form-control" placeholder="Optional remarks…"/>
+            </div>
+          </div>
+
+          <!-- Related Data Panel (shown when WO selected) -->
+          <div class="woc-related-panel" id="wocRelatedPanel" style="display:none">
+            <div class="woc-related-header">
+              <div class="woc-tab-bar">
+                <button class="woc-tab active" id="wocTab1" onclick="switchWocTab(1)">📋 Timesheet Entries</button>
+                <button class="woc-tab" id="wocTab2" onclick="switchWocTab(2)">📎 Attachments</button>
+              </div>
+              <span class="woc-ts-meta" id="wocTsMeta"></span>
+            </div>
+
+            <!-- Tab 1: Timesheets -->
+            <div id="wocTabContent1" class="woc-tab-content">
+              <div class="woc-ts-scroll">
+                <table class="woc-ts-table">
+                  <thead><tr>
+                    <th>#</th><th>Doc No</th><th>Date</th><th>Department</th><th>Entered By</th>
+                  </tr></thead>
+                  <tbody id="wocTsBody">
+                    <tr><td colspan="5" class="woc-ts-empty">Select a work order to view entries.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Tab 2: Attachments -->
+            <div id="wocTabContent2" class="woc-tab-content" style="display:none">
+              <div id="wocSavedFileList" class="woc-file-list" style="display:none"></div>
+              <div class="woc-dropzone" id="wocDropzone" onclick="document.getElementById('wocFileInput').click()" ondragover="event.preventDefault();this.classList.add('woc-dropzone-hover')" ondragleave="this.classList.remove('woc-dropzone-hover')" ondrop="wocHandleDrop(event)">
+                <div class="woc-dropzone-icon">📎</div>
+                <div class="woc-dropzone-text">Click or drag files here to attach</div>
+                <div class="woc-dropzone-hint">PDF, images, Word, Excel — max 5 MB each</div>
+              </div>
+              <input type="file" id="wocFileInput" multiple style="display:none" onchange="wocHandleFileSelect(event)"/>
+              <div id="wocFileList" class="woc-file-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="woc-modal-footer">
+          <button class="btn btn-outline" onclick="closeWocModal()">Cancel</button>
+          <button class="btn btn-primary woc-save-btn" id="wocSaveBtn" onclick="saveWocComplete()">✅ Mark Complete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ TASK TYPE MASTER -->
+    <div class="page" id="page-task-type-master">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Task Type Master</div>
+          <div class="wip-list-meta" id="taskTypesMeta">Loading…</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search task types" oninput="filterWipTable('taskTypesSearch','taskTypesTable','taskTypesMeta')" id="taskTypesSearch"/>
+          </div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="taskTypesTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'taskTypesTable',1)">Reason Visit <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'taskTypesTable',2)">Module Name <span class="wip-sort-icon">↕</span></th>
+          </tr></thead>
+          <tbody id="taskTypesBody">
+            <tr><td class="wip-td-num">—</td><td colspan="2" style="color:#9ca3af;font-size:12px">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ REPORTS LANDING -->
+    <div class="page" id="page-reports">
+      <div class="page-header">
+        <div><div class="page-title">Reports</div><div class="page-sub">Select a report to generate and export</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">
+        <div class="card" style="margin-bottom:0;cursor:pointer;transition:border-color var(--transition)" onclick="showPage('report-summary')" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+          <div class="card-body">
+            <div style="font-size:28px;margin-bottom:10px">📊</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Timesheet Summary</div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Timesheet list with labour counts, duration and status by date range</div>
+            <span class="badge badge-approved">CSV</span>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;cursor:pointer;transition:border-color var(--transition)" onclick="openDetailReport('PROD')" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+          <div class="card-body">
+            <div style="font-size:28px;margin-bottom:10px">🔧</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Production Detail</div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Line-level breakdown for Production timesheets</div>
+            <span class="badge badge-approved">CSV</span>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;cursor:pointer;transition:border-color var(--transition)" onclick="openDetailReport('INST')" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+          <div class="card-body">
+            <div style="font-size:28px;margin-bottom:10px">🏗️</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Installation Detail</div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Line-level breakdown for Installation timesheets</div>
+            <span class="badge badge-approved">CSV</span>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;cursor:pointer;transition:border-color var(--transition)" onclick="openDetailReport('PROJ')" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+          <div class="card-body">
+            <div style="font-size:28px;margin-bottom:10px">📁</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">Project Detail</div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Line-level breakdown for Project timesheets</div>
+            <span class="badge badge-approved">CSV</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ SUMMARY REPORT -->
+    <div class="page" id="page-report-summary">
+      <div class="wip-list-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-outline btn-sm" onclick="showPage('reports')" style="padding:4px 10px">&larr;</button>
+          <div>
+            <div class="wip-list-title">Timesheet Summary Report</div>
+            <div class="wip-list-sub">Filter, review and export timesheet records</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="clearReportFilters()">Clear</button>
+          <button class="btn btn-primary btn-sm" onclick="exportReportCSV()">Export CSV</button>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-body" style="padding:14px 16px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end">
+            <div>
+              <label class="form-label">Date From</label>
+              <input type="date" id="rptDateFrom" class="form-control form-control-sm" onchange="loadReport()">
+            </div>
+            <div>
+              <label class="form-label">Date To</label>
+              <input type="date" id="rptDateTo" class="form-control form-control-sm" onchange="loadReport()">
+            </div>
+            <div>
+              <label class="form-label">Type</label>
+              <select id="rptType" class="form-control form-control-sm" onchange="loadReport()">
+                <option value="">All Types</option>
+                <option value="PROD">Production</option>
+                <option value="INST">Installation</option>
+                <option value="PROJ">Project</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Status</label>
+              <select id="rptStatus" class="form-control form-control-sm" onchange="loadReport()">
+                <option value="">All Statuses</option>
+                <option value="Draft">Draft</option>
+                <option value="Submitted">Submitted</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Department</label>
+              <select id="rptDept" class="form-control form-control-sm" onchange="loadReport()">
+                <option value="">All Departments</option>
+              </select>
+            </div>
+            <div style="display:flex;align-items:flex-end">
+              <button class="btn btn-primary btn-sm" style="width:100%" onclick="loadReport()">Run Report</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary totals -->
+      <div id="rptSummaryBar" style="display:none;gap:16px;margin-bottom:14px;flex-wrap:wrap">
+        <div class="card" style="margin-bottom:0;flex:1;min-width:120px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="rptTotalCount">0</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Timesheets</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;flex:1;min-width:120px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="rptTotalHours">0</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Total Duration</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;flex:1;min-width:120px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="rptTotalLabour">0</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Labour Lines</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;flex:1;min-width:120px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="rptTotalMaterial">0</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Material Lines</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;flex:1;min-width:120px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="rptTotalEquip">0</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Equipment Lines</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results table -->
+      <div class="card" style="margin-bottom:0">
+        <div class="card-body" style="padding:0">
+          <div id="rptTableWrap" style="overflow-x:auto">
+            <table class="data-table" style="min-width:900px">
+              <thead>
+                <tr>
+                  <th>Doc No</th>
+                  <th>Type</th>
+                  <th>Date</th>
+                  <th>Department</th>
+                  <th>Work Order / Project</th>
+                  <th>Entered By</th>
+                  <th>Shift</th>
+                  <th style="text-align:center">Labour</th>
+                  <th style="text-align:right">Duration</th>
+                  <th style="text-align:center">Materials</th>
+                  <th style="text-align:center">Equipment</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="rptBody">
+                <tr><td colspan="12" style="text-align:center;color:var(--text3);padding:40px">Select filters and click Run Report</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ DETAIL REPORT -->
+    <div class="page" id="page-report-detail">
+      <div class="wip-list-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-outline btn-sm" onclick="showPage('reports')" style="padding:4px 10px">&larr;</button>
+          <div>
+            <div class="wip-list-title" id="drptTitle">Timesheet Detail Report</div>
+            <div class="wip-list-sub" id="drptSub">Line-level breakdown — labour, materials and equipment per timesheet</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="clearDetailReportFilters()">Clear</button>
+          <button class="btn btn-primary btn-sm" onclick="exportDetailReportCSV()">Export CSV</button>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-body" style="padding:14px 16px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end">
+            <div>
+              <label class="form-label">Date From</label>
+              <input type="date" id="drptDateFrom" class="form-control form-control-sm">
+            </div>
+            <div>
+              <label class="form-label">Date To</label>
+              <input type="date" id="drptDateTo" class="form-control form-control-sm">
+            </div>
+            <div id="drptTypeWrap">
+              <label class="form-label">Type</label>
+              <select id="drptType" class="form-control form-control-sm">
+                <option value="">All Types</option>
+                <option value="PROD">Production</option>
+                <option value="INST">Installation</option>
+                <option value="PROJ">Project</option>
+              </select>
+            </div>
+            <div id="drptStatusWrap">
+              <label class="form-label">Status</label>
+              <select id="drptStatus" class="form-control form-control-sm">
+                <option value="">All Statuses</option>
+                <option value="Draft">Draft</option>
+                <option value="Submitted">Submitted</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+            <div id="drptDeptWrap">
+              <label class="form-label">Department</label>
+              <select id="drptDept" class="form-control form-control-sm">
+                <option value="">All Departments</option>
+              </select>
+            </div>
+            <div id="drptLineTypeWrap">
+              <label class="form-label">Line Type</label>
+              <select id="drptLineType" class="form-control form-control-sm" onchange="_applyDetailLineFilter()">
+                <option value="">All Lines</option>
+                <option value="LABOUR">Labour</option>
+                <option value="MATERIAL">Material</option>
+                <option value="MACHINERY">Machinery</option>
+                <option value="VEHICLE">Vehicle</option>
+                <option value="ACCESS">Access Equipment</option>
+              </select>
+            </div>
+            <div id="drptEmployeeWrap" style="display:none">
+              <label class="form-label">Employee</label>
+              <input type="text" id="drptEmployee" class="form-control form-control-sm" placeholder="Name or code…">
+            </div>
+            <div style="display:flex;align-items:flex-end">
+              <button class="btn btn-primary btn-sm" style="width:100%" onclick="loadDetailReport()">Run Report</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary totals -->
+      <div id="drptSummaryBar" style="display:none;gap:16px;margin-bottom:14px;flex-wrap:wrap">
+        <div class="card" style="margin-bottom:0;flex:1;min-width:110px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="drptTotalTS">0</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Timesheets</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;flex:1;min-width:110px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="drptTotalLabour">0</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Labour Lines</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;flex:1;min-width:110px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="drptTotalDuration">00:00</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Total Duration</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;flex:1;min-width:110px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="drptTotalMaterial">0</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Material Lines</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0;flex:1;min-width:110px">
+          <div class="card-body" style="padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--accent)" id="drptTotalEquip">0</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Equipment Lines</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results table -->
+      <div class="card" style="margin-bottom:0">
+        <div class="card-body" style="padding:0">
+          <div style="overflow-x:auto">
+            <table class="data-table" style="min-width:1100px">
+              <thead>
+                <tr>
+                  <th>Doc No</th>
+                  <th>Type</th>
+                  <th>Date</th>
+                  <th id="drptThDept">Department</th>
+                  <th id="drptThWO">Work Order / Project</th>
+                  <th>Entered By</th>
+                  <th id="drptThLineType">Line Type</th>
+                  <th id="drptThEmployee">Employee / Item / Equipment</th>
+                  <th>Code / Designation</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th id="drptThDuration" style="text-align:right">Duration / Qty</th>
+                  <th id="drptThUOM">UOM</th>
+                </tr>
+              </thead>
+              <tbody id="drptBody">
+                <tr><td colspan="13" style="text-align:center;color:var(--text3);padding:40px">Select filters and click Run Report</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ AUDIT TRAIL -->
+    <div class="page" id="page-audit">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Audit Trail</div>
+          <div class="wip-list-meta" id="auditMeta"></div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search doc / user / details" id="auditSearch" onkeydown="if(event.key==='Enter')loadAuditTrail()"/>
+          </div>
+          <button class="btn btn-outline btn-sm" style="height:28px;padding:0 12px;font-size:12px" onclick="exportAuditCSV()">↓ CSV</button>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center">
+        <select id="auditFilterDocType" class="form-control" style="width:160px;height:30px;font-size:12px" onchange="loadAuditTrail()">
+          <option value="">All Types</option>
+          <option value="TIMESHEET-PROD">Timesheet Production</option>
+          <option value="TIMESHEET-INST">Timesheet Installation</option>
+          <option value="TIMESHEET-PROJ">Timesheet Project</option>
+          <option value="WO-COMPLETE">WO Complete</option>
+          <option value="USER">User</option>
+          <option value="ROLE">Role</option>
+        </select>
+        <select id="auditFilterAction" class="form-control" style="width:130px;height:30px;font-size:12px" onchange="loadAuditTrail()">
+          <option value="">All Actions</option>
+          <option value="CREATE">Create</option>
+          <option value="UPDATE">Update</option>
+          <option value="DELETE">Delete</option>
+          <option value="RESET-PWD">Reset Password</option>
+          <option value="PERMISSIONS">Permissions</option>
+        </select>
+        <input id="auditFilterDateFrom" type="date" class="form-control" style="width:140px;height:30px;font-size:12px" onchange="loadAuditTrail()" placeholder="From"/>
+        <input id="auditFilterDateTo" type="date" class="form-control" style="width:140px;height:30px;font-size:12px" onchange="loadAuditTrail()" placeholder="To"/>
+        <button class="btn btn-ghost btn-sm" style="height:30px" onclick="clearAuditFilters()">Clear</button>
+      </div>
+
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="auditTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th>Timestamp</th>
+            <th>Type</th>
+            <th>Reference</th>
+            <th>Action</th>
+            <th>Performed By</th>
+            <th>Details</th>
+          </tr></thead>
+          <tbody id="auditBody">
+            <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:30px">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ INSTALLATION LIST -->
+    <div class="page" id="page-inst-list">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Installation Timesheets</div>
+          <div class="wip-list-meta" id="instListMeta">2 items · Updated just now</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-filter-wrap" id="instFilterWrap">
+            <button class="wip-filter-btn" id="instFilterBtn" onclick="toggleInstFilter()" title="Filters">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            </button>
+            <div class="wip-filter-panel" id="instFilterPanel" style="display:none">
+              <div class="wip-filter-title">Filters</div>
+              <div class="wip-filter-row"><label class="wip-filter-label">Date From</label><input id="instDateFrom" type="date" class="wip-filter-input" onchange="applyInstFilters()"/></div>
+              <div class="wip-filter-row"><label class="wip-filter-label">Date To</label><input id="instDateTo" type="date" class="wip-filter-input" onchange="applyInstFilters()"/></div>
+              <div class="wip-filter-row"><label class="wip-filter-label">Status</label><select id="instListStatusFilter" class="wip-filter-input" onchange="applyInstFilters()"><option value="">All Status</option><option value="Draft">Draft</option><option value="Submitted">Submitted</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option></select></div>
+              <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="clearInstFilters()">Clear</button></div>
+            </div>
+          </div>
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search this list" oninput="filterWipTable('instSearch','instListTable','instListMeta')" id="instSearch"/>
+          </div>
+          <button class="btn btn-primary btn-sm" style="height:28px;padding:0 12px;font-size:12px" onclick="initNewInstPage().then(()=>openInstEntryModal())">+ New</button>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="instListTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'instListTable',1)">Document No <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'instListTable',2)">Date <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'instListTable',3)">Work Order <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'instListTable',4)">Project ID <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'instListTable',5)">Customer <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'instListTable',6)">Project Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'instListTable',7)">Department <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'instListTable',8)">Shift <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'instListTable',9)">Entry Person <span class="wip-sort-icon">↕</span></th>
+            <th style="width:90px">Status</th>
+            <th style="width:82px">Actions</th>
+          </tr></thead>
+          <tbody id="instListBody">
+            <tr><td colspan="12" style="text-align:center;color:var(--text3);padding:20px">Loading timesheets...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ PROJECTS TEAM -->
+    <div class="page" id="page-projects-team">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Projects Team Timesheets</div>
+          <div class="wip-list-meta" id="projTsMeta">Loading…</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-filter-wrap" id="projFilterWrap">
+            <button class="wip-filter-btn" id="projFilterBtn" onclick="toggleProjFilter()" title="Filters">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            </button>
+            <div class="wip-filter-panel" id="projFilterPanel" style="display:none">
+              <div class="wip-filter-title">Filters</div>
+              <div class="wip-filter-row"><label class="wip-filter-label">Date From</label><input id="projDateFrom" type="date" class="wip-filter-input" onchange="applyProjFilters()"/></div>
+              <div class="wip-filter-row"><label class="wip-filter-label">Date To</label><input id="projDateTo" type="date" class="wip-filter-input" onchange="applyProjFilters()"/></div>
+              <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="clearProjFilters()">Clear</button></div>
+            </div>
+          </div>
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search timesheets" oninput="filterWipTable('projTsSearch','projTsTable','projTsMeta')" id="projTsSearch"/>
+          </div>
+          <button class="btn btn-primary btn-sm" style="height:28px;padding:0 12px;font-size:12px" onclick="openProjectsTeamTimesheetModal()">+ New</button>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="projTsTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projTsTable',1)">Document No <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projTsTable',2)">Date <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projTsTable',3)">Employee <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projTsTable',4)">Project ID <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projTsTable',5)">Project Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projTsTable',6)">Task Type <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'projTsTable',7)">Duration <span class="wip-sort-icon">↕</span></th>
+            <th style="width:72px">Actions</th>
+          </tr></thead>
+          <tbody id="projTsBody">
+            <tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px">Loading timesheets…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="page" id="page-projects-team-daily">
+      <div class="page-header">
+        <div>
+          <div class="page-title" id="ptDailyTitle">New Daily Timesheet</div>
+          <div class="page-sub" id="ptDailySub">Projects Team daily entry</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-outline btn-sm" onclick="showPage('projects-team')">← Back</button>
+          <button class="btn btn-primary btn-sm" onclick="savePTDailyTimesheet()">💾 Save</button>
+        </div>
+      </div>
+      <div class="card"><div class="card-body"><div class="form-grid-2">
+        <div class="form-group"><label class="form-label">Doc #</label><span id="ptDocNo" class="form-control form-control-auto" style="display:flex;align-items:center">…</span></div>
+        <div class="form-group"><label class="form-label">Entered By</label><input id="ptUser" class="form-control" readonly/></div>
+        <div class="form-group">
+          <label class="form-label">Employee</label>
+          <div class="srch-wrap"><input id="ptEmployee" class="form-control ts-emp-inp" placeholder="Search employee…" autocomplete="off"/><div id="ptEmployeeMenu" class="srch-menu" style="display:none"></div></div>
+        </div>
+        <div class="form-group"><label class="form-label">Date</label><input id="ptDate" type="date" class="form-control"/></div>
+        <div class="form-group">
+          <label class="form-label">Project ID</label>
+          <div style="position:relative">
+            <input id="ptProjectId" class="form-control" placeholder="Type to search…" oninput="onPTProjectChange()" onchange="onPTProjectChange()" autocomplete="off"/>
+            <div id="ptProjectIdMenu" class="project-id-menu" style="display:none"></div>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Project Name</label><input id="ptProjectName" class="form-control" readonly/></div>
+        <div class="form-group"><label class="form-label">Customer</label><input id="ptCustomer" class="form-control" readonly/></div>
+        <div class="form-group">
+          <label class="form-label">Task Type</label>
+          <select id="ptTaskType" class="form-control"><option value="">Select task type…</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start Time</label>
+          <div class="time-picker-row">
+            <select id="ptStartH" class="form-control time-sel" onchange="calcPTDuration()"><option value="">--</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option></select>
+            <span class="time-colon">:</span>
+            <select id="ptStartM" class="form-control time-sel" onchange="calcPTDuration()"><option value="">--</option><option value="00">00</option><option value="15">15</option><option value="30">30</option><option value="45">45</option></select>
+            <select id="ptStartAP" class="form-control time-sel" onchange="calcPTDuration()"><option value="">--</option><option>AM</option><option>PM</option></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Time</label>
+          <div class="time-picker-row">
+            <select id="ptEndH" class="form-control time-sel" onchange="calcPTDuration()"><option value="">--</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option></select>
+            <span class="time-colon">:</span>
+            <select id="ptEndM" class="form-control time-sel" onchange="calcPTDuration()"><option value="">--</option><option value="00">00</option><option value="15">15</option><option value="30">30</option><option value="45">45</option></select>
+            <select id="ptEndAP" class="form-control time-sel" onchange="calcPTDuration()"><option value="">--</option><option>AM</option><option>PM</option></select>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Duration (mins)</label><input id="ptDuration" class="form-control" readonly/></div>
+        <div class="form-group"><label class="form-label">Comments</label><input id="ptComments" class="form-control" placeholder="Update comments…"/></div>
+      </div></div></div>
+    </div>
+
+    <div class="page" id="page-projects-team-weekly">
+      <div class="page-header">
+        <div><div class="page-title">Weekly Timesheet Entry</div><div class="page-sub">Each filled day is saved as an individual daily timesheet</div></div>
+        <div class="btn-row">
+          <button class="btn btn-outline btn-sm" onclick="showPage('projects-team')">← Back</button>
+          <button class="btn btn-primary btn-sm" onclick="savePTWeeklyTimesheet()">💾 Save Weekly Entry</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Header</div></div>
+        <div class="card-body">
+          <div class="form-grid-2">
+            <div class="form-group"><label class="form-label">Entered By</label><input id="ptWeeklyUser" class="form-control" readonly/></div>
+            <div class="form-group">
+              <label class="form-label">Employee</label>
+              <div class="srch-wrap"><input id="ptWeeklyEmployee" class="form-control ts-emp-inp" placeholder="Search employee…" autocomplete="off"/><div id="ptWeeklyEmployeeMenu" class="srch-menu" style="display:none"></div></div>
+            </div>
+            <div class="form-group"><label class="form-label">Week Start (Mon)</label><input id="ptWeeklyStart" type="date" class="form-control" oninput="onPTWeeklyStartChange()"/></div>
+            <div class="form-group"><label class="form-label">Week End (Sun)</label><input id="ptWeeklyEnd" type="date" class="form-control" readonly/></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Daily Entries</div></div>
+        <div class="card-body">
+          <div style="overflow-x:auto">
+          <table class="line-table" style="min-width:1400px">
+            <thead>
+              <tr>
+                <th style="min-width:140px">Project</th>
+                <th style="min-width:130px">Task Type</th>
+                <th id="ptwDay1" style="min-width:110px">Mon</th>
+                <th id="ptwDay2" style="min-width:110px">Tue</th>
+                <th id="ptwDay3" style="min-width:110px">Wed</th>
+                <th id="ptwDay4" style="min-width:110px">Thu</th>
+                <th id="ptwDay5" style="min-width:110px">Fri</th>
+                <th id="ptwDay6" style="min-width:110px">Sat</th>
+                <th id="ptwDay7" style="min-width:110px">Sun</th>
+                <th style="min-width:140px">Comment</th>
+                <th style="width:36px"></th>
+              </tr>
+            </thead>
+            <tbody id="ptWeeklyBody"></tbody>
+          </table>
+          </div>
+          <button class="add-line-btn" onclick="addPTWeeklyRow()">+ Add Row</button>
+          <p style="margin-top:10px;font-size:12px;color:var(--text3)">Enter times as <strong>HH:MM–HH:MM</strong> (e.g. 08:00–17:00). Leave blank to skip that day.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- page-new-inst is handled via instEntryModal overlay -->
+
+    <!-- NOTIFICATIONS PAGE -->
+    <div class="page" id="page-notifications">
+      <div class="page-header">
+        <div><div class="page-title">Notifications</div></div>
+        <button class="btn btn-ghost btn-sm">Mark all read</button>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div class="notif-item">
+            <div class="notif-dot-lg" style="background:var(--red)"></div>
+            <div><div class="notif-msg"><strong>EQ-0017</strong> Tower Crane certification has expired. Immediate action required.</div><div class="notif-time">2 days ago</div></div>
+          </div>
+          <div class="notif-item">
+            <div class="notif-dot-lg" style="background:var(--amber)"></div>
+            <div><div class="notif-msg">TS-PROD-2026-00041 has exceeded the 48h approval threshold. Escalated to Director.</div><div class="notif-time">3 hours ago</div></div>
+          </div>
+          <div class="notif-item">
+            <div class="notif-dot-lg" style="background:var(--blue)"></div>
+            <div><div class="notif-msg">TS-INST-2026-00018 submitted by Sara K. is awaiting your approval.</div><div class="notif-time">6 hours ago</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOCUMENT NUMBERING PAGE -->
+    <div class="page" id="page-doc-numbering">
+      <div class="page-header">
+        <div><div class="page-title">Document Numbering</div></div>
+      </div>
+      <div class="two-col" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Document Numbering</div></div>
+          <div class="card-body">
+            <div class="form-grid-2">
+              <div class="form-group"><label class="form-label">Production Prefix</label><input id="dnProdPrefix" class="form-control" oninput="updateDocNumberingPreview()"/></div>
+              <div class="form-group"><label class="form-label">Installation Prefix</label><input id="dnInstPrefix" class="form-control" oninput="updateDocNumberingPreview()"/></div>
+              <div class="form-group"><label class="form-label">WO Complete Prefix</label><input id="dnWocPrefix" class="form-control" oninput="updateDocNumberingPreview()"/></div>
+              <div class="form-group"><label class="form-label">Projects Team Prefix</label><input id="dnProjPrefix" class="form-control" oninput="updateDocNumberingPreview()"/></div>
+              <div class="form-group"><label class="form-label">Sequence Digits</label><select id="dnSequenceDigits" class="form-control" onchange="updateDocNumberingPreview()">
+                <option value="4">4 digits (0001)</option>
+                <option value="5">5 digits (00001)</option>
+                <option value="6">6 digits (000001)</option>
+              </select></div>
+              <div class="form-group"><label class="form-label">Year Reset</label><input class="form-control" value="Annual — Jan 1 (automatic)" readonly style="background:var(--bg2);color:var(--text3)"/></div>
+            </div>
+            <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="saveDocNumberingSettings()">Save Settings</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Numbering Preview</div></div>
+          <div class="card-body">
+            <div class="doc-preview" style="margin:0">
+              <div>
+                <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Production</div>
+                <div id="dnPreviewProd" class="doc-num-big">—</div>
+              </div>
+            </div>
+            <div class="doc-preview" style="margin:10px 0 0 0">
+              <div>
+                <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Installation</div>
+                <div id="dnPreviewInst" class="doc-num-big">—</div>
+              </div>
+            </div>
+            <div class="doc-preview" style="margin:10px 0 0 0">
+              <div>
+                <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">WO Complete</div>
+                <div id="dnPreviewWoc" class="doc-num-big">—</div>
+              </div>
+            </div>
+            <div class="doc-preview" style="margin:10px 0 0 0">
+              <div>
+                <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Projects Team</div>
+                <div id="dnPreviewProj" class="doc-num-big">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SHIFT SETUP PAGE -->
+    <div class="page" id="page-shift-setup">
+      <div class="page-header">
+        <div><div class="page-title">Shift Setup</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title" id="shiftFormTitle">Add Shift</div>
+        </div>
+        <div class="card-body">
+          <input type="hidden" id="shiftEditCode"/>
+          <div class="form-grid-2">
+            <div class="form-group"><label class="form-label">Shift Code</label><input id="shiftCode" class="form-control" placeholder="SHIFT-A"/></div>
+            <div class="form-group"><label class="form-label">Shift Name</label><input id="shiftName" class="form-control" placeholder="Morning Shift"/></div>
+            <div class="form-group"><label class="form-label">Start Time</label><input id="shiftStartTime" type="time" class="form-control" value="06:00"/></div>
+            <div class="form-group"><label class="form-label">End Time</label><input id="shiftEndTime" type="time" class="form-control" value="14:00"/></div>
+            <div class="form-group"><label class="form-label">Grace (mins)</label><input id="shiftGrace" type="number" class="form-control" value="10" min="0" max="180"/></div>
+            <div class="form-group"><label class="form-label">Status</label><select id="shiftStatus" class="form-control"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button id="shiftSaveBtn" class="btn btn-primary btn-sm" onclick="saveShift()">+ Add Shift</button>
+            <button id="shiftCancelBtn" class="btn btn-sm" style="display:none" onclick="resetShiftForm()">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <div class="wip-list-header" style="margin-top:8px">
+        <div>
+          <div class="wip-list-title">Shift List</div>
+          <div class="wip-list-meta" id="shiftsMeta"></div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search shifts" oninput="filterWipTable('shiftsSearch','shiftsTable','shiftsMeta')" id="shiftsSearch"/>
+          </div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="shiftsTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'shiftsTable',1)">Shift Code <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'shiftsTable',2)">Shift Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'shiftsTable',3)">Start <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'shiftsTable',4)">End <span class="wip-sort-icon">↕</span></th>
+            <th>Grace</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'shiftsTable',6)">Status <span class="wip-sort-icon">↕</span></th>
+            <th style="width:80px">Actions</th>
+          </tr></thead>
+          <tbody id="shiftsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- USER LIST PAGE -->
+    <div class="page" id="page-user-list">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">User List</div>
+          <div class="wip-list-meta" id="userListMeta"></div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search users" oninput="filterWipTable('userListSearch','userListTable','userListMeta')" id="userListSearch"/>
+          </div>
+          <button class="btn btn-outline btn-sm" style="height:28px;padding:0 12px;font-size:12px" onclick="exportUsersCSV()">↓ CSV</button>
+          <button class="btn btn-primary btn-sm" style="height:28px;padding:0 12px;font-size:12px" onclick="createNewUser()">+ New User</button>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="userListTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'userListTable',1)">User ID <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'userListTable',2)">Username <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'userListTable',3)">Display Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'userListTable',4)">Role <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'userListTable',5)">Department <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'userListTable',6)">Last Login <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'userListTable',7)">Status <span class="wip-sort-icon">↕</span></th>
+            <th style="width:100px">Actions</th>
+          </tr></thead>
+          <tbody id="userListBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- USER CREATE / EDIT PAGE -->
+    <div class="page" id="page-user-create">
+      <div class="page-header">
+        <div><div class="page-title" id="userFormPageTitle">Create Login User</div><div class="page-sub" id="userFormPageSub">Fill in details to create a new login user</div></div>
+        <div class="btn-row">
+          <button class="btn btn-outline btn-sm" id="btnResetPassword" style="display:none;color:#dc2626;border-color:#dc2626" onclick="resetUserPassword()">Reset Password</button>
+          <button class="btn btn-outline btn-sm" onclick="showPage('user-list')">← Back to User List</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <input type="hidden" id="userEditId"/>
+          <div class="form-grid-2">
+            <div class="form-group"><label class="form-label">User ID</label><input id="userId" class="form-control" readonly style="background:var(--bg2);color:var(--text3)"/></div>
+            <div class="form-group"><label class="form-label">Username</label><input id="username" class="form-control" placeholder="sara.k"/></div>
+            <div class="form-group"><label class="form-label">Display Name</label><input id="displayName" class="form-control" placeholder="Sara Khalid"/></div>
+            <div class="form-group">
+              <label class="form-label">Password <span id="passwordHint" style="font-weight:400;color:var(--text3);font-size:11px">(leave blank to keep current)</span></label>
+              <input id="userPassword" type="password" class="form-control" placeholder="********" oninput="updatePwStrength(this.value)"/>
+              <!-- Password strength bar -->
+              <div id="pwStrengthBar" style="display:none;margin-top:6px">
+                <div style="height:4px;border-radius:2px;background:var(--bg3);overflow:hidden">
+                  <div id="pwStrengthFill" style="height:100%;width:0%;border-radius:2px;transition:width .2s,background .2s"></div>
+                </div>
+                <div id="pwRules" style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:11px">
+                  <span id="pwr-len"  class="pw-rule">✗ Min 8 characters</span>
+                  <span id="pwr-up"   class="pw-rule">✗ Uppercase letter</span>
+                  <span id="pwr-lo"   class="pw-rule">✗ Lowercase letter</span>
+                  <span id="pwr-num"  class="pw-rule">✗ Number</span>
+                  <span id="pwr-sp"   class="pw-rule">✗ Special character</span>
+                  <span id="pwr-nsp"  class="pw-rule">✓ No spaces</span>
+                </div>
+              </div>
+            </div>
+            <div class="form-group"><label class="form-label">Confirm Password</label><input id="confirmPassword" type="password" class="form-control" placeholder="********"/></div>
+            <div class="form-group"><label class="form-label">Role</label><select id="userRole" class="form-control" onchange="loadUserRolePermsSummary(this.value)"></select></div>
+            <div class="form-group">
+              <label class="form-label">Employee Code <span style="font-weight:400;color:var(--text3);font-size:11px">(optional)</span></label>
+              <select id="userEmployeeCode" class="form-control" onchange="onUserEmployeeChange(this.value)">
+                <option value="">— Not linked —</option>
+              </select>
+            </div>
+            <div class="form-group"><label class="form-label">Department</label><select id="userDepartmentCode" class="form-control"><option value="">— Select —</option></select></div>
+            <div class="form-group"><label class="form-label">Email</label><input id="userEmail" class="form-control" placeholder="sara@company.com"/></div>
+            <div class="form-group"><label class="form-label">Phone</label><input id="userPhone" class="form-control" placeholder="+971 5x xxx xxxx"/></div>
+            <div class="form-group"><label class="form-label">Status</label><select id="userStatus" class="form-control"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+          </div>
+          <!-- Role Permissions Summary -->
+          <div id="userRolePermsSummary" style="display:none;margin-top:16px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Role Permissions</div>
+            <div id="userRolePermsContent" style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px"></div>
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-top:16px" onclick="saveUser()">Save User</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROLE LIST PAGE -->
+    <div class="page" id="page-role-list">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Role List</div>
+          <div class="wip-list-meta" id="roleListMeta"></div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search roles" oninput="filterWipTable('roleListSearch','roleListTable','roleListMeta')" id="roleListSearch"/>
+          </div>
+          <button class="btn btn-primary btn-sm" style="height:28px;padding:0 12px;font-size:12px" onclick="createNewRole()">+ New Role</button>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="roleListTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'roleListTable',1)">Role Code <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'roleListTable',2)">Role Name <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'roleListTable',3)">Dept Scope <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'roleListTable',4)">Data Scope <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'roleListTable',5)">Status <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'roleListTable',6)">Users <span class="wip-sort-icon">↕</span></th>
+            <th style="width:80px">Actions</th>
+          </tr></thead>
+          <tbody id="roleListBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ROLE CREATE / EDIT PAGE -->
+    <div class="page" id="page-role-create">
+      <div class="page-header">
+        <div><div class="page-title" id="roleFormPageTitle">Role Management</div><div class="page-sub">Create roles and configure module-wise access</div></div>
+        <div class="btn-row"><button class="btn btn-outline btn-sm" onclick="showPage('role-list')">← Back to Role List</button></div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <input type="hidden" id="roleEditCode"/>
+          <div class="form-grid-2">
+            <div class="form-group"><label class="form-label">Role Code</label><input id="roleCode" class="form-control" readonly style="background:var(--bg2);color:var(--text3)"/></div>
+            <div class="form-group"><label class="form-label">Role Name</label><input id="roleName" class="form-control" placeholder="Timesheet Controller"/></div>
+            <div class="form-group"><label class="form-label">Department Scope</label><select id="roleScope" class="form-control"><option value="All">All</option><option value="Production">Production</option><option value="Installation">Installation</option></select></div>
+            <div class="form-group"><label class="form-label">Data Scope</label><select id="roleDataScope" class="form-control"><option value="All">All — can view all records</option><option value="Own">Own — can view own records only</option></select></div>
+            <div class="form-group"><label class="form-label">Status</label><select id="roleStatus" class="form-control"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="saveRoleHeader()">Save Role</button>
+        </div>
+      </div>
+
+      <div class="card" id="rolePermCard" style="display:none">
+        <div class="card-head"><div class="card-title">Permission Matrix</div></div>
+        <table class="data-table" id="rolePermTable">
+          <thead>
+            <tr>
+              <th style="min-width:180px">Module</th>
+              <th style="text-align:center;width:72px"><div>Create</div><input type="checkbox" title="Toggle all Create" style="cursor:pointer;accent-color:var(--accent)" onchange="togglePermCol('create',this.checked)"/></th>
+              <th style="text-align:center;width:72px"><div>Read</div><input type="checkbox" title="Toggle all Read" style="cursor:pointer;accent-color:var(--accent)" onchange="togglePermCol('read',this.checked)"/></th>
+              <th style="text-align:center;width:72px"><div>Write</div><input type="checkbox" title="Toggle all Write" style="cursor:pointer;accent-color:var(--accent)" onchange="togglePermCol('write',this.checked)"/></th>
+              <th style="text-align:center;width:72px"><div>Delete</div><input type="checkbox" title="Toggle all Delete" style="cursor:pointer;accent-color:var(--accent)" onchange="togglePermCol('delete',this.checked)"/></th>
+              <th style="text-align:center;width:72px"><div>Report</div><input type="checkbox" title="Toggle all Report" style="cursor:pointer;accent-color:var(--accent)" onchange="togglePermCol('report',this.checked)"/></th>
+            </tr>
+          </thead>
+          <tbody id="rolePermBody"></tbody>
+        </table>
+        <div class="card-body-sm">
+          <button class="btn btn-primary btn-sm" onclick="saveRolePermissions()">Save Permissions</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- LOGIN HISTORY PAGE -->
+    <div class="page" id="page-login-history">
+      <div class="page-header">
+        <div><div class="page-title">Login History</div></div>
+        <div class="btn-row" style="gap:8px">
+          <select id="loginHistoryDays" class="form-control" style="width:130px;height:28px;font-size:12px" onchange="loadLoginHistory()">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="0">All time</option>
+          </select>
+          <select id="loginHistoryFilter" class="form-control" style="width:130px;height:28px;font-size:12px" onchange="loadLoginHistory()">
+            <option value="all">All Users</option>
+            <option value="mine">My Logins</option>
+          </select>
+        </div>
+      </div>
+      <div class="wip-list-header" style="margin-top:0">
+        <div><div class="wip-list-meta" id="loginHistoryMeta"></div></div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search…" oninput="filterWipTable('loginHistSearch','loginHistTable','loginHistoryMeta')" id="loginHistSearch"/>
+          </div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="loginHistTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'loginHistTable',1)">Username <span class="wip-sort-icon">↕</span></th>
+            <th class="wip-th-sort" onclick="sortWipCol(this,'loginHistTable',2)">Date / Time <span class="wip-sort-icon">↕</span></th>
+            <th>Status</th>
+            <th>IP Address</th>
+            <th>Location</th>
+            <th>Browser</th>
+            <th>Fail Reason</th>
+          </tr></thead>
+          <tbody id="loginHistBody"></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:20px">
+        <div class="card-head"><div class="card-title">Active Sessions</div></div>
+        <div class="wip-table-wrap" style="margin-top:8px">
+          <table class="wip-table" id="activeSessionsTable">
+            <thead><tr>
+              <th class="wip-th-num">#</th>
+              <th>User</th>
+              <th>Logged In</th>
+              <th>Last Active</th>
+              <th>Expires</th>
+              <th>IP</th>
+              <th style="width:80px">Actions</th>
+            </tr></thead>
+            <tbody id="activeSessionsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ PENDING APPROVALS -->
+    <div class="page" id="page-pending-approvals">
+      <div class="wip-list-header">
+        <div>
+          <div class="wip-list-title">Pending Approvals</div>
+          <div class="wip-list-meta" id="pendingApprovalsMeta">Loading…</div>
+        </div>
+        <div class="wip-list-actions">
+          <div class="wip-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="2"/><line x1="13.5" y1="13.5" x2="18" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <input class="wip-search-input" placeholder="Search" oninput="filterWipTable('pendingApprovalsSearch','pendingApprovalsTable','pendingApprovalsMeta')" id="pendingApprovalsSearch"/>
+          </div>
+        </div>
+      </div>
+      <div class="wip-table-wrap">
+        <table class="wip-table" id="pendingApprovalsTable">
+          <thead><tr>
+            <th class="wip-th-num">#</th>
+            <th>Document No</th>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Department</th>
+            <th>Work Order</th>
+            <th>Entry Person</th>
+            <th>Duration (min)</th>
+            <th>Submitted On</th>
+            <th>Pending For</th>
+            <th style="width:160px">Actions</th>
+          </tr></thead>
+          <tbody id="pendingApprovalsBody">
+            <tr><td colspan="11" style="text-align:center;color:var(--text3);padding:20px">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ APPROVAL SETTINGS -->
+    <div class="page" id="page-approval-settings">
+      <div class="page-header">
+        <div><div class="page-title">Approval Settings</div><div class="page-subtitle">Assign an approver per department for Production and Installation timesheets.</div></div>
+        <button class="btn btn-primary btn-sm" onclick="saveApprovalSettings()">Save</button>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div style="margin-bottom:12px;font-size:13px;color:var(--text2)">Assign one or more approvers per department. Any approver can review and approve. Separate multiple entries with a comma.</div>
+          <table class="wip-table" id="approvalSettingsTable">
+            <thead><tr>
+              <th>Department</th>
+              <th>Approver Names <span style="font-weight:400;opacity:0.6">(comma-separated)</span></th>
+              <th>Approver Emails <span style="font-weight:400;opacity:0.6">(comma-separated)</span></th>
+              <th style="width:48px"></th>
+            </tr></thead>
+            <tbody id="approvalSettingsBody">
+              <tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Loading…</td></tr>
+            </tbody>
+          </table>
+          <button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="addApprovalSettingsRow()">+ Add Row</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ EMAIL SETTINGS -->
+    <div class="page" id="page-email-settings">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Email Settings</div>
+          <div class="page-subtitle">Configure SMTP, notification rules, and email templates.</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveActiveEmailTab()">Save</button>
+      </div>
+
+      <!-- Tab bar -->
+      <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border,#e5e7eb)">
+        <button id="emailTabBtn-config"        class="tab-btn active" onclick="showEmailTab('config')"        style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent">Configuration</button>
+        <button id="emailTabBtn-notifications" class="tab-btn"        onclick="showEmailTab('notifications')" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent">Notifications</button>
+        <button id="emailTabBtn-templates"     class="tab-btn"        onclick="showEmailTab('templates')"     style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent">Templates</button>
+        <button id="emailTabBtn-logs"          class="tab-btn"        onclick="showEmailTab('logs')"          style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent">Send Log</button>
+      </div>
+
+      <!-- ── Tab 1: Configuration ── -->
+      <div id="emailTab-config" style="display:block">
+        <div class="card" style="max-width:600px">
+          <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
+
+            <!-- Enable toggle -->
+            <div class="form-row">
+              <label class="form-label">Enable Email Notifications</label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="emailEnabled" style="width:16px;height:16px"/>
+                <span style="font-size:13px;color:var(--text2)">Send emails for approvals and WO Complete events</span>
+              </label>
+            </div>
+
+            <!-- Provider selector -->
+            <div class="form-row">
+              <label class="form-label">Email Provider</label>
+              <div style="display:flex;gap:10px">
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:10px 16px;border:1px solid var(--border2);border-radius:8px;flex:1;transition:border-color .15s" id="providerSmtpLabel">
+                  <input type="radio" name="emailProvider" id="emailProviderSmtp" value="smtp" onchange="onEmailProviderChange()" style="accent-color:#2563eb"/>
+                  <div><div style="font-size:13px;font-weight:600">SMTP</div><div style="font-size:11px;color:var(--text3)">Gmail, custom servers</div></div>
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:10px 16px;border:1px solid var(--border2);border-radius:8px;flex:1;transition:border-color .15s" id="providerGraphLabel">
+                  <input type="radio" name="emailProvider" id="emailProviderGraph" value="graph" onchange="onEmailProviderChange()" style="accent-color:#2563eb"/>
+                  <div><div style="font-size:13px;font-weight:600">Microsoft Graph</div><div style="font-size:11px;color:var(--text3)">Office 365 — recommended</div></div>
+                </label>
+              </div>
+            </div>
+
+            <!-- SMTP fields -->
+            <div id="smtpFields" style="display:flex;flex-direction:column;gap:14px">
+              <div class="form-row">
+                <label class="form-label">SMTP Host</label>
+                <input class="form-control" id="emailHost" placeholder="smtp.gmail.com"/>
+              </div>
+              <div class="form-row">
+                <label class="form-label">SMTP Port</label>
+                <input class="form-control" id="emailPort" type="number" placeholder="587" style="width:120px"/>
+                <span style="font-size:11px;color:var(--text3);margin-top:4px;display:block">587 for STARTTLS · 465 for SSL</span>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Username</label>
+                <input class="form-control" id="emailUser" placeholder="you@yourcompany.com"/>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Password / App Password</label>
+                <input class="form-control" id="emailPass" type="password" placeholder="Enter password"/>
+              </div>
+            </div>
+
+            <!-- Microsoft Graph fields -->
+            <div id="graphFields" style="display:none;flex-direction:column;gap:14px">
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;font-size:12px;color:#1e40af;line-height:1.7">
+                <strong>Setup:</strong> Go to <strong>portal.azure.com</strong> → Azure Active Directory → App registrations → New registration.<br>
+                Then: API permissions → Add → Microsoft Graph → Application permissions → <strong>Mail.Send</strong> → Grant admin consent.<br>
+                Copy your <strong>Tenant ID</strong>, <strong>Client ID</strong>, and a <strong>Client Secret</strong> below.
+              </div>
+              <div class="form-row">
+                <label class="form-label">Tenant ID</label>
+                <input class="form-control" id="graphTenantId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Client ID (Application ID)</label>
+                <input class="form-control" id="graphClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Client Secret</label>
+                <input class="form-control" id="graphClientSecret" type="password" placeholder="Enter client secret value"/>
+              </div>
+            </div>
+
+            <!-- From address (shared) -->
+            <div class="form-row">
+              <label class="form-label">From Email</label>
+              <input class="form-control" id="emailFrom" placeholder="you@yourcompany.com"/>
+              <span style="font-size:11px;color:var(--text3);margin-top:4px;display:block" id="fromEmailHint"></span>
+            </div>
+            <div class="form-row">
+              <label class="form-label">From Name</label>
+              <input class="form-control" id="emailFromName" placeholder="PS Timesheet"/>
+            </div>
+
+            <!-- Test row -->
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:4px;border-top:1px solid var(--border2)">
+              <button class="btn btn-outline btn-sm" onclick="testEmailConnection()">Test Connection</button>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input class="form-control" id="testEmailAddr" placeholder="recipient@example.com" style="width:220px"/>
+                <button class="btn btn-outline btn-sm" onclick="sendTestEmail()">Send Test Email</button>
+              </div>
+            </div>
+            <div id="emailTestResult" style="display:none;padding:10px;border-radius:6px;font-size:13px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab 2: Notifications ── -->
+      <div id="emailTab-notifications" style="display:none">
+        <div class="card">
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Enable or disable email notifications per module and event. Recipients are configured per row.</p>
+            <div class="wip-table-wrap">
+              <table class="wip-table" id="notificationRulesTable">
+                <thead><tr>
+                  <th>Module</th>
+                  <th>Event</th>
+                  <th>Enabled</th>
+                  <th>Notify Approver</th>
+                  <th>Notify Submitter</th>
+                  <th>CC Emails (comma-separated)</th>
+                </tr></thead>
+                <tbody id="notificationRulesBody">
+                  <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="margin-top:12px">
+              <button class="btn btn-primary btn-sm" onclick="saveNotificationRules()">Save Rules</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab 3: Templates ── -->
+      <div id="emailTab-templates" style="display:none">
+        <div class="card" style="max-width:780px">
+          <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
+            <div class="form-row">
+              <label class="form-label">Template</label>
+              <select class="form-control" id="templateKey" onchange="loadEmailTemplate(this.value)" style="max-width:280px">
+                <option value="TIMESHEET_SUBMIT">Timesheet Submitted</option>
+                <option value="TIMESHEET_APPROVE">Timesheet Approved</option>
+                <option value="TIMESHEET_REJECT">Timesheet Rejected</option>
+                <option value="WO_COMPLETE">WO Complete Notification</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">Subject</label>
+              <input class="form-control" id="templateSubject" placeholder="Email subject line"/>
+            </div>
+            <div class="form-row">
+              <label class="form-label">Body (HTML)</label>
+              <textarea class="form-control" id="templateBody" rows="12" style="font-family:monospace;font-size:12px;width:100%;resize:vertical"></textarea>
+            </div>
+            <!-- Available Variables collapsible -->
+            <details style="font-size:13px">
+              <summary style="cursor:pointer;color:var(--text2);user-select:none">Available Variables</summary>
+              <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+                <code style="background:var(--bg2,#f3f4f6);padding:2px 7px;border-radius:4px;font-size:12px">{{docNo}}</code>
+                <code style="background:var(--bg2,#f3f4f6);padding:2px 7px;border-radius:4px;font-size:12px">{{type}}</code>
+                <code style="background:var(--bg2,#f3f4f6);padding:2px 7px;border-radius:4px;font-size:12px">{{submitter}}</code>
+                <code style="background:var(--bg2,#f3f4f6);padding:2px 7px;border-radius:4px;font-size:12px">{{department}}</code>
+                <code style="background:var(--bg2,#f3f4f6);padding:2px 7px;border-radius:4px;font-size:12px">{{workOrder}}</code>
+                <code style="background:var(--bg2,#f3f4f6);padding:2px 7px;border-radius:4px;font-size:12px">{{date}}</code>
+                <code style="background:var(--bg2,#f3f4f6);padding:2px 7px;border-radius:4px;font-size:12px">{{approver}}</code>
+                <code style="background:var(--bg2,#f3f4f6);padding:2px 7px;border-radius:4px;font-size:12px">{{reason}}</code>
+                <code style="background:var(--bg2,#f3f4f6);padding:2px 7px;border-radius:4px;font-size:12px">{{status}}</code>
+              </div>
+            </details>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-outline btn-sm" onclick="resetEmailTemplate()">Reset to Default</button>
+              <button class="btn btn-primary btn-sm" onclick="saveEmailTemplate()">Save Template</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab 4: Send Log ── -->
+      <div id="emailTab-logs" style="display:none">
+        <div class="card">
+          <div class="card-body">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+              <p style="font-size:13px;color:var(--text2);margin:0">Recent email notification attempts. Refreshes each time you open this tab.</p>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-outline btn-sm" onclick="loadEmailLogs()">Refresh</button>
+                <button class="btn btn-outline btn-sm" style="color:#dc2626;border-color:#fca5a5" onclick="clearEmailLogs()">Clear Log</button>
+              </div>
+            </div>
+            <div class="wip-table-wrap">
+              <table class="wip-table" id="emailLogsTable">
+                <thead><tr>
+                  <th style="min-width:140px">Date / Time</th>
+                  <th>Module</th>
+                  <th>Event</th>
+                  <th>Recipient</th>
+                  <th style="min-width:200px">Subject</th>
+                  <th>Status</th>
+                  <th style="min-width:220px">Details</th>
+                </tr></thead>
+                <tbody id="emailLogsBody">
+                  <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══ MODALS ══ -->
+
+<!-- Approve Modal -->
+<div id="approveModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeApproveModal()">
+  <div class="modal" style="max-width:480px;width:95%">
+    <div class="modal-head">
+      <div class="modal-title">Approve Timesheet</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeApproveModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text2);font-size:14px;margin-bottom:16px">Approving <strong id="approveDocNoLabel"></strong>. You may add a remark before approving.</p>
+      <div class="form-row">
+        <label class="form-label">Approver Remark (optional)</label>
+        <textarea class="form-control" id="approveRemark" rows="3" placeholder="Optional remark…" style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeApproveModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmApprove()">Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reject Modal -->
+<div id="rejectModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeRejectModal()">
+  <div class="modal" style="max-width:480px;width:95%">
+    <div class="modal-head">
+      <div class="modal-title">Reject Timesheet</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeRejectModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text2);font-size:14px;margin-bottom:16px">Rejecting <strong id="rejectDocNoLabel"></strong>. Please provide a reason.</p>
+      <div class="form-row">
+        <label class="form-label">Rejection Reason <span style="color:var(--red)">*</span></label>
+        <textarea class="form-control" id="rejectReason" rows="3" placeholder="Enter rejection reason…" style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeRejectModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmReject()">Reject</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD RESULT MODAL -->
+<div id="resetPwModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1200;align-items:center;justify-content:center">
+  <div style="background:var(--bg1,#fff);border-radius:12px;padding:32px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px;color:var(--text1,#1e293b)">Password Reset</div>
+    <div style="font-size:13px;color:var(--text2,#64748b);margin-bottom:16px">Share this temporary password with the user. It will not be shown again.</div>
+    <div style="background:var(--bg2,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:8px;padding:14px 16px;font-family:monospace;font-size:18px;letter-spacing:3px;color:#c47d28;text-align:center;word-break:break-all" id="resetPwValue"></div>
+    <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-outline btn-sm" onclick="copyResetPw()">Copy</button>
+      <button class="btn btn-primary btn-sm" onclick="closeResetPwModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL (self-service) -->
+<div id="changePwModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1200;align-items:center;justify-content:center">
+  <div style="background:var(--bg1,#fff);border-radius:12px;padding:32px;width:400px;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="font-size:16px;font-weight:600;margin-bottom:20px;color:var(--text1,#1e293b)">Change Password</div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Current Password</label>
+      <input id="cpCurrentPw" type="password" class="form-control" placeholder="Enter current password"/>
+    </div>
+    <div class="form-group" style="margin-bottom:6px">
+      <label class="form-label">New Password</label>
+      <input id="cpNewPw" type="password" class="form-control" placeholder="New password" oninput="updateCpStrength(this.value)"/>
+      <div id="cpStrengthBar" style="display:none;margin-top:6px">
+        <div style="height:4px;border-radius:2px;background:var(--bg3,#e2e8f0);overflow:hidden">
+          <div id="cpStrengthFill" style="height:100%;width:0%;border-radius:2px;transition:width .2s,background .2s"></div>
+        </div>
+        <div style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:11px">
+          <span id="cpr-len"  class="pw-rule">✗ Min 8 characters</span>
+          <span id="cpr-up"   class="pw-rule">✗ Uppercase letter</span>
+          <span id="cpr-lo"   class="pw-rule">✗ Lowercase letter</span>
+          <span id="cpr-num"  class="pw-rule">✗ Number</span>
+          <span id="cpr-sp"   class="pw-rule">✗ Special character</span>
+          <span id="cpr-nsp"  class="pw-rule">✓ No spaces</span>
+        </div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Confirm New Password</label>
+      <input id="cpConfirmPw" type="password" class="form-control" placeholder="Repeat new password"/>
+    </div>
+    <div id="cpError" style="display:none;background:#fef2f2;color:#dc2626;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-outline btn-sm" onclick="closeChangePwModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="submitChangePassword()">Update Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- FORCE CHANGE PASSWORD MODAL (after admin reset) -->
+<div id="forceChangePwModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9990;align-items:center;justify-content:center">
+  <div style="background:var(--bg1,#fff);border-radius:12px;padding:32px;width:400px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text1,#1e293b)">Password Change Required</div>
+    <div style="font-size:13px;color:var(--text2,#64748b);margin-bottom:20px">Your password was reset by an administrator. Set a new password to continue.</div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Temporary Password</label>
+      <input id="fcpCurrentPw" type="password" class="form-control" placeholder="Enter the temporary password"/>
+    </div>
+    <div class="form-group" style="margin-bottom:6px">
+      <label class="form-label">New Password</label>
+      <input id="fcpNewPw" type="password" class="form-control" placeholder="New password" oninput="updateFcpStrength(this.value)"/>
+      <div id="fcpStrengthBar" style="display:none;margin-top:6px">
+        <div style="height:4px;border-radius:2px;background:var(--bg3,#e2e8f0);overflow:hidden">
+          <div id="fcpStrengthFill" style="height:100%;width:0%;border-radius:2px;transition:width .2s,background .2s"></div>
+        </div>
+        <div style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:11px">
+          <span id="fcpr-len"  class="pw-rule">✗ Min 8 characters</span>
+          <span id="fcpr-up"   class="pw-rule">✗ Uppercase letter</span>
+          <span id="fcpr-lo"   class="pw-rule">✗ Lowercase letter</span>
+          <span id="fcpr-num"  class="pw-rule">✗ Number</span>
+          <span id="fcpr-sp"   class="pw-rule">✗ Special character</span>
+          <span id="fcpr-nsp"  class="pw-rule">✓ No spaces</span>
+        </div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Confirm New Password</label>
+      <input id="fcpConfirmPw" type="password" class="form-control" placeholder="Repeat new password"/>
+    </div>
+    <div id="fcpError" style="display:none;background:#fef2f2;color:#dc2626;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:12px"></div>
+    <div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-primary btn-sm" onclick="submitForceChangePassword()">Set New Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Timesheet Project Type Modal -->
+<div class="modal-overlay" id="timesheetProjectTypeModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <div class="modal-title">Timesheet Type</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeModal('timesheetProjectTypeModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Is this Project Related?</label>
+        <select id="tsProjectRelated" class="form-control">
+          <option value="yes">Project Related</option>
+          <option value="no">No Project Related</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('timesheetProjectTypeModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="goNextTimesheetProjectStep()">Next</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="projectsTeamEntryTypeModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><div class="modal-title">Timesheet Entry Type</div><button class="btn btn-ghost btn-sm btn-icon" onclick="closeModal('projectsTeamEntryTypeModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Select Type</label>
+        <select id="ptEntryType" class="form-control"><option value="daily">Daily Timesheet Entry</option><option value="weekly">Weekly Timesheet Entry</option></select>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" onclick="closeModal('projectsTeamEntryTypeModal')">Cancel</button><button class="btn btn-primary" onclick="openProjectsTeamEntry()">Continue</button></div>
+  </div>
+</div>
+
+<!-- Timesheet Project Select Modal -->
+<div class="modal-overlay" id="timesheetProjectSelectModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <div class="modal-title">Select Project ID</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeModal('timesheetProjectSelectModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Project ID</label>
+        <select id="tsProjectIdSelect" class="form-control"></select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('timesheetProjectSelectModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="openTimesheetAfterProjectSelect()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- Date Range Modal -->
+<div class="modal-overlay" id="dateRangeModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <div class="modal-title">Select Date Range</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeModal('dateRangeModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label class="form-label">From Date</label>
+          <input id="rangeFromDate" type="date" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">To Date</label>
+          <input id="rangeToDate" type="date" class="form-control" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('dateRangeModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="applyDateRange()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Employee Modal -->
+<div class="modal-overlay" id="empModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">👷 Add Employee</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeModal('empModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid-2" style="gap:12px">
+        <div class="form-group"><label class="form-label">Employee ID</label><input class="form-control form-control-auto" value="EMP-0143" readonly/></div>
+        <div class="form-group"><label class="form-label">Full Name <span class="req">*</span></label><input class="form-control" placeholder="e.g. Omar Al-Farsi"/></div>
+        <div class="form-group"><label class="form-label">Department <span class="req">*</span></label><select class="form-control"><option>Production</option><option>Installation</option></select></div>
+        <div class="form-group"><label class="form-label">Designation</label><input class="form-control" placeholder="e.g. Senior Welder"/></div>
+        <div class="form-group"><label class="form-label">Skill Category</label><select class="form-control"><option>Welder</option><option>Fitter</option><option>Operator</option><option>Helper</option><option>Electrician</option></select></div>
+        <div class="form-group"><label class="form-label">Hourly Rate (AED)</label><input type="number" class="form-control" placeholder="0.00"/></div>
+        <div class="form-group"><label class="form-label">Employee Type</label><select class="form-control"><option>Staff</option><option>Contract</option><option>Daily</option></select></div>
+        <div class="form-group"><label class="form-label">Joining Date</label><input type="date" class="form-control"/></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('empModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('empModal')">Save Employee</button>
+    </div>
+  </div>
+</div>
+
+<!-- Profile Modal -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-head">
+      <div class="modal-title">Profile</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeModal('profileModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid-2" style="gap:12px">
+        <div class="form-group" style="grid-column:1 / -1;display:flex;align-items:center;gap:12px">
+          <img id="profilePreview" class="profile-preview" alt="Profile preview" />
+          <div style="flex:1">
+            <label class="form-label">Profile Image</label>
+            <input id="profileImageInput" type="file" class="form-control" accept="image/*" onchange="onProfileImageSelected(event)" />
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">User Name</label><input id="profileUserName" class="form-control" readonly value="Ahmed M." /></div>
+        <div class="form-group"><label class="form-label">Role</label><input id="profileRole" class="form-control" readonly value="Site Manager" /></div>
+        <div class="form-group"><label class="form-label">Theme</label><select id="profileTheme" class="form-control" onchange="changeUserTheme(this.value)"><option value="industrial">Industrial</option><option value="ocean">Ocean Blue</option><option value="forest">Forest Green</option><option value="graphite">Graphite Gray</option></select></div>
+        <div class="form-group"><label class="form-label">Theme Preview</label><input class="form-control" readonly value="Theme applies instantly and is saved for this browser." /></div>
+        <div class="form-group"><label class="form-label">New Password</label><input id="profileNewPassword" type="password" class="form-control" placeholder="Enter new password" /></div>
+        <div class="form-group"><label class="form-label">Confirm Password</label><input id="profileConfirmPassword" type="password" class="form-control" placeholder="Confirm new password" /></div>
+      </div>
+      <div id="profileMessage" class="kpi-sub" style="margin-top:10px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('profileModal')">Close</button>
+      <button class="btn btn-primary" onclick="resetProfilePassword()">Reset Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Production Timesheet View Modal -->
+<!-- ══ PRODUCTION TIMESHEET ENTRY MODAL ══ -->
+<div id="prodEntryModal" class="ts-modal-overlay" style="display:none" onclick="if(event.target===this)closeProdEntryModal()">
+  <div class="ts-modal">
+
+    <!-- ── Modal header ── -->
+    <div class="ts-modal-head">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div>
+          <div class="ts-modal-title" id="prodEntryModalTitle">New Production Timesheet</div>
+          <div class="ts-modal-sub" id="prodEntryModalSub">Fill in the details below and save</div>
+        </div>
+        <span class="ts-docno-pill" id="prodDocNo"></span>
+      </div>
+      <button class="ts-close-btn" onclick="closeProdEntryModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Mobile-only tab bar -->
+    <div class="ts-mob-tabs" id="prodMobTabs">
+      <button class="ts-mob-tab ts-mob-tab-active" id="prodMobTabDetails" onclick="switchMobTsTab('prod','details')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Details
+      </button>
+      <button class="ts-mob-tab" id="prodMobTabEntries" onclick="switchMobTsTab('prod','entries')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Entries
+        <span class="ts-mob-tab-badge" id="prodMobBadge">0</span>
+      </button>
+    </div>
+
+    <!-- ── Modal body: left form + right tabs ── -->
+    <div class="ts-modal-body">
+
+      <!-- Left panel: header fields -->
+      <div class="ts-form-panel">
+        <div class="ts-field-group">
+          <label class="ts-field-label">Project ID</label>
+          <div style="position:relative">
+            <input id="prodProjectId" class="form-control ts-input" placeholder="Type to search…" onchange="onProdProjectChange()" oninput="onProdProjectChange()" autocomplete="off"/>
+            <div id="prodProjectIdMenu" class="project-id-menu" style="display:none"></div>
+          </div>
+        </div>
+        <div class="ts-field-group">
+          <label class="ts-field-label">Project Name</label>
+          <input id="prodProjectName" class="form-control ts-input ts-readonly" readonly/>
+        </div>
+        <div class="ts-field-group">
+          <label class="ts-field-label">Work Order</label>
+          <div class="srch-wrap">
+            <input id="prodWorkOrder" class="form-control ts-input" placeholder="Select work order…" autocomplete="off"/>
+            <div id="prodWorkOrderMenu" class="srch-menu" style="display:none"></div>
+          </div>
+        </div>
+        <div class="ts-field-group">
+          <label class="ts-field-label">Department</label>
+          <div class="srch-wrap">
+            <input id="prodDepartment" class="form-control ts-input" placeholder="Select department…" autocomplete="off"/>
+            <div id="prodDepartmentMenu" class="srch-menu" style="display:none"></div>
+          </div>
+        </div>
+        <div class="ts-field-row-2">
+          <div class="ts-field-group">
+            <label class="ts-field-label">Date</label>
+            <input id="prodDate" type="date" class="form-control ts-input"/>
+          </div>
+          <div class="ts-field-group">
+            <label class="ts-field-label">Shift</label>
+            <div class="srch-wrap">
+              <input id="prodShift" class="form-control ts-input" placeholder="Select shift…" autocomplete="off"/>
+              <div id="prodShiftMenu" class="srch-menu" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+        <div class="ts-field-group">
+          <label class="ts-field-label">Entry Person</label>
+          <input id="prodEntryPerson" class="form-control ts-input ts-readonly" readonly/>
+        </div>
+        <div class="ts-divider"></div>
+        <div class="ts-summary" id="prodEntrySummary">
+          <div class="ts-summary-row"><span>Labour rows</span><span id="prodSumLabour">0</span></div>
+          <div class="ts-summary-row"><span>Material rows</span><span id="prodSumMaterial">0</span></div>
+          <div class="ts-summary-row"><span>Machinery rows</span><span id="prodSumMachinery">0</span></div>
+        </div>
+      </div>
+
+      <!-- Right panel: all sections stacked in one scroll area -->
+      <div class="ts-lines-panel">
+        <div class="ts-scroll-panel">
+
+          <!-- Labour section -->
+          <div class="ts-section">
+            <div class="ts-section-head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              Labour Time
+              <span class="ts-section-badge" id="prodBadgeLabour">0</span>
+            </div>
+            <table class="ts-line-table">
+              <thead><tr>
+                <th>Employee</th>
+                <th style="width:108px">Start Time</th>
+                <th style="width:108px">End Time</th>
+                <th style="width:108px">Duration (min)</th>
+                <th style="width:34px"></th>
+              </tr></thead>
+              <tbody id="prodLabourBody"></tbody>
+            </table>
+            <div class="ts-section-footer">
+              <button class="ts-add-btn" onclick="addProdLabourRow()">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Employee
+              </button>
+            </div>
+          </div>
+
+          <!-- Consumed Material section -->
+          <div class="ts-section">
+            <div class="ts-section-head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+              Consumed Material
+              <span class="ts-section-badge" id="prodBadgeMaterial">0</span>
+            </div>
+            <table class="ts-line-table">
+              <thead><tr>
+                <th style="width:140px">Item Code</th>
+                <th>Description</th>
+                <th style="width:72px">UOM</th>
+                <th style="width:100px">Qty</th>
+                <th style="width:34px"></th>
+              </tr></thead>
+              <tbody id="prodMaterialBody"></tbody>
+            </table>
+            <div class="ts-section-footer">
+              <button class="ts-add-btn" onclick="addProdMaterialRow()">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Material
+              </button>
+            </div>
+          </div>
+
+          <!-- Machinery section -->
+          <div class="ts-section">
+            <div class="ts-section-head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+              Machinery
+              <span class="ts-section-badge" id="prodBadgeMachinery">0</span>
+            </div>
+            <table class="ts-line-table">
+              <thead><tr>
+                <th>Machine</th>
+                <th style="width:120px">Minutes</th>
+                <th style="width:34px"></th>
+              </tr></thead>
+              <tbody id="prodMachineryBody"></tbody>
+            </table>
+            <div class="ts-section-footer">
+              <button class="ts-add-btn" onclick="addProdMachineryRow()">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Machinery
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Modal footer ── -->
+    <div id="prodWocBlock" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px 14px;margin:0 20px 0;font-size:13px;color:#b91c1c;font-weight:500;line-height:1.4"></div>
+    <div class="ts-modal-footer">
+      <button class="ts-footer-cancel" onclick="closeProdEntryModal()">Cancel</button>
+      <button class="ts-footer-save" id="prodSaveBtn" onclick="saveProdTimesheet()">Save Timesheet</button>
+    </div>
+  </div>
+</div>
+
+<div id="prodViewModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeProdViewModal()">
+  <div class="modal" style="max-width:780px;width:95%;max-height:90vh;overflow-y:auto">
+    <div class="modal-head">
+      <div class="modal-title" id="prodViewDocNo">Timesheet</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeProdViewModal()">✕</button>
+    </div>
+    <div class="modal-body" id="prodViewBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeProdViewModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ INSTALLATION ENTRY MODAL -->
+<div id="instEntryModal" class="ts-modal-overlay" style="display:none" onclick="if(event.target===this)closeInstEntryModal()">
+  <div class="ts-modal">
+    <div class="ts-modal-head">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div>
+          <div class="ts-modal-title" id="instEntryModalTitle">New Installation Timesheet</div>
+          <div class="ts-modal-sub" id="instEntryModalSub">Fill in the details below and save</div>
+        </div>
+        <span class="ts-docno-pill" id="instDocNo"></span>
+      </div>
+      <button class="ts-close-btn" onclick="closeInstEntryModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <!-- Mobile-only tab bar -->
+    <div class="ts-mob-tabs" id="instMobTabs">
+      <button class="ts-mob-tab ts-mob-tab-active" id="instMobTabDetails" onclick="switchMobTsTab('inst','details')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Details
+      </button>
+      <button class="ts-mob-tab" id="instMobTabEntries" onclick="switchMobTsTab('inst','entries')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Entries
+        <span class="ts-mob-tab-badge" id="instMobBadge">0</span>
+      </button>
+    </div>
+
+    <div class="ts-modal-body">
+      <div class="ts-form-panel">
+        <div class="ts-field-group">
+          <label class="ts-field-label">Project ID</label>
+          <div style="position:relative">
+            <input id="instProjectId" class="form-control ts-input" placeholder="Type to search…" onchange="onInstProjectChange()" oninput="onInstProjectChange()" autocomplete="off"/>
+            <div id="instProjectIdMenu" class="project-id-menu" style="display:none"></div>
+          </div>
+        </div>
+        <div class="ts-field-group">
+          <label class="ts-field-label">Project Name</label>
+          <input id="instProjectName" class="form-control ts-input ts-readonly" readonly/>
+        </div>
+        <div class="ts-field-group">
+          <label class="ts-field-label">Work Order</label>
+          <div class="srch-wrap">
+            <input id="instWorkOrder" class="form-control ts-input" placeholder="Select work order…" autocomplete="off"/>
+            <div id="instWorkOrderMenu" class="srch-menu" style="display:none"></div>
+          </div>
+        </div>
+        <div class="ts-field-group">
+          <label class="ts-field-label">Department</label>
+          <div class="srch-wrap">
+            <input id="instDepartment" class="form-control ts-input" placeholder="Select department…" autocomplete="off"/>
+            <div id="instDepartmentMenu" class="srch-menu" style="display:none"></div>
+          </div>
+        </div>
+        <div class="ts-field-row-2">
+          <div class="ts-field-group">
+            <label class="ts-field-label">Date</label>
+            <input id="instDate" type="date" class="form-control ts-input"/>
+          </div>
+          <div class="ts-field-group">
+            <label class="ts-field-label">Shift</label>
+            <div class="srch-wrap">
+              <input id="instShift" class="form-control ts-input" placeholder="Select shift…" autocomplete="off"/>
+              <div id="instShiftMenu" class="srch-menu" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+        <div class="ts-field-group">
+          <label class="ts-field-label">Entry Person</label>
+          <input id="instEntryPerson" class="form-control ts-input ts-readonly" readonly/>
+        </div>
+        <div class="ts-divider"></div>
+        <div class="ts-summary" id="instEntrySummary">
+          <div class="ts-summary-row"><span>Labour rows</span><span id="instSumLabour">0</span></div>
+          <div class="ts-summary-row"><span>Material rows</span><span id="instSumMaterial">0</span></div>
+          <div class="ts-summary-row"><span>Vehicle rows</span><span id="instSumVehicle">0</span></div>
+          <div class="ts-summary-row"><span>Access Equipment</span><span id="instSumAccess">0</span></div>
+        </div>
+      </div>
+      <div class="ts-lines-panel">
+        <div class="ts-scroll-panel">
+          <div class="ts-section">
+            <div class="ts-section-head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              Labour Time
+              <span class="ts-section-badge" id="instBadgeLabour">0</span>
+            </div>
+            <table class="ts-line-table">
+              <thead><tr>
+                <th>Employee</th>
+                <th style="width:108px">Start Time</th>
+                <th style="width:108px">End Time</th>
+                <th style="width:108px">Duration (min)</th>
+                <th style="width:34px"></th>
+              </tr></thead>
+              <tbody id="instLabourBody"></tbody>
+            </table>
+            <div class="ts-section-footer">
+              <button class="ts-add-btn" onclick="addInstLabourRow()">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Employee
+              </button>
+            </div>
+          </div>
+          <div class="ts-section">
+            <div class="ts-section-head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+              Consumed Material
+              <span class="ts-section-badge" id="instBadgeMaterial">0</span>
+            </div>
+            <table class="ts-line-table">
+              <thead><tr>
+                <th style="width:140px">Item Code</th>
+                <th>Description</th>
+                <th style="width:72px">UOM</th>
+                <th style="width:100px">Qty</th>
+                <th style="width:34px"></th>
+              </tr></thead>
+              <tbody id="instMaterialBody"></tbody>
+            </table>
+            <div class="ts-section-footer">
+              <button class="ts-add-btn" onclick="addInstMaterialRow()">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Material
+              </button>
+            </div>
+          </div>
+          <div class="ts-section">
+            <div class="ts-section-head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+              Vehicle
+              <span class="ts-section-badge" id="instBadgeVehicle">0</span>
+            </div>
+            <table class="ts-line-table">
+              <thead><tr>
+                <th>Vehicle</th>
+                <th style="width:120px">KM</th>
+                <th style="width:34px"></th>
+              </tr></thead>
+              <tbody id="instVehicleBody"></tbody>
+            </table>
+            <div class="ts-section-footer">
+              <button class="ts-add-btn" onclick="addInstVehicleRow()">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Vehicle
+              </button>
+            </div>
+          </div>
+          <div class="ts-section">
+            <div class="ts-section-head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              Access Equipment
+              <span class="ts-section-badge" id="instBadgeAccess">0</span>
+            </div>
+            <table class="ts-line-table">
+              <thead><tr>
+                <th>Equipment</th>
+                <th style="width:120px">Hours</th>
+                <th style="width:34px"></th>
+              </tr></thead>
+              <tbody id="instAccessBody"></tbody>
+            </table>
+            <div class="ts-section-footer">
+              <button class="ts-add-btn" onclick="addInstAccessRow()">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Access Equipment
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="instWocBlock" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px 14px;margin:0 20px 0;font-size:13px;color:#b91c1c;font-weight:500;line-height:1.4"></div>
+    <div class="ts-modal-footer">
+      <button class="ts-footer-cancel" onclick="closeInstEntryModal()">Cancel</button>
+      <button class="ts-footer-save" id="instSaveBtn" onclick="saveInstTimesheet()">Save Timesheet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ INSTALLATION VIEW MODAL -->
+<div id="instViewModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeInstViewModal()">
+  <div class="modal" style="max-width:820px;width:95%;max-height:90vh;overflow-y:auto">
+    <div class="modal-head">
+      <div class="modal-title" id="instViewDocNo">Timesheet</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeInstViewModal()">✕</button>
+    </div>
+    <div class="modal-body" id="instViewBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeInstViewModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="projViewModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeProjViewModal()">
+  <div class="modal" style="max-width:640px;width:95%;max-height:90vh;overflow-y:auto">
+    <div class="modal-head">
+      <div class="modal-title" id="projViewDocNo">Timesheet</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeProjViewModal()">✕</button>
+    </div>
+    <div class="modal-body" id="projViewBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeProjViewModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="appToast" style="display:none;position:fixed;bottom:32px;right:32px;z-index:9999;padding:14px 24px;border-radius:8px;font-size:14px;font-weight:500;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.18);transition:opacity 0.3s"></div>
