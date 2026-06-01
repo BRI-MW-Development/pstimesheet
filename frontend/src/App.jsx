@@ -34,6 +34,10 @@ const InstTimesheetFormPage  = lazy(() => import('./pages/timesheets/InstTimeshe
 const ProjTimesheetPage      = lazy(() => import('./pages/timesheets/ProjTimesheetPage'));
 const PendingApprovalsPage   = lazy(() => import('./pages/timesheets/PendingApprovalsPage'));
 
+// QC
+const QCListPage             = lazy(() => import('./pages/qc/QCListPage'));
+const QCFormPage             = lazy(() => import('./pages/qc/QCFormPage'));
+
 // WOC + Reports
 const WocPage                = lazy(() => import('./pages/woc/WocPage'));
 const ReportsPage            = lazy(() => import('./pages/reports/ReportsPage'));
@@ -104,6 +108,11 @@ export default function App() {
                   <Route path="timesheets/pending-approvals"    element={<PendingApprovalsPage />} />
 
                   {/* WOC + Reports */}
+                  <Route path="qc"             element={<QCListPage />} />
+                  <Route path="qc/new"         element={<QCFormPage />} />
+                  <Route path="qc/:id/edit"    element={<QCFormPage />} />
+                  <Route path="qc/:id/view"    element={<QCFormPage />} />
+
                   <Route path="woc"            element={<WocPage />} />
                   <Route path="reports"        element={<ReportsPage />} />
                   <Route path="reports/audit"  element={<AuditPage />} />

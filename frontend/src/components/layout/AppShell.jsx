@@ -24,6 +24,13 @@ const TOP_GROUPS = [
     ],
   },
   {
+    label: 'QC',
+    icon: '🔍',
+    links: [
+      { label: 'QC Records', to: '/qc' },
+    ],
+  },
+  {
     label: 'Master Data',
     icon: '🗂️',
     links: [
