@@ -2,12 +2,16 @@ import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@
 import type { ConnectionPool } from 'mssql';
 import * as mssql from 'mssql';
 import { DEV_SQL_POOL } from '../database/database.constants';
+import { S3Service } from '../s3/s3.service';
 
 @Injectable()
 export class WoCompleteService implements OnModuleInit {
   private readonly logger = new Logger(WoCompleteService.name);
 
-  constructor(@Inject(DEV_SQL_POOL) private readonly pool: ConnectionPool) {}
+  constructor(
+    @Inject(DEV_SQL_POOL) private readonly pool: ConnectionPool,
+    private readonly s3: S3Service,
+  ) {}
 
   async onModuleInit() {
     try {
@@ -59,6 +63,10 @@ export class WoCompleteService implements OnModuleInit {
           uploadedAt   DATETIME2     DEFAULT SYSUTCDATETIME()
         )
       `);
+      await this.pool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PsWoCompleteAttachment') AND name='s3Key')
+          ALTER TABLE PsWoCompleteAttachment ADD s3Key NVARCHAR(500) NULL
+      `);
     } catch (err) {
       this.logger.warn(`Schema init skipped (will retry on next request): ${(err as Error)?.message}`);
     }
@@ -103,8 +111,10 @@ export class WoCompleteService implements OnModuleInit {
   }
 
   async update(id: number, body: any): Promise<void> {
+    this.assertWocFields(body);
     await this.assertNoDuplicateWo(body.workOrderNumber, id);
     await this.assertNoPendingTimesheets(body.workOrderNumber);
+    await this.assertQcFullCompleted(body.workOrderNumber, body.department);
     await this.pool.request()
       .input('id',              mssql.BigInt,        id)
       .input('completedDate',   mssql.NVarChar(20),  body.completedDate   || null)
@@ -153,6 +163,23 @@ export class WoCompleteService implements OnModuleInit {
     }
   }
 
+  private async assertQcFullCompleted(workOrderNumber: string, department: string): Promise<void> {
+    if (!workOrderNumber) return;
+    // Full QC is only required for Production department WOs
+    if (!department?.toLowerCase().includes('production')) return;
+    const res = await this.pool.request()
+      .input('wo', mssql.NVarChar(100), workOrderNumber)
+      .query(`
+        SELECT COUNT(*) AS cnt FROM PsQcRecord
+        WHERE workOrderNo = @wo AND isDeleted = 0 AND partialFull = 'Full'
+      `);
+    if ((res.recordset[0]?.cnt ?? 0) === 0) {
+      throw new BadRequestException(
+        `Work Order "${workOrderNumber}" does not have a Full QC inspection. Production Work Orders require a Full QC inspection before being marked as complete.`
+      );
+    }
+  }
+
   private async assertNoDuplicateWo(workOrderNumber: string, excludeId?: number): Promise<void> {
     if (!workOrderNumber) return;
     const req = this.pool.request().input('wo', mssql.NVarChar(100), workOrderNumber);
@@ -171,9 +198,18 @@ export class WoCompleteService implements OnModuleInit {
     }
   }
 
+  private assertWocFields(body: any) {
+    if (!body.workOrderNumber?.toString().trim())
+      throw new BadRequestException('Work Order Number is required.');
+    if (!body.status?.toString().trim())
+      throw new BadRequestException('Status is required.');
+  }
+
   async create(body: any): Promise<{ docNo: string; id: number }> {
+    this.assertWocFields(body);
     await this.assertNoDuplicateWo(body.workOrderNumber);
     await this.assertNoPendingTimesheets(body.workOrderNumber);
+    await this.assertQcFullCompleted(body.workOrderNumber, body.department);
     const year = new Date().getFullYear();
     const upd = await this.pool.request()
       .input('docType', mssql.NVarChar(30), 'WOC')
@@ -224,16 +260,30 @@ export class WoCompleteService implements OnModuleInit {
   }
 
   async addAttachment(wocId: number, fileName: string, mimeType: string, fileData: string, fileSize: number): Promise<{ id: number }> {
+    const MAX_BYTES = 5 * 1024 * 1024;
+    const approxBytes = fileSize ?? Math.round((fileData?.length ?? 0) * 0.75);
+    if (approxBytes > MAX_BYTES)
+      throw new BadRequestException(`File "${fileName}" exceeds the 5 MB size limit.`);
+
+    let s3Key: string | null = null;
+    let dbFileData: string | null = null;
+    if (this.s3.isConfigured) {
+      s3Key = await this.s3.upload(`woc/${wocId}`, fileName, fileData, mimeType);
+    } else {
+      dbFileData = fileData;
+    }
+
     const res = await this.pool.request()
-      .input('wocId',    mssql.BigInt,        wocId)
-      .input('fileName', mssql.NVarChar(250),  fileName)
-      .input('mimeType', mssql.NVarChar(100),  mimeType)
-      .input('fileData', mssql.NVarChar(mssql.MAX), fileData)
-      .input('fileSize', mssql.Int,            fileSize)
+      .input('wocId',    mssql.BigInt,             wocId)
+      .input('fileName', mssql.NVarChar(250),       fileName)
+      .input('mimeType', mssql.NVarChar(100),       mimeType)
+      .input('fileData', mssql.NVarChar(mssql.MAX), dbFileData)
+      .input('fileSize', mssql.Int,                 fileSize)
+      .input('s3Key',    mssql.NVarChar(500),       s3Key)
       .query<{ id: number }>(`
-        INSERT INTO PsWoCompleteAttachment (wocId, fileName, mimeType, fileData, fileSize)
+        INSERT INTO PsWoCompleteAttachment (wocId, fileName, mimeType, fileData, fileSize, s3Key)
         OUTPUT INSERTED.id
-        VALUES (@wocId, @fileName, @mimeType, @fileData, @fileSize)
+        VALUES (@wocId, @fileName, @mimeType, @fileData, @fileSize, @s3Key)
       `);
     return { id: res.recordset[0].id };
   }
@@ -253,11 +303,22 @@ export class WoCompleteService implements OnModuleInit {
   async getAttachment(id: number): Promise<any> {
     const res = await this.pool.request()
       .input('id', mssql.BigInt, id)
-      .query(`SELECT id, fileName, mimeType, fileData FROM PsWoCompleteAttachment WHERE id = @id`);
-    return res.recordset[0] ?? null;
+      .query(`SELECT id, fileName, mimeType, fileData, s3Key FROM PsWoCompleteAttachment WHERE id = @id`);
+    const row = res.recordset[0];
+    if (!row) return null;
+    if (row.s3Key) {
+      const url = await this.s3.presignedUrl(row.s3Key);
+      return { ...row, fileData: url, isS3: true };
+    }
+    return row;
   }
 
   async removeAttachment(id: number): Promise<void> {
+    const res = await this.pool.request()
+      .input('id', mssql.BigInt, id)
+      .query(`SELECT s3Key FROM PsWoCompleteAttachment WHERE id = @id`);
+    const s3Key = res.recordset[0]?.s3Key;
+    if (s3Key) await this.s3.delete(s3Key);
     await this.pool.request()
       .input('id', mssql.BigInt, id)
       .query(`DELETE FROM PsWoCompleteAttachment WHERE id = @id`);

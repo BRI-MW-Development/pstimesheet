@@ -37,7 +37,7 @@ function LoginHistoryTab({ days, setDays }) {
 
   const columns = [
     { key: '#',          label: '#',           num: true,  sort: false, render: (_, i) => (page - 1) * PAGE_SIZE + i + 1 },
-    { key: 'attemptAt',  label: 'Date / Time', sort: true, render: (r) => r.attemptAt ? new Date(r.attemptAt).toLocaleString() : '—' },
+    { key: 'attemptAt',  label: 'Date / Time', sort: true, render: (r) => r.attemptAt ? new Date(r.attemptAt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—' },
     { key: 'username',   label: 'Username',    sort: true },
     { key: 'ipAddress',  label: 'IP Address',  sort: true },
     { key: 'city',       label: 'Location',    sort: true, render: (r) => [r.city, r.country].filter(Boolean).join(', ') || '—' },
@@ -122,9 +122,9 @@ function ActiveSessionsTab() {
     { key: '#',           label: '#',           num: true,  sort: false, render: (_, i) => i + 1 },
     { key: 'username',    label: 'Username',    sort: true },
     { key: 'displayName', label: 'Name',        sort: true },
-    { key: 'createdAt',   label: 'Login Time',  sort: true, render: (r) => r.createdAt ? new Date(r.createdAt).toLocaleString() : '—' },
-    { key: 'lastActiveAt',label: 'Last Active', sort: true, render: (r) => r.lastActiveAt ? new Date(r.lastActiveAt).toLocaleString() : '—' },
-    { key: 'expiresAt',   label: 'Expires',     sort: true, render: (r) => r.expiresAt ? new Date(r.expiresAt).toLocaleString() : '—' },
+    { key: 'createdAt',   label: 'Login Time',  sort: true, render: (r) => r.createdAt ? new Date(r.createdAt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—' },
+    { key: 'lastActiveAt',label: 'Last Active', sort: true, render: (r) => r.lastActiveAt ? new Date(r.lastActiveAt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—' },
+    { key: 'expiresAt',   label: 'Expires',     sort: true, render: (r) => r.expiresAt ? new Date(r.expiresAt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—' },
     { key: 'ipAddress',   label: 'IP',          sort: true },
     {
       key: 'actions', label: '', sort: false,

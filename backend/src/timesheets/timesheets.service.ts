@@ -327,6 +327,14 @@ export class TimesheetsService implements OnModuleInit {
     const year    = new Date().getFullYear();
     const tsType  = (body.tsType || 'PROD').toUpperCase();
 
+    // Mandatory field validation for Production and Installation timesheets
+    if (tsType === 'PROD' || tsType === 'INST') {
+      if (!body.projectId?.toString().trim())  throw new BadRequestException('Project ID is required.');
+      if (!body.workOrder?.toString().trim())  throw new BadRequestException('Work Order is required.');
+      if (!body.department?.toString().trim()) throw new BadRequestException('Department is required.');
+      if (!body.shift?.toString().trim())      throw new BadRequestException('Shift is required.');
+    }
+
     // Block Production and Installation timesheets if the work order is already WO Complete
     if ((tsType === 'PROD' || tsType === 'INST') && body.workOrder) {
       const wocCheck = await this.devPool.request()
@@ -636,6 +644,22 @@ export class TimesheetsService implements OnModuleInit {
 
   // ── Update ───────────────────────────────────────────────────────
   async update(docNo: string, body: any): Promise<{ docNo: string }> {
+    // Mandatory field validation for Production and Installation timesheets
+    const tsTypeU = (body.tsType || '').toUpperCase();
+    if (tsTypeU === 'PROD' || tsTypeU === 'INST') {
+      if (!body.projectId?.toString().trim())  throw new BadRequestException('Project ID is required.');
+      if (!body.workOrder?.toString().trim())  throw new BadRequestException('Work Order is required.');
+      if (!body.department?.toString().trim()) throw new BadRequestException('Department is required.');
+      if (!body.shift?.toString().trim())      throw new BadRequestException('Shift is required.');
+    }
+    // Block editing Approved timesheets via API
+    const statusRes = await this.devPool.request()
+      .input('tsDocNo', mssql.NVarChar(40), docNo)
+      .query<{ status: string }>(`SELECT status FROM PSTsHeader WHERE tsDocNo = @tsDocNo AND isDeleted = 0`);
+    const currentStatus = statusRes.recordset[0]?.status ?? '';
+    if (currentStatus === 'Approved') {
+      throw new BadRequestException(`Timesheet "${docNo}" is Approved and cannot be edited.`);
+    }
     const tsType = (body.tsType || '').toUpperCase();
     if ((tsType === 'PROD' || tsType === 'INST') && body.workOrder) {
       const wocCheck = await this.devPool.request()
@@ -841,6 +865,19 @@ export class TimesheetsService implements OnModuleInit {
     return res.recordset.map(r => ({ ...r, entryDate: toDateStr(r.entryDate) }));
   }
 
+  /** Check if a role has canWrite on any timesheet module — determines approver eligibility */
+  async isTimesheetApprover(roleCode: string): Promise<boolean> {
+    if (!roleCode) return false;
+    const res = await this.devPool.request()
+      .input('roleCode', mssql.NVarChar(30), roleCode)
+      .query<{ cnt: number }>(`
+        SELECT COUNT(*) AS cnt FROM PSTsRolePermissions
+        WHERE roleCode = @roleCode AND canWrite = 1
+          AND module IN ('PROD','INST','PROJ')
+      `);
+    return (res.recordset[0]?.cnt ?? 0) > 0;
+  }
+
   async getEmailByDisplayName(displayName: string): Promise<string | null> {
     const res = await this.devPool.request()
       .input('name', mssql.NVarChar(200), displayName)
@@ -850,6 +887,14 @@ export class TimesheetsService implements OnModuleInit {
 
   // ── Soft delete ─────────────────────────────────────────────────
   async remove(docNo: string): Promise<void> {
+    // Only Draft timesheets may be deleted
+    const statusRes = await this.devPool.request()
+      .input('tsDocNo', mssql.NVarChar(40), docNo)
+      .query<{ status: string }>(`SELECT status FROM PSTsHeader WHERE tsDocNo = @tsDocNo AND isDeleted = 0`);
+    const currentStatus = statusRes.recordset[0]?.status ?? '';
+    if (currentStatus && currentStatus !== 'Draft') {
+      throw new BadRequestException(`Only Draft timesheets can be deleted. "${docNo}" is currently "${currentStatus}".`);
+    }
     const res = await this.devPool.request()
       .input('tsDocNo', mssql.NVarChar(40), docNo)
       .query(`UPDATE PSTsHeader SET isDeleted = 1, updatedAt = SYSUTCDATETIME() WHERE tsDocNo = @tsDocNo`);

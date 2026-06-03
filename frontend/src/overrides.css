@@ -153,10 +153,20 @@ html, body { height: 100%; overflow: hidden; }
   font-size: 13px;
   font-family: var(--font-body);
   width: 100%;
+  min-width: 0;
   text-align: left;
   box-shadow: var(--sh-inset);
   transition: border-color var(--t);
   color: var(--text);
+  overflow: hidden;        /* prevent height growth from long text */
+  white-space: nowrap;
+}
+.search-select-trigger > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 .search-select-trigger:hover { border-color: var(--text3); }
 .search-select-trigger.open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }

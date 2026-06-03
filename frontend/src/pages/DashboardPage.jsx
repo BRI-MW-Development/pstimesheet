@@ -64,6 +64,9 @@ export default function DashboardPage() {
 
   const ts       = stats.timesheets    ?? {};
   const woc      = stats.woComplete    ?? {};
+  // hasQc derived from API response — not from stale local permissions store
+  const qc       = stats.qc ?? null;
+  const hasQc    = qc !== null;
   const recentTs = stats.recentTimesheets ?? [];
 
   const failColor = (audit?.failuresToday ?? 0) > 0 ? 'var(--red)' : 'var(--green)';
@@ -137,6 +140,24 @@ export default function DashboardPage() {
             color="var(--accent)"
           />
         )}
+        {hasQc && (
+          <KpiCard
+            label="QC Passed"
+            value={qc.passed}
+            sub="Total passed"
+            color="var(--green)"
+            onClick={() => navigate('/qc')}
+          />
+        )}
+        {hasQc && (qc.failed ?? 0) > 0 && (
+          <KpiCard
+            label="QC Failed"
+            value={qc.failed}
+            sub="Needs attention"
+            color="var(--red)"
+            onClick={() => navigate('/qc')}
+          />
+        )}
       </div>
 
       {/* ── Timesheet Overview — only types the user can access ── */}
@@ -164,6 +185,32 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* ── QC Overview ── */}
+      {hasQc && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-head">
+            <div className="card-title">QC Overview</div>
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/qc')}>View All →</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0 }}>
+            {[
+              { label: 'Total Records',  value: qc.total,      color: 'var(--text)'    },
+              { label: 'In Progress',    value: qc.inProgress, color: 'var(--amber)'   },
+              { label: 'Passed',         value: qc.passed,     color: 'var(--green)'   },
+              { label: 'Failed',         value: qc.failed,     color: qc.failed > 0 ? 'var(--red)' : 'var(--text3)' },
+            ].map(({ label, value, color }, i, arr) => (
+              <div key={label} style={{
+                padding: '16px 20px', cursor: 'pointer',
+                borderRight: i < arr.length - 1 ? '1px solid var(--border2)' : undefined,
+              }} onClick={() => navigate('/qc')}>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
+                <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1 }}>{value ?? '—'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Recent Timesheets + Activity ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 20 }}>

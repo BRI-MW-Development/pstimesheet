@@ -1,75 +1,72 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
 import { useLogout } from '../../hooks/useAuth';
 import api from '../../api/client';
 
 /* ─── Navigation config ─── */
-const TOP_GROUPS = [
+/* ── Permission key attached to each nav link ──────────────────
+   perm: { module, action } — link shown only when user has that permission
+   No perm field = always visible to any authenticated user              */
+const NAV_GROUPS = [
   {
-    label: 'Dashboard',
-    icon: '📊',
+    label: 'Dashboard', icon: '📊',
     links: [{ label: 'Dashboard', to: '/dashboard' }],
   },
   {
-    label: 'Timesheets',
-    icon: '📋',
+    label: 'Timesheets', icon: '📋',
     links: [
-      { label: 'Production',       to: '/timesheets/prod' },
-      { label: 'Installation',     to: '/timesheets/inst' },
-      { label: 'Projects Team',    to: '/timesheets/project' },
-      { label: 'Pending Approvals',to: '/timesheets/pending-approvals' },
-      { label: 'WO Complete',      to: '/woc' },
+      { label: 'Production',        to: '/timesheets/prod',              perm: { module: 'PROD',        action: 'canRead' } },
+      { label: 'Installation',      to: '/timesheets/inst',              perm: { module: 'INST',        action: 'canRead' } },
+      { label: 'Projects Team',     to: '/timesheets/project',           perm: { module: 'PROJ',        action: 'canRead' } },
+      { label: 'Pending Approvals', to: '/timesheets/pending-approvals', perm: { module: 'PROD',        action: 'canWrite' } },
+      { label: 'WO Complete',       to: '/woc',                          perm: { module: 'WO_COMPLETE', action: 'canRead' } },
     ],
   },
   {
-    label: 'QC',
-    icon: '🔍',
+    label: 'QC', icon: '🔍',
     links: [
-      { label: 'QC Records', to: '/qc' },
+      { label: 'QC Records', to: '/qc', perm: { module: 'QC', action: 'canRead' } },
     ],
   },
   {
-    label: 'Master Data',
-    icon: '🗂️',
+    label: 'Master Data', icon: '🗂️',
     links: [
-      { label: 'Employees',        to: '/masters/employees' },
-      { label: 'Departments',      to: '/masters/departments' },
-      { label: 'Items',            to: '/masters/items' },
-      { label: 'Machinery',        to: '/masters/machinery' },
-      { label: 'Vehicles',         to: '/masters/vehicles' },
-      { label: 'Access Equipment', to: '/masters/access-equipment' },
-      { label: 'Projects',         to: '/masters/projects' },
-      { label: 'Work Orders',      to: '/masters/workorders' },
-      { label: 'Task Types',       to: '/masters/tasktypes' },
+      { label: 'Employees',        to: '/masters/employees',         perm: { module: 'EMPLOYEES',   action: 'canRead' } },
+      { label: 'Departments',      to: '/masters/departments',       perm: { module: 'DEPARTMENTS', action: 'canRead' } },
+      { label: 'Items',            to: '/masters/items',             perm: { module: 'ITEMS',       action: 'canRead' } },
+      { label: 'Machinery',        to: '/masters/machinery',         perm: { module: 'MACHINERY',   action: 'canRead' } },
+      { label: 'Vehicles',         to: '/masters/vehicles',          perm: { module: 'VEHICLES',    action: 'canRead' } },
+      { label: 'Access Equipment', to: '/masters/access-equipment',  perm: { module: 'ITEMS',       action: 'canRead' } },
+      { label: 'Projects',         to: '/masters/projects',          perm: { module: 'PROJECTS',    action: 'canRead' } },
+      { label: 'Work Orders',      to: '/masters/workorders',        perm: { module: 'WORK_ORDERS', action: 'canRead' } },
+      { label: 'Task Types',       to: '/masters/tasktypes',         perm: { module: 'TASK_TYPES',  action: 'canRead' } },
     ],
   },
   {
-    label: 'Access Control',
-    icon: '🔐',
+    label: 'Access Control', icon: '🔐',
     links: [
-      { label: 'Users',         to: '/admin/users' },
-      { label: 'Roles',         to: '/admin/roles' },
-      { label: 'Login History', to: '/admin/login-history' },
+      { label: 'Users',         to: '/admin/users',         perm: { module: 'USERS', action: 'canRead' } },
+      { label: 'Roles',         to: '/admin/roles',         perm: { module: 'ROLES', action: 'canRead' } },
+      { label: 'Login History', to: '/admin/login-history', perm: { module: 'USERS', action: 'canRead' } },
     ],
   },
   {
-    label: 'Reports',
-    icon: '📈',
+    label: 'Reports', icon: '📈',
     links: [
-      { label: 'Reports',     to: '/reports' },
-      { label: 'Audit Trail', to: '/reports/audit' },
+      { label: 'Reports',     to: '/reports',           perm: { module: 'REPORTS', action: 'canRead' } },
+      { label: 'Analytics',   to: '/reports/analytics', perm: { module: 'REPORTS', action: 'canRead' } },
+      { label: 'Audit Trail', to: '/reports/audit',     perm: { module: 'REPORTS', action: 'canRead' } },
     ],
   },
   {
-    label: 'Settings',
-    icon: '⚙️',
+    label: 'Settings', icon: '⚙️',
     links: [
-      { label: 'Shift Setup',       to: '/admin/shifts' },
-      { label: 'Doc Numbering',     to: '/admin/doc-numbering' },
-      { label: 'Approval Settings', to: '/settings/approvals' },
-      { label: 'Email Settings',    to: '/settings/email' },
+      { label: 'Shift Setup',       to: '/admin/shifts',       perm: { module: 'SHIFTS',       action: 'canRead' } },
+      { label: 'Doc Numbering',     to: '/admin/doc-numbering',perm: { module: 'DOC_NUMBERING', action: 'canRead' } },
+      { label: 'Approval Settings', to: '/settings/approvals', perm: { module: 'SETTINGS',     action: 'canRead' } },
+      { label: 'Email Settings',    to: '/settings/email',     perm: { module: 'SETTINGS',     action: 'canRead' } },
     ],
   },
 ];
@@ -177,7 +174,8 @@ function GlobalSearch({ onClose }) {
 
 /* ─── Notification panel ─── */
 function NotifPanel({ onClose }) {
-  const navigate = useNavigate();
+  const navigate    = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: notifs = [] } = useQuery({
     queryKey: ['notifications'],
@@ -186,15 +184,39 @@ function NotifPanel({ onClose }) {
   });
 
   const levelColor = { error: 'var(--red)', warning: 'var(--amber)', info: 'var(--blue)', success: 'var(--green)' };
+  const unreadCount = notifs.filter(n => !n.isRead).length;
+
+  async function handleClick(n) {
+    // Mark as read
+    if (!n.isRead) {
+      await api.patch(`/notifications/${encodeURIComponent(n.notifKey)}/read`).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    }
+    if (n.link) navigate(n.link);
+    onClose();
+  }
+
+  async function markAllRead() {
+    await api.patch('/notifications/read-all').catch(() => {});
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  }
 
   return (
     <div className="notif-panel" onClick={(e) => e.stopPropagation()}>
       <div className="notif-panel-head">
-        <span className="notif-panel-title">Notifications</span>
-        {notifs.length > 0 && (
-          <span className="notif-panel-count">{notifs.length}</span>
-        )}
-        <button className="notif-panel-close" onClick={onClose}>✕</button>
+        <span className="notif-panel-title">
+          Notifications
+          {unreadCount > 0 && <span className="notif-panel-count">{unreadCount} new</span>}
+        </span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {unreadCount > 0 && (
+            <button style={{ background: 'none', border: 'none', fontSize: 11, color: 'var(--text3)', cursor: 'pointer', padding: 0 }}
+              onClick={markAllRead}>
+              Mark all read
+            </button>
+          )}
+          <button className="notif-panel-close" onClick={onClose}>✕</button>
+        </div>
       </div>
 
       <div className="notif-panel-body">
@@ -206,12 +228,17 @@ function NotifPanel({ onClose }) {
           </div>
         ) : (
           notifs.map((n, i) => (
-            <div key={i} className="notif-panel-item" onClick={() => { n.link && navigate(n.link); onClose(); }}>
-              <div className="notif-dot-lg" style={{ background: levelColor[n.level] ?? 'var(--blue)', marginTop: 4, flexShrink: 0 }} />
+            <div key={i}
+              className="notif-panel-item"
+              style={{ background: n.isRead ? 'transparent' : 'var(--accent-glow)', cursor: n.link ? 'pointer' : 'default' }}
+              onClick={() => handleClick(n)}>
+              <div className="notif-dot-lg" style={{ background: levelColor[n.level] ?? 'var(--blue)', marginTop: 4, flexShrink: 0, opacity: n.isRead ? 0.4 : 1 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="notif-msg" style={{ fontSize: 12.5 }}>{n.message}</div>
+                <div className="notif-msg" style={{ fontSize: 12.5, fontWeight: n.isRead ? 400 : 600 }}>{n.message}</div>
+                {n.detail && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.detail}</div>}
                 {n.time && <div className="notif-time">{n.time}</div>}
               </div>
+              {!n.isRead && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, marginTop: 6 }} />}
             </div>
           ))
         )}
@@ -236,10 +263,38 @@ export default function AppShell() {
     () => localStorage.getItem('ps.theme') || 'industrial'
   );
 
-  const user    = useAuthStore((s) => s.user);
+  const user           = useAuthStore((s) => s.user);
+  const setUser        = useAuthStore((s) => s.setUser);
+  const permissions    = useAuthStore((s) => s.permissions);
+  const setPermissions = useAuthStore((s) => s.setPermissions);
   const logout  = useLogout();
   const navigate = useNavigate();
   const now     = useClock();
+
+  /* Refresh permissions on mount — picks up any new modules (e.g. QC) without requiring re-login */
+  const { data: permData } = useQuery({
+    queryKey: ['my-permissions'],
+    queryFn: () => api.get('/auth/permissions').then(r => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (permData?.permissions) setPermissions(permData.permissions, permData.dataScope ?? 'All');
+  }, [permData]);
+
+  /* Fetch profile image URL on mount and keep it fresh (onSuccess removed in RQ v5 — use useEffect) */
+  const { data: profileData } = useQuery({
+    queryKey: ['profile-image'],
+    queryFn: () => api.get('/auth/profile').then(r => r.data),
+    staleTime: 20 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+
+  useEffect(() => {
+    if (profileData?.profileImageUrl && profileData.profileImageUrl !== user?.profileImageUrl) {
+      setUser({ ...user, profileImageUrl: profileData.profileImageUrl });
+    }
+  }, [profileData?.profileImageUrl]);
 
   /* Theme */
   useEffect(() => {
@@ -247,14 +302,14 @@ export default function AppShell() {
     localStorage.setItem('ps.theme', theme);
   }, [theme]);
 
-  /* Notification count */
+  /* Notification count — badge shows only UNREAD */
   const { data: notifs = [] } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => api.get('/notifications').then((r) => r.data).catch(() => []),
     staleTime: 60_000,
     refetchInterval: 120_000,
   });
-  const notifCount = notifs.length;
+  const notifCount = notifs.filter(n => !n.isRead).length;
 
   /* Close all panels on outside click */
   const closeAll = useCallback(() => {
@@ -314,7 +369,13 @@ export default function AppShell() {
           {/* Avatar + user info */}
           <button className="profile-trigger"
             onClick={() => { setShowProfile((v) => !v); setShowNotif(false); setOpenGroup(null); }}>
-            <div className="avatar">{initials}</div>
+            <div className="avatar" style={{ overflow: 'hidden', padding: 0 }}>
+              {user?.profileImageUrl
+                ? <img src={user.profileImageUrl} alt={initials}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '50%' }}
+                    onError={e => { e.target.style.display = 'none'; e.target.parentNode.style.background = 'var(--accent)'; e.target.parentNode.textContent = initials; }} />
+                : initials}
+            </div>
           </button>
           <div className="user-info" style={{ cursor: 'pointer' }}
             onClick={() => { setShowProfile((v) => !v); setShowNotif(false); setOpenGroup(null); }}>
@@ -330,7 +391,13 @@ export default function AppShell() {
             <div className="profile-menu" onClick={(e) => e.stopPropagation()}>
               {/* User summary */}
               <div className="pm-user-row">
-                <div className="pm-avatar">{initials}</div>
+                <div className="pm-avatar" style={{ overflow: 'hidden', padding: 0 }}>
+                  {user?.profileImageUrl
+                    ? <img src={user.profileImageUrl} alt={initials}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '50%' }}
+                        onError={e => { e.target.style.display = 'none'; e.target.parentNode.style.background = 'var(--accent)'; e.target.parentNode.textContent = initials; }} />
+                    : initials}
+                </div>
                 <div>
                   <div className="pm-name">{user?.displayName ?? user?.username}</div>
                   <div className="pm-role">{user?.roleCode ?? user?.role ?? ''}</div>
@@ -376,15 +443,21 @@ export default function AppShell() {
 
       {/* ════════════════ TOP GROUP NAV ════════════════ */}
       <div className="top-group-menu" onClick={closeAll}>
-        {TOP_GROUPS.map((group) => {
-          const isSingle = group.links.length === 1;
+        {NAV_GROUPS.map((group) => {
+          // Filter links by permission — show only links the user can access
+          const visibleLinks = group.links.filter(link => {
+            if (!link.perm) return true;
+            return permissions.some(p => p.module === link.perm.module && p[link.perm.action]);
+          });
+          if (visibleLinks.length === 0) return null; // hide entire group if no visible links
+          const isSingle = visibleLinks.length === 1;
           return (
             <div
               key={group.label}
               className={`top-group${openGroup === group.label ? ' open' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
-                if (isSingle) { navigate(group.links[0].to); closeAll(); }
+                if (isSingle) { navigate(visibleLinks[0].to); closeAll(); }
                 else setOpenGroup((cur) => cur === group.label ? null : group.label);
                 setShowProfile(false);
                 setShowNotif(false);
@@ -397,7 +470,7 @@ export default function AppShell() {
               </div>
               {!isSingle && (
                 <div className="top-group-dropdown">
-                  {group.links.map((link) => (
+                  {visibleLinks.map((link) => (
                     <NavLink
                       key={link.to}
                       to={link.to}

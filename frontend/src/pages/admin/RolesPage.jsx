@@ -8,14 +8,15 @@ import { useToast } from '../../context/ToastContext';
 
 const MODULE_LABELS = {
   PROD: 'Production Timesheets', INST: 'Installation Timesheets', PROJ: 'Projects Timesheets',
-  WO_COMPLETE: 'WO Complete', REPORTS: 'Reports', EMPLOYEES: 'Employees',
-  DEPARTMENTS: 'Departments', ITEMS: 'Items', MACHINERY: 'Machinery', VEHICLES: 'Vehicles',
-  PROJECTS: 'Projects', WORK_ORDERS: 'Work Orders', TASK_TYPES: 'Task Types',
+  WO_COMPLETE: 'WO Complete', REPORTS: 'Reports', QC: 'Quality Control (QC)',
+  EMPLOYEES: 'Employees', DEPARTMENTS: 'Departments', ITEMS: 'Items', MACHINERY: 'Machinery',
+  VEHICLES: 'Vehicles', PROJECTS: 'Projects', WORK_ORDERS: 'Work Orders', TASK_TYPES: 'Task Types',
   USERS: 'Users', ROLES: 'Roles', SHIFTS: 'Shifts', DOC_NUMBERING: 'Doc Numbering', SETTINGS: 'Settings',
 };
 
 const MODULE_GROUPS = [
   { label: 'Timesheets',      modules: ['PROD', 'INST', 'PROJ', 'WO_COMPLETE', 'REPORTS'] },
+  { label: 'Quality Control', modules: ['QC'] },
   { label: 'Master Data',     modules: ['EMPLOYEES', 'DEPARTMENTS', 'ITEMS', 'MACHINERY', 'VEHICLES', 'PROJECTS', 'WORK_ORDERS', 'TASK_TYPES'] },
   { label: 'Administration',  modules: ['USERS', 'ROLES', 'SHIFTS', 'DOC_NUMBERING', 'SETTINGS'] },
 ];

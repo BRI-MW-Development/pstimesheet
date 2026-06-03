@@ -1,17 +1,23 @@
-import { Body, Controller, Get, Param, Put, Query } from '@nestjs/common';
+import { UseGuards, Body, Controller, Get, Param, Put, Query } from '@nestjs/common';
 import type { ListDepartmentsQueryDto } from './dto/list-departments-query.dto';
 import { DepartmentsService } from './departments.service';
 import type { UpdateDepartmentProfileDto } from './departments.service';
+import { PermissionGuard } from '../auth/permission.guard';
+import { RequirePermission } from '../auth/permission.decorator';
 
 @Controller('departments')
 export class DepartmentsController {
   constructor(private readonly departmentsService: DepartmentsService) {}
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('DEPARTMENTS', 'canRead')
   @Get()
   async list(@Query() query: ListDepartmentsQueryDto) {
     return this.departmentsService.list(query);
   }
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('DEPARTMENTS', 'canWrite')
   @Put(':id/profile')
   async updateProfile(
     @Param('id') id: string,

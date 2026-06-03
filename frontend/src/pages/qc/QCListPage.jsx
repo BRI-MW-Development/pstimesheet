@@ -9,11 +9,11 @@ import { useAuthStore } from '../../store/authStore';
 import { formatDate } from '../../utils/format';
 
 const STATUS_VARIANT = {
-  Draft: 'draft',
+  Draft:         'draft',
   'In Progress': 'submitted',
-  Passed: 'approved',
-  Failed: 'rejected',
-  Closed: 'draft',
+  Passed:        'approved',
+  Failed:        'rejected',
+  Closed:        'draft',
 };
 
 function FilterPanel({ filters, setFilters, onClear }) {
@@ -56,15 +56,14 @@ function FilterPanel({ filters, setFilters, onClear }) {
             <select className="wip-filter-input" value={filters.status}
               onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
               <option value="">All Status</option>
-              <option>Draft</option>
               <option>In Progress</option>
               <option>Passed</option>
               <option>Failed</option>
-              <option>Closed</option>
             </select>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-            <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => { onClear(); setOpen(false); }}>Clear</button>
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}
+              onClick={() => { onClear(); setOpen(false); }}>Clear</button>
           </div>
         </div>
       )}
@@ -104,33 +103,35 @@ export default function QCListPage() {
   const isApprover = user?.canApprove || ['Admin', 'Manager', 'Supervisor'].includes(user?.roleCode);
 
   const columns = [
-    { key: '#',            label: '#',            num: true, sort: false, render: (_, i) => i + 1 },
-    { key: 'docNo',        label: 'Document No',  sort: true, render: (r) => <span className="wip-link">{r.docNo}</span> },
+    { key: '#',            label: '#',            num: true,  sort: false, render: (_, i) => i + 1 },
+    { key: 'docNo',        label: 'Document No',  sort: true,  render: (r) => <span className="wip-link">{r.docNo}</span> },
     { key: 'projectCode',  label: 'Project Code', sort: true },
     { key: 'customerName', label: 'Customer',     sort: true },
     { key: 'projectName',  label: 'Project Name', sort: true },
     { key: 'workOrderNo',  label: 'Work Order',   sort: true },
-    { key: 'qcDate',       label: 'QC Date',      sort: true, render: (r) => formatDate(r.qcDate) },
+    { key: 'qcDate',       label: 'QC Date',      sort: true,  render: (r) => formatDate(r.qcDate) },
     { key: 'qcInspector',  label: 'QC Inspector', sort: true },
     {
-      key: 'status', label: 'Status', sort: true, width: '100px',
+      key: 'status', label: 'Status', sort: true, width: '110px',
       render: (row) => <Badge variant={STATUS_VARIANT[row.status] ?? 'draft'}>{row.status}</Badge>,
     },
     {
       key: 'actions', label: '', sort: false,
       render: (row) => (
         <div style={{ display: 'flex', gap: 4 }}>
-          {/* View */}
           <button className="wip-icon-btn wip-icon-btn-view" title="View"
             onClick={() => navigate(`/qc/${row.id}/view`)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
-          {/* Edit */}
+          <button className="wip-icon-btn" title="Print / PDF"
+            onClick={() => window.open(`/qc/${row.id}/print`, '_blank')}
+            style={{ color: '#6b7280', borderColor: '#d1d5db' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </button>
           <button className="wip-icon-btn wip-icon-btn-edit" title="Edit"
             onClick={() => navigate(`/qc/${row.id}/edit`)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
-          {/* Delete — Draft only */}
           {(row.status === 'Draft' || isApprover) && (
             <button className="wip-icon-btn wip-icon-btn-delete" title="Delete"
               onClick={() => { if (confirm('Delete this QC record?')) deleteQc(row.id); }}>

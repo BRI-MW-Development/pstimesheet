@@ -15,6 +15,7 @@ const DOCS = [
   { key: 'instPrefix',       docType: 'INST', label: 'Installation Timesheet',  placeholder: 'TS-INST' },
   { key: 'projTeamPrefix',   docType: 'PROJ', label: 'Projects Team Timesheet', placeholder: 'TS-PROJ' },
   { key: 'woCompletePrefix', docType: 'WOC',  label: 'WO Complete',             placeholder: 'WO-COMP' },
+  { key: 'qcPrefix',         docType: 'QC',   label: 'Quality Control (QC)',    placeholder: 'QC'      },
 ];
 
 export default function DocNumberingPage() {
@@ -31,6 +32,7 @@ export default function DocNumberingPage() {
     instPrefix:       'TS-INST',
     projTeamPrefix:   'TS-PROJ',
     woCompletePrefix: 'WO-COMP',
+    qcPrefix:         'QC',
     sequenceDigits:   5,
     yearReset:        'Annual (Jan 1)',
   });
@@ -53,7 +55,8 @@ export default function DocNumberingPage() {
       prodPrefix:       rowMap['PROD']?.prefix        ?? f.prodPrefix,
       instPrefix:       rowMap['INST']?.prefix        ?? f.instPrefix,
       projTeamPrefix:   rowMap['PROJ']?.prefix        ?? f.projTeamPrefix,
-      woCompletePrefix: rowMap['WOC']?.prefix         ?? f.woCompletePrefix,
+      woCompletePrefix: rowMap['WOC']?.prefix          ?? f.woCompletePrefix,
+      qcPrefix:         rowMap['QC']?.prefix           ?? f.qcPrefix,
       sequenceDigits:   rowMap['PROD']?.sequenceDigits ?? f.sequenceDigits,
     }));
   }, [data]);

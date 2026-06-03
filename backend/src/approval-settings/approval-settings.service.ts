@@ -161,6 +161,101 @@ export class ApprovalSettingsService implements OnModuleInit {
     };
   }
 
+  /**
+   * Find the best-matching approval rule for a timesheet and check whether
+   * the given userId/roleCode is authorised to approve it.
+   *
+   * Logic:
+   *  1. Collect all rules where module matches (or module = 'ALL').
+   *  2. Among those, prefer rules whose criteria match the timesheet fields.
+   *  3. If the best rule has anyApprover = true → any user with canWrite can approve.
+   *  4. If anyApprover = false → only users listed in approverUserIds can approve.
+   *  5. If NO rule is found → fall back to canWrite permission check.
+   */
+  async canUserApproveTimesheet(
+    userId: string,
+    roleCode: string,
+    ts: { tsType: string; department_code?: string; shiftCode?: string; projectId?: string; workOrderNo?: string },
+    hasCanWrite: boolean,
+  ): Promise<{ allowed: boolean; reason: string }> {
+    const allRules = await this.list();
+    const tsModule = ts.tsType === 'INST' ? 'INST' : ts.tsType === 'PROJ' ? 'PROJ' : 'PROD';
+
+    // Filter rules that apply to this module
+    const applicableRules = allRules.filter(r =>
+      r.module === 'ALL' || r.module === tsModule
+    );
+
+    if (applicableRules.length === 0) {
+      // No rules configured — fall back to permission-based check
+      return hasCanWrite
+        ? { allowed: true,  reason: 'No approval rules configured — permission-based approval allowed.' }
+        : { allowed: false, reason: 'No approval rules configured and you do not have canWrite permission.' };
+    }
+
+    // Score each rule: count how many criteria match
+    const scoreRule = (rule: any): number => {
+      if (!rule.criteria?.length) return 1; // no criteria = lowest priority match
+      let score = 0;
+      for (const c of rule.criteria) {
+        const tsVal = (
+          c.field === 'department'   ? ts.department_code :
+          c.field === 'shift'        ? ts.shiftCode :
+          c.field === 'projectNo'    ? ts.projectId :
+          c.field === 'workOrderNo'  ? ts.workOrderNo : null
+        )?.toString().toLowerCase() ?? '';
+        const ruleVal = (c.value ?? '').toString().toLowerCase();
+        const op = c.operator ?? 'equals';
+        const matches =
+          op === 'equals'     ? tsVal === ruleVal :
+          op === 'not equals' ? tsVal !== ruleVal :
+          op === 'contains'   ? tsVal.includes(ruleVal) :
+          op === 'starts with'? tsVal.startsWith(ruleVal) : false;
+        if (matches) score++;
+        else return -1; // AND logic — all criteria must match
+      }
+      return score;
+    };
+
+    const scored = applicableRules
+      .map(r => ({ rule: r, score: scoreRule(r) }))
+      .filter(x => x.score >= 0)
+      .sort((a, b) => b.score - a.score);
+
+    if (scored.length === 0) {
+      // Rules exist but none match — fall back to permission
+      return hasCanWrite
+        ? { allowed: true,  reason: 'No matching approval rule for this timesheet — permission-based approval.' }
+        : { allowed: false, reason: 'No matching approval rule found for this timesheet.' };
+    }
+
+    const best = scored[0].rule;
+
+    if (best.anyApprover) {
+      // Any user with canWrite can approve
+      return hasCanWrite
+        ? { allowed: true,  reason: `Rule "${best.module}" allows any approver with permission.` }
+        : { allowed: false, reason: 'You do not have canWrite permission on this timesheet module.' };
+    }
+
+    // Check if user is a named approver
+    const allowedIds = this.splitTrim(best.approverUserIds);
+    if (allowedIds.includes(userId)) {
+      return { allowed: true, reason: `You are a designated approver for this rule.` };
+    }
+
+    const allowedNames = this.splitTrim(best.approverNames);
+    // Fallback name check (for rules saved before userId tracking)
+    if (allowedNames.length > 0 && allowedIds.length === 0 && hasCanWrite) {
+      return { allowed: true, reason: 'Approval granted via named approver rule.' };
+    }
+
+    return {
+      allowed: false,
+      reason: `This timesheet requires approval by: ${allowedNames.join(', ') || 'a designated approver'}. You are not listed.`,
+    };
+  }
+
   async remove(id: number) {
     await this.pool.request().input('id', mssql.Int, id)
       .query(`DELETE FROM PSApprovalSettings WHERE id = @id`);

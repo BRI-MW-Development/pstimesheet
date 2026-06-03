@@ -57,12 +57,21 @@ function PwStrengthBar({ password }) {
 }
 
 function UserViewModal({ user, onClose, onEdit }) {
+  const initials = (user.displayName ?? user.username ?? '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
   return (
     <Modal title="User Details" onClose={onClose}>
       <div className="modal-banner">
-        <div>
-          <div className="modal-banner-title">{user.displayName || user.username}</div>
-          <div className="modal-banner-sub">{[user.roleName ?? user.roleCode, user.departmentCode].filter(Boolean).join(' · ') || '—'}</div>
+        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+          {/* Profile photo or initials */}
+          <div style={{ width:52, height:52, borderRadius:'50%', overflow:'hidden', flexShrink:0, background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:18, border:'2px solid var(--border2)' }}>
+            {user.profileImageUrl
+              ? <img src={user.profileImageUrl} alt={initials} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{ e.target.style.display='none'; }} />
+              : initials}
+          </div>
+          <div>
+            <div className="modal-banner-title">{user.displayName || user.username}</div>
+            <div className="modal-banner-sub">{[user.roleName ?? user.roleCode, user.departmentCode].filter(Boolean).join(' · ') || '—'}</div>
+          </div>
         </div>
         <div className="modal-banner-right">
           <Badge variant={user.status === 'Active' ? 'active' : 'inactive'}>{user.status}</Badge>
@@ -79,8 +88,8 @@ function UserViewModal({ user, onClose, onEdit }) {
         <div className="detail-row"><span>Email</span><span>{user.email ?? '—'}</span></div>
         <div className="detail-row"><span>Phone</span><span>{user.phone ?? '—'}</span></div>
         <div className="detail-row"><span>Status</span><Badge variant={user.status === 'Active' ? 'active' : 'inactive'}>{user.status}</Badge></div>
-        <div className="detail-row"><span>Last Login</span><span>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : '—'}</span></div>
-        <div className="detail-row"><span>Created</span><span>{user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-GB') : '—'}</span></div>
+        <div className="detail-row"><span>Last Login</span><span>{(user.lastLoginAt || user.lastLogin) ? new Date(user.lastLoginAt ?? user.lastLogin).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'}</span></div>
+        <div className="detail-row"><span>Created</span><span>{user.createdAt ? new Date(user.createdAt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'}</span></div>
       </div>
       <div className="modal-foot">
         <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
@@ -374,6 +383,19 @@ export default function UsersPage() {
 
   const columns = [
     { key: '#',           label: '#',            num: true,  sort: false, render: (_, i) => i + 1 },
+    {
+      key: 'avatar', label: '', sort: false, width: '44px',
+      render: (r) => {
+        const ini = (r.displayName ?? r.username ?? '?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+        return (
+          <div style={{ width:32,height:32,borderRadius:'50%',overflow:'hidden',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:12,flexShrink:0 }}>
+            {r.profileImageUrl
+              ? <img src={r.profileImageUrl} alt={ini} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none';}} />
+              : ini}
+          </div>
+        );
+      },
+    },
     { key: 'userId',      label: 'User ID',      sort: true, render: (r) => <span className="wip-link">{r.userId ?? '—'}</span> },
     { key: 'username',    label: 'Username',     sort: true },
     { key: 'displayName', label: 'Display Name', sort: true },

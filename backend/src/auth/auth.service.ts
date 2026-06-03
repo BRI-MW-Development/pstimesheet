@@ -112,6 +112,14 @@ export class AuthService implements OnModuleInit {
       .input('ip',        mssql.NVarChar(45),  ip)
       .input('ua',        mssql.NVarChar(500), userAgent)
       .query(`INSERT INTO PSTsSessions (sessionToken,userId,expiresAt,ipAddress,userAgent) VALUES (@token,@userId,@expiresAt,@ip,@ua)`);
+    // Clean up expired/old sessions for this user (keep last 5 active + purge all expired)
+    await this.pool.request()
+      .input('userId', mssql.NVarChar(30), user.userId)
+      .query(`
+        DELETE FROM PSTsSessions WHERE expiresAt < GETDATE();
+        DELETE FROM PSTsSessions WHERE userId = @userId AND isActive = 0
+          AND loggedOutAt < DATEADD(DAY, -7, GETDATE());
+      `).catch(() => { /* non-critical — don't fail login */ });
 
     // Use client-provided geo (browser sees real public IP); fall back to server-side lookup
     let city    = clientCity    || undefined;
@@ -348,9 +356,24 @@ export class AuthService implements OnModuleInit {
           SELECT ISNULL(dataScope,'All') AS dataScope FROM PSTsRoles WHERE roleCode = @roleCode
         `),
     ]);
+
+    let permissions = permsRes.recordset;
+
+    // Auto-grant QC to any role that has PROD or INST access but no explicit QC row
+    const hasQcRow = permissions.some(p => p.module === 'QC');
+    if (!hasQcRow) {
+      const hasProdOrInst = permissions.some(p => (p.module === 'PROD' || p.module === 'INST') && p.canRead);
+      if (hasProdOrInst) {
+        permissions = [
+          ...permissions,
+          { module: 'QC', canRead: true, canCreate: true, canWrite: true, canDelete: true, canReport: true },
+        ];
+      }
+    }
+
     return {
-      permissions: permsRes.recordset,
-      dataScope:   roleRes.recordset[0]?.dataScope ?? 'All',
+      permissions,
+      dataScope: roleRes.recordset[0]?.dataScope ?? 'All',
     };
   }
 
@@ -368,15 +391,21 @@ export class AuthService implements OnModuleInit {
         .query<{ module: string }>(`
           SELECT module FROM PSTsRolePermissions
           WHERE roleCode = @rc AND canRead = 1
-            AND module IN ('PROD','INST','PROJ','WO_COMPLETE')
+            AND module IN ('PROD','INST','PROJ','WO_COMPLETE','QC')
         `).catch(() => ({ recordset: [] })),
     ]);
 
-    const dataScope   = roleQ.recordset[0]?.dataScope ?? 'All';
-    const accessible  = permsQ.recordset.map(p => p.module);
-    // Whitelist-filter before any SQL interpolation (C-3)
-    const tsTypes     = accessible.filter(m => ALLOWED_TS_TYPES.has(m));
-    const hasWoc      = accessible.includes('WO_COMPLETE');
+    const dataScope  = roleQ.recordset[0]?.dataScope ?? 'All';
+    const accessible = permsQ.recordset.map(p => p.module);
+
+    // Auto-grant QC to any role that has at least PROD or INST access (no explicit QC row needed)
+    if (!accessible.includes('QC') && (accessible.includes('PROD') || accessible.includes('INST'))) {
+      accessible.push('QC');
+    }
+
+    const tsTypes = accessible.filter(m => ALLOWED_TS_TYPES.has(m));
+    const hasWoc  = accessible.includes('WO_COMPLETE');
+    const hasQc   = accessible.includes('QC');
 
     // ── 2. Build dynamic WHERE for PSTsHeader ─────────────────────────────
     // Values come from the ALLOWED_TS_TYPES constant set — safe for interpolation.
@@ -398,7 +427,7 @@ export class AuthService implements OnModuleInit {
     const tsReq    = this.pool.request().input('uid', mssql.NVarChar(30), userId);
     const recReq   = this.pool.request().input('uid', mssql.NVarChar(30), userId);
 
-    const [tsRes, wocRes, recentRes] = await Promise.all([
+    const [tsRes, wocRes, qcRes, recentRes] = await Promise.all([
       tsReq.query<{ total: number; draft: number; submitted: number; approved: number; thisMonth: number; prodCount: number; instCount: number; projCount: number }>(`
         SELECT
           COUNT(*) AS total,
@@ -420,6 +449,18 @@ export class AuthService implements OnModuleInit {
           `).catch(() => ({ recordset: [{ total:0, thisMonth:0 }] }))
         : Promise.resolve({ recordset: [{ total:0, thisMonth:0 }] }),
 
+      hasQc
+        ? this.pool.request().query<{ total: number; passed: number; failed: number; inProgress: number; thisMonth: number }>(`
+            SELECT
+              COUNT(*) AS total,
+              SUM(CASE WHEN status='Passed'      THEN 1 ELSE 0 END) AS passed,
+              SUM(CASE WHEN status='Failed'      THEN 1 ELSE 0 END) AS failed,
+              SUM(CASE WHEN status='In Progress' THEN 1 ELSE 0 END) AS inProgress,
+              SUM(CASE WHEN YEAR(qcDate)=YEAR(GETDATE()) AND MONTH(qcDate)=MONTH(GETDATE()) THEN 1 ELSE 0 END) AS thisMonth
+            FROM PsQcRecord WHERE isDeleted = 0
+          `).catch(() => ({ recordset: [{ total:0, passed:0, failed:0, inProgress:0, thisMonth:0 }] }))
+        : Promise.resolve({ recordset: [{ total:0, passed:0, failed:0, inProgress:0, thisMonth:0 }] }),
+
       recReq.query(`
         SELECT TOP 10 tsDocNo, tsType, projectName, entryDate, entered_by_name, status, createdAt
         FROM PSTsHeader WHERE ${tsWhere} ORDER BY createdAt DESC
@@ -429,9 +470,9 @@ export class AuthService implements OnModuleInit {
     return {
       timesheets:       tsRes.recordset[0]   ?? { total:0, draft:0, submitted:0, approved:0, thisMonth:0, prodCount:0, instCount:0, projCount:0 },
       woComplete:       hasWoc ? (wocRes.recordset[0] ?? { total:0, thisMonth:0 }) : null,
+      qc:               hasQc  ? (qcRes.recordset[0]  ?? { total:0, passed:0, failed:0, inProgress:0, thisMonth:0 }) : null,
       recentTimesheets: recentRes.recordset,
-      // metadata the frontend uses for conditional rendering
-      meta: { tsTypes, hasWoc, dataScope },
+      meta: { tsTypes, hasWoc, hasQc, dataScope },
     };
   }
 

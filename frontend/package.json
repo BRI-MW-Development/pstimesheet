@@ -13,9 +13,12 @@
     "@vitejs/plugin-react": "^4.7.0",
     "axios": "^1.16.0",
     "clsx": "^2.1.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.15.0",
+    "recharts": "^3.8.1",
     "zustand": "^5.0.13"
   },
   "devDependencies": {

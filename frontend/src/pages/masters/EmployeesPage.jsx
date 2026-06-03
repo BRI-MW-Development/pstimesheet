@@ -1,10 +1,28 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+
+const EMPLOYEE_CATEGORIES = [
+  'WORKING SUPERVISOR + DRIVER',
+  'WORKING SUPERVISOR',
+  'SITE SUPERVISOR',
+  'TEAM LEADER',
+  'TECHNICIAN',
+  'TECHNICIAN + DRIVER',
+  'STORE + DRIVER',
+  'SUPERVISOR',
+  'SUPPORTER',
+  'DRIVER',
+  'INSTALLATION COORDINATOR',
+  'INSTALLATION SUPERVISOR',
+  'PRODUCTION COORDINATOR',
+  'DIGITAL TECHNICIAN',
+];
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import Table, { WipListHeader } from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import { useToast } from '../../context/ToastContext';
+import CameraCapture from '../../components/ui/CameraCapture';
 
 function Avatar({ imageUrl, name, size = 32 }) {
   if (imageUrl) {
@@ -67,37 +85,67 @@ function EmployeeEditModal({ emp, onClose }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const fullName = [emp.firstName, emp.lastname].filter(Boolean).join(' ');
+  const fileInputRef = useRef(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(emp.imageUrl ?? null);
 
   const [form, setForm] = useState({
-    emailId:       emp.emailId       ?? '',
-    subDepartment: emp.subDepartment ?? '',
-    category:      emp.category      ?? '',
-    imageUrl:      emp.imageUrl      ?? '',
+    emailId: emp.emailId ?? '', subDepartment: emp.subDepartment ?? '', category: emp.category ?? '',
   });
 
   const { mutate: save, isPending: saving } = useMutation({
     mutationFn: (payload) => api.patch(`/employees/${emp.employeeNo}`, payload).then((r) => r.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
-      toast('Employee updated.', 'success');
-      onClose();
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['employees'] }); toast('Employee updated.', 'success'); onClose(); },
     onError: (err) => toast(err?.response?.data?.message ?? 'Save failed.', 'error'),
   });
 
-  function handleSubmit(e) {
-    e.preventDefault();
-    save(form);
+  const { mutate: uploadImg, isPending: uploadingImg } = useMutation({
+    mutationFn: (body) => api.post(`/employees/${emp.employeeNo}/image`, body).then(r => r.data),
+    onSuccess: (data) => { setPreviewUrl(data.imageUrl); queryClient.invalidateQueries({ queryKey: ['employees'] }); toast('Photo updated.', 'success'); },
+    onError: () => toast('Photo upload failed.', 'error'),
+  });
+
+  function uploadFile(file) {
+    if (!file?.type.startsWith('image/')) { toast('Please select an image.', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = () => uploadImg({ fileData: reader.result, mimeType: file.type, fileName: file.name });
+    reader.readAsDataURL(file);
   }
 
   return (
     <Modal title={`Edit — ${fullName || emp.employeeNo}`} onClose={onClose}>
-      <form onSubmit={handleSubmit}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <Avatar imageUrl={form.imageUrl || emp.imageUrl} name={fullName} size={48} />
+      <form onSubmit={e => { e.preventDefault(); save(form); }}>
+        {/* Avatar with upload */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <Avatar imageUrl={previewUrl} name={fullName} size={56} />
+            {/* Spinner overlay while uploading */}
+            {uploadingImg && (
+              <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 18, height: 18, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              </div>
+            )}
+            {!uploadingImg && (
+              <div style={{ position: 'absolute', bottom: -2, right: -2, display: 'flex', gap: 2 }}>
+                <button type="button" title="Upload photo" onClick={() => fileInputRef.current?.click()}
+                  style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--accent)', color: '#fff', border: '2px solid var(--surface)', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  📁
+                </button>
+                <button type="button" title="Camera" onClick={() => setShowCamera(true)}
+                  style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--blue)', color: '#fff', border: '2px solid var(--surface)', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  📷
+                </button>
+              </div>
+            )}
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { uploadFile(e.target.files?.[0]); e.target.value = ''; }} />
+          </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600 }}>{fullName || emp.employeeNo}</div>
             <div style={{ color: 'var(--text3)', fontSize: 13 }}>{emp.designation ?? '—'} · {emp.departmentCode ?? '—'}</div>
+            {uploadingImg && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ width: 10, height: 10, border: '1.5px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              Uploading photo…
+            </div>}
           </div>
         </div>
 
@@ -106,39 +154,32 @@ function EmployeeEditModal({ emp, onClose }) {
           <div className="form-group">
             <label className="form-label">Email</label>
             <input className="form-control" type="email" placeholder="employee@company.com"
-              value={form.emailId}
-              onChange={(e) => setForm((f) => ({ ...f, emailId: e.target.value }))} />
+              value={form.emailId} onChange={(e) => setForm((f) => ({ ...f, emailId: e.target.value }))} />
           </div>
-
           <div className="form-group">
             <label className="form-label">Sub-Department</label>
             <input className="form-control" placeholder="e.g. Fabrication"
-              value={form.subDepartment}
-              onChange={(e) => setForm((f) => ({ ...f, subDepartment: e.target.value }))} />
+              value={form.subDepartment} onChange={(e) => setForm((f) => ({ ...f, subDepartment: e.target.value }))} />
           </div>
-
           <div className="form-group">
             <label className="form-label">Category</label>
-            <input className="form-control" placeholder="e.g. Skilled"
+            <select className="form-control"
               value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Image URL</label>
-            <input className="form-control" placeholder="https://..."
-              value={form.imageUrl}
-              onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))} />
+              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
+              <option value="">— Select category —</option>
+              {EMPLOYEE_CATEGORIES.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
         </div>
 
         <div className="modal-foot">
           <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
         </div>
       </form>
+      {showCamera && <CameraCapture onCapture={(dataUrl, mimeType, fileName) => { uploadImg({ fileData: dataUrl, mimeType, fileName }); setShowCamera(false); }} onClose={() => setShowCamera(false)} />}
     </Modal>
   );
 }

@@ -53,6 +53,10 @@ function ShiftForm({ initial, onSave, onClose, saving }) {
 
   function handleSubmit(e) {
     e.preventDefault();
+    // Night shifts (e.g. 22:00–06:00) are allowed — only validate if both values same-day
+    if (form.startTime && form.endTime && form.startTime === form.endTime) {
+      alert('Start time and end time cannot be the same.'); return;
+    }
     onSave(form);
   }
 

@@ -1,13 +1,19 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Param, Patch, Post } from '@nestjs/common';
+import { UseGuards, Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Param, Patch, Post } from '@nestjs/common';
 import { AccessEquipmentService } from './access-equipment.service';
+import { PermissionGuard } from '../auth/permission.guard';
+import { RequirePermission } from '../auth/permission.decorator';
 
 @Controller('access-equipment')
 export class AccessEquipmentController {
   constructor(private readonly accessEquipmentService: AccessEquipmentService) {}
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('ITEMS', 'canRead')
   @Get()
   list() { return this.accessEquipmentService.list(); }
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('ITEMS', 'canCreate')
   @Post()
   @HttpCode(201)
   async create(@Body() body: any) {
@@ -18,6 +24,8 @@ export class AccessEquipmentController {
     }
   }
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('ITEMS', 'canWrite')
   @Patch(':equipmentId')
   async update(@Param('equipmentId') equipmentId: string, @Body() body: any) {
     try {
@@ -27,6 +35,8 @@ export class AccessEquipmentController {
     }
   }
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('ITEMS', 'canDelete')
   @Delete(':equipmentId')
   async remove(@Param('equipmentId') equipmentId: string) {
     try {

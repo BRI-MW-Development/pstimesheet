@@ -37,11 +37,13 @@ const PendingApprovalsPage   = lazy(() => import('./pages/timesheets/PendingAppr
 // QC
 const QCListPage             = lazy(() => import('./pages/qc/QCListPage'));
 const QCFormPage             = lazy(() => import('./pages/qc/QCFormPage'));
+const QCPrintPage            = lazy(() => import('./pages/qc/QCPrintPage'));
 
 // WOC + Reports
 const WocPage                = lazy(() => import('./pages/woc/WocPage'));
 const ReportsPage            = lazy(() => import('./pages/reports/ReportsPage'));
 const AuditPage              = lazy(() => import('./pages/reports/AuditPage'));
+const AnalyticsPage          = lazy(() => import('./pages/reports/AnalyticsPage'));
 
 // Admin / System Settings
 const UsersPage              = lazy(() => import('./pages/admin/UsersPage'));
@@ -80,6 +82,9 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
 
               <Route element={<RequireAuth />}>
+                {/* Print pages — no AppShell chrome */}
+                <Route path="qc/:id/print" element={<QCPrintPage />} />
+
                 <Route element={<AppShell />}>
                   <Route index element={<Navigate to="/dashboard" replace />} />
                   <Route path="dashboard" element={<DashboardPage />} />
@@ -112,10 +117,10 @@ export default function App() {
                   <Route path="qc/new"         element={<QCFormPage />} />
                   <Route path="qc/:id/edit"    element={<QCFormPage />} />
                   <Route path="qc/:id/view"    element={<QCFormPage />} />
-
                   <Route path="woc"            element={<WocPage />} />
-                  <Route path="reports"        element={<ReportsPage />} />
-                  <Route path="reports/audit"  element={<AuditPage />} />
+                  <Route path="reports"           element={<ReportsPage />} />
+                  <Route path="reports/audit"    element={<AuditPage />} />
+                  <Route path="reports/analytics" element={<AnalyticsPage />} />
 
                   {/* Admin / System Settings */}
                   <Route path="admin/users"              element={<UsersPage />} />

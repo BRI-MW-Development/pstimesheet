@@ -1,56 +1,74 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-/**
- * Searchable dropdown that renders its list via a Portal (position:fixed)
- * so it escapes parent overflow:hidden in modals.
- *
- * Props:
- *   options    — [{ value, label }]
- *   value      — currently selected value (or null)
- *   onChange   — (value) => void
- *   placeholder
- *   disabled
- */
+const DROPDOWN_MAX_H = 240; // px — max height of the dropdown list
+const GAP = 4;              // px — gap between trigger bottom and dropdown top
+
 export default function SearchSelect({ options = [], value, onChange, placeholder = 'Select…', disabled }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState('');
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
-  const triggerRef = useRef(null);
-  const inputRef = useRef(null);
+  const [pos, setPos]     = useState({ top: 0, left: 0, width: 0, openUp: false });
+  const triggerRef  = useRef(null);
+  const inputRef    = useRef(null);
   const dropdownRef = useRef(null);
 
-  const selected = options.find((o) => o.value === value);
-  // triggerLabel: what to show in the closed button (defaults to label)
+  const selected    = options.find((o) => o.value === value);
   const triggerText = selected ? (selected.triggerLabel ?? selected.label) : placeholder;
+
+  /* ── Calculate where to place the dropdown ── */
+  function calcPos() {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const vh = window.innerHeight;
+    const spaceBelow = vh - rect.bottom - GAP;
+    const spaceAbove = rect.top - GAP;
+    // Open upward if not enough room below AND more room above
+    const openUp = spaceBelow < DROPDOWN_MAX_H && spaceAbove > spaceBelow;
+    return {
+      left:   rect.left,       // viewport-relative for position:fixed
+      width:  rect.width,
+      openUp,
+      // For downward: top = trigger bottom. For upward: bottom = viewport height - trigger top
+      top:    openUp ? undefined : rect.bottom + GAP,
+      bottom: openUp ? vh - rect.top + GAP : undefined,
+    };
+  }
 
   function openDropdown() {
     if (disabled) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    setPos({
-      top: rect.bottom + window.scrollY,
-      left: rect.left + window.scrollX,
-      width: rect.width,
-    });
+    const p = calcPos();
+    if (!p) return;
+    setPos(p);
     setQuery('');
     setOpen(true);
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
+  /* ── Close on outside mousedown ── */
   useEffect(() => {
     if (!open) return;
     function onDown(e) {
-      if (!triggerRef.current?.contains(e.target) && !dropdownRef.current?.contains(e.target)) setOpen(false);
+      if (!triggerRef.current?.contains(e.target) && !dropdownRef.current?.contains(e.target))
+        setOpen(false);
     }
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
+  /* ── Close (and don't reopen) when ANY ancestor scrolls ── */
+  useEffect(() => {
+    if (!open) return;
+    function onScroll() { setOpen(false); }
+    // Capture scroll on all scrollable ancestors
+    window.addEventListener('scroll', onScroll, true);
+    return () => window.removeEventListener('scroll', onScroll, true);
+  }, [open]);
+
+  /* ── Filter ── */
   const q = query.toLowerCase().trim();
   const filtered = !q ? options : options.filter((o) => {
     const label = o.label.toLowerCase();
     if (!o.search) return label.includes(q);
-    // token-start match: split label and name by spaces+hyphens, check if any token starts with query
     const tokens = o.search.toLowerCase().split(/[\s-]+/).filter(Boolean);
     return tokens.some((t) => t.startsWith(q));
   });
@@ -64,53 +82,51 @@ export default function SearchSelect({ options = [], value, onChange, placeholde
         onClick={openDropdown}
         disabled={disabled}
       >
-        <span className={selected ? '' : 'placeholder'}>
-          {triggerText}
-        </span>
+        <span className={selected ? '' : 'placeholder'}>{triggerText}</span>
         <span className="search-select-arrow">▾</span>
       </button>
 
-      {open &&
-        createPortal(
-          <div
-            ref={dropdownRef}
-            className="search-select-dropdown"
-            style={{
-              position: 'fixed',
-              top: pos.top,
-              left: pos.left,
-              width: pos.width,
-              zIndex: 9999,
-            }}
-          >
-            <input
-              ref={inputRef}
-              className="search-select-input"
-              placeholder="Search…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            <ul className="search-select-list">
-              {filtered.length === 0 ? (
-                <li className="search-select-empty">No results</li>
-              ) : (
-                filtered.map((o, i) => (
-                  <li
-                    key={`${i}-${o.value}`}
-                    className={`search-select-item${o.value === value ? ' selected' : ''}`}
-                    onMouseDown={() => {
-                      onChange(o.value);
-                      setOpen(false);
-                    }}
-                  >
-                    {o.label}
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>,
-          document.body
-        )}
+      {open && createPortal(
+        <div
+          ref={dropdownRef}
+          className="search-select-dropdown"
+          style={{
+            position:  'fixed',
+            left:      pos.left,
+            width:     pos.width,
+            zIndex:    9999,
+            maxHeight: DROPDOWN_MAX_H,
+            // Downward or upward
+            ...(pos.openUp
+              ? { bottom: pos.bottom, top: 'auto' }
+              : { top: pos.top,       bottom: 'auto' }),
+          }}
+        >
+          <input
+            ref={inputRef}
+            className="search-select-input"
+            placeholder="Search…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <ul className="search-select-list">
+            {filtered.length === 0 ? (
+              <li className="search-select-empty">No results</li>
+            ) : (
+              filtered.map((o, i) => (
+                <li
+                  key={`${i}-${o.value}`}
+                  className={`search-select-item${o.value === value ? ' selected' : ''}`}
+                  onMouseDown={() => { onChange(o.value); setOpen(false); }}
+                >
+                  {o.label}
+                </li>
+              ))
+            )}
+          </ul>
+        </div>,
+        document.body,
+      )}
     </>
   );
 }

@@ -59,7 +59,97 @@ export class NotificationsService implements OnModuleInit {
       } catch { /* table may not exist in all envs */ }
     }
 
-    // Recent WO Complete entries (last 7 days)
+    // My recently approved timesheets (last 7 days) — notify submitter
+    try {
+      const cutoff7 = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+      const approvedRes = await this.pool.request()
+        .input('userId', mssql.NVarChar(30), userId)
+        .input('cutoff', mssql.DateTime2,    cutoff7)
+        .query(`
+          SELECT TOP 10 tsId, tsDocNo, tsType, updatedAt,
+                 CONVERT(VARCHAR(24), updatedAt, 126) AS updatedAtStr
+          FROM PSTsHeader
+          WHERE status = 'Approved' AND isDeleted = 0
+            AND enteredByUserId = @userId AND updatedAt >= @cutoff
+          ORDER BY updatedAt DESC
+        `);
+      for (const r of approvedRes.recordset) {
+        const typeLabel = r.tsType === 'INST' ? 'Installation' : r.tsType === 'PROJ' ? 'Projects' : 'Production';
+        items.push({
+          id: `ts-approved-${r.tsId}`,
+          notifKey: `ts-approved-${r.tsId}`,
+          message: `${typeLabel} timesheet ${r.tsDocNo} has been approved`,
+          detail: `Approved recently`,
+          level: 'success',
+          link: `/timesheets/${r.tsType?.toLowerCase() === 'inst' ? 'inst' : 'prod'}/${r.tsDocNo}/view`,
+          time: r.updatedAtStr ? new Date(r.updatedAtStr).toLocaleString('en-GB') : null,
+          isRead: false,
+        });
+      }
+    } catch { /* skip */ }
+
+    // My recently rejected timesheets (last 7 days) — notify submitter
+    try {
+      const cutoff7 = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+      const rejectedRes = await this.pool.request()
+        .input('userId', mssql.NVarChar(30), userId)
+        .input('cutoff', mssql.DateTime2,    cutoff7)
+        .query(`
+          SELECT TOP 10 tsId, tsDocNo, tsType, remarks, updatedAt,
+                 CONVERT(VARCHAR(24), updatedAt, 126) AS updatedAtStr
+          FROM PSTsHeader
+          WHERE status = 'Rejected' AND isDeleted = 0
+            AND enteredByUserId = @userId AND updatedAt >= @cutoff
+          ORDER BY updatedAt DESC
+        `);
+      for (const r of rejectedRes.recordset) {
+        const typeLabel = r.tsType === 'INST' ? 'Installation' : r.tsType === 'PROJ' ? 'Projects' : 'Production';
+        items.push({
+          id: `ts-rejected-${r.tsId}`,
+          notifKey: `ts-rejected-${r.tsId}`,
+          message: `${typeLabel} timesheet ${r.tsDocNo} was rejected`,
+          detail: r.remarks ? `Reason: ${r.remarks}` : 'Please correct and resubmit',
+          level: 'error',
+          link: `/timesheets/${r.tsType?.toLowerCase() === 'inst' ? 'inst' : 'prod'}/${r.tsDocNo}/edit`,
+          time: r.updatedAtStr ? new Date(r.updatedAtStr).toLocaleString('en-GB') : null,
+          isRead: false,
+        });
+      }
+    } catch { /* skip */ }
+
+    // QC records passed/failed (last 7 days) — for inspector
+    try {
+      const cutoff7 = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+      const qcRes = await this.pool.request()
+        .input('userId', mssql.NVarChar(30), userId)
+        .input('cutoff', mssql.DateTime2,    cutoff7)
+        .query(`
+          SELECT TOP 10 id, docNo, status, qcInspector, workOrderNo,
+                 CONVERT(VARCHAR(24), updatedAt, 126) AS updatedAtStr
+          FROM PsQcRecord
+          WHERE isDeleted = 0 AND status IN ('Passed','Failed')
+            AND updatedAt >= @cutoff
+            AND (qcInspector IN (
+              SELECT displayName FROM PSTsUsers WHERE userId = @userId
+            ) OR ${isPrivileged ? '1=1' : '1=0'})
+          ORDER BY updatedAt DESC
+        `);
+      for (const r of qcRes.recordset) {
+        items.push({
+          id: `qc-${r.status?.toLowerCase()}-${r.id}`,
+          notifKey: `qc-${r.status?.toLowerCase()}-${r.id}`,
+          message: `QC ${r.docNo} ${r.status === 'Passed' ? '✓ Passed' : '✗ Failed'}`,
+          detail: `WO: ${r.workOrderNo ?? '—'} · Inspector: ${r.qcInspector ?? '—'}`,
+          level: r.status === 'Passed' ? 'success' : 'error',
+          link: `/qc/${r.id}/view`,
+          time: r.updatedAtStr ? new Date(r.updatedAtStr).toLocaleString('en-GB') : null,
+          isRead: false,
+        });
+      }
+    } catch { /* skip */ }
+
+    // Recent WO Complete entries (last 7 days) — for approvers/admins
+    if (isPrivileged) {
     try {
       const cutoff = new Date(Date.now() - 7 * 24 * 3600 * 1000);
       const wocRes = await this.pool.request()
@@ -84,6 +174,7 @@ export class NotificationsService implements OnModuleInit {
         });
       }
     } catch { /* table may not exist */ }
+    }
 
     if (items.length === 0) return [];
 

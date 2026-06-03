@@ -43,7 +43,23 @@ export class EmailSettingsController {
 
   // ── Email Log ──
   @Get('email-logs')
-  getLogs(@Query('limit') limit?: string) { return this.svc.getLogs(limit ? Number(limit) : 200); }
+  getLogs(
+    @Query('limit')    limit?:    string,
+    @Query('offset')   offset?:   string,
+    @Query('status')   status?:   string,
+    @Query('module')   module?:   string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo')   dateTo?:   string,
+  ) {
+    return this.svc.getLogs({
+      limit:    limit    ? Number(limit)    : 50,
+      offset:   offset   ? Number(offset)   : 0,
+      status:   status   || undefined,
+      module:   module   || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo:   dateTo   || undefined,
+    });
+  }
 
   @Delete('email-logs')
   clearLogs() { return this.svc.clearLogs(); }

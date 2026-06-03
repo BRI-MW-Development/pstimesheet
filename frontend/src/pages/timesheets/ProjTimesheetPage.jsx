@@ -177,7 +177,7 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
 
               <div className="form-group">
                 <label className="form-label">Date</label>
-                <input type="date" required className="form-control" value={form.date}
+                <input type="date" className="form-control" value={form.date}
                   onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
               </div>
 
@@ -199,7 +199,7 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
 
               <div className="form-group">
                 <label className="form-label">Task Type</label>
-                <select required className="form-control" value={form.taskType}
+                <select className="form-control" value={form.taskType}
                   onChange={(e) => setForm((f) => ({ ...f, taskType: e.target.value }))}>
                   <option value="">Select task type…</option>
                   {ttOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -358,7 +358,7 @@ function WeeklyForm({ onBack, onSaved }) {
               </div>
               <div className="form-group">
                 <label className="form-label">Week Start (Mon)</label>
-                <input type="date" required className="form-control" value={weekStart}
+                <input type="date" className="form-control" value={weekStart}
                   onChange={(e) => onWeekStartChange(e.target.value)} />
               </div>
               <div className="form-group">

@@ -122,6 +122,12 @@ export class TimesheetsController {
     try {
       const ts = await this.timesheetsService.get(docNo);
       if (!ts) throw new NotFoundException(`Timesheet ${docNo} not found`);
+      // Check against Approval Settings rules (+ canWrite as fallback)
+      const hasCanWrite = await this.isTimesheetApprover(req.currentUser?.roleCode);
+      const check = await this.approvalSettingsService.canUserApproveTimesheet(
+        req.currentUser?.userId, req.currentUser?.roleCode, ts, hasCanWrite,
+      );
+      if (!check.allowed) throw new HttpException({ message: check.reason }, HttpStatus.FORBIDDEN);
       const byName = req.currentUser?.displayName || body?.approverName || '';
       await this.timesheetsService.approve(docNo, byName, body?.edits);
       this.auditService.log({ docType: `TIMESHEET-${(ts.tsType||'PROD').toUpperCase()}`, docRef: docNo, action: 'APPROVE', performedBy: req.currentUser?.userId, performedByName: byName, details: 'Approved' });
@@ -148,6 +154,11 @@ export class TimesheetsController {
     try {
       const ts = await this.timesheetsService.get(docNo);
       if (!ts) throw new NotFoundException(`Timesheet ${docNo} not found`);
+      const hasCanWrite = await this.isTimesheetApprover(req.currentUser?.roleCode);
+      const check = await this.approvalSettingsService.canUserApproveTimesheet(
+        req.currentUser?.userId, req.currentUser?.roleCode, ts, hasCanWrite,
+      );
+      if (!check.allowed) throw new HttpException({ message: check.reason }, HttpStatus.FORBIDDEN);
       const byName = req.currentUser?.displayName || '';
       await this.timesheetsService.reject(docNo, byName, body.reason || '');
       this.auditService.log({ docType: `TIMESHEET-${(ts.tsType||'PROD').toUpperCase()}`, docRef: docNo, action: 'REJECT', performedBy: req.currentUser?.userId, performedByName: byName, details: `Rejected: ${body.reason || '—'}` });
@@ -169,6 +180,11 @@ export class TimesheetsController {
       if (err instanceof HttpException) throw err;
       throw new HttpException({ message: err?.message || 'Reject failed' }, HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  /** True when the user's role has canWrite on any timesheet module */
+  private async isTimesheetApprover(roleCode: string): Promise<boolean> {
+    return this.timesheetsService.isTimesheetApprover(roleCode);
   }
 
   private async getEmailForUser(displayName: string): Promise<string | null> {
@@ -235,8 +251,12 @@ export class TimesheetsController {
   @HttpCode(201)
   async create(@Body() body: any, @Req() req: any) {
     try {
+      // Enforce entry person from authenticated session — never trust client
+      body.entryPerson    = req.currentUser?.displayName ?? req.currentUser?.username ?? body.entryPerson;
+      body.entered_by_name = body.entryPerson;
+      body.enteredByUserId = req.currentUser?.userId;
       const result = await this.timesheetsService.create(body);
-      this.auditService.log({ docType: `TIMESHEET-${(body.tsType||'PROD').toUpperCase()}`, docRef: result.docNo, action: 'CREATE', performedBy: req.currentUser?.userId, performedByName: req.currentUser?.displayName, details: `Created by ${body.entered_by_name || '—'}` });
+      this.auditService.log({ docType: `TIMESHEET-${(body.tsType||'PROD').toUpperCase()}`, docRef: result.docNo, action: 'CREATE', performedBy: req.currentUser?.userId, performedByName: req.currentUser?.displayName, details: `Created by ${body.entered_by_name}` });
       return result;
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -249,6 +269,10 @@ export class TimesheetsController {
   async update(@Param('docNo') docNo: string, @Body() body: any, @Req() req: any) {
     try {
       const before = await this.timesheetsService.get(docNo).catch(() => null);
+      const isApprover = await this.isTimesheetApprover(req.currentUser?.roleCode);
+      // Non-approvers cannot edit a Submitted timesheet
+      if (before?.status === 'Submitted' && !isApprover)
+        throw new HttpException({ message: 'Only an approver can edit a Submitted timesheet.' }, HttpStatus.FORBIDDEN);
       const result = await this.timesheetsService.update(docNo, body);
       const details = before
         ? this.auditService.diff(before, body, ['status', 'department', 'workOrderNo', 'entryDate', 'shiftCode', 'remarks', 'entered_by_name'])

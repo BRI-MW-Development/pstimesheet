@@ -3,6 +3,7 @@ import type { ConnectionPool, IResult } from 'mssql';
 import * as mssql from 'mssql';
 import { DEV_SQL_POOL, SQL_POOL } from '../database/database.constants';
 import type { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
+import { S3Service } from '../s3/s3.service';
 
 export interface EmployeeMasterRow {
   employeeNo: string | null;
@@ -27,6 +28,7 @@ export class EmployeesService implements OnModuleInit {
   constructor(
     @Inject(SQL_POOL)     private readonly pool:    ConnectionPool,
     @Inject(DEV_SQL_POOL) private readonly devPool: ConnectionPool,
+    private readonly s3: S3Service,
   ) {}
 
   async onModuleInit() {
@@ -41,6 +43,10 @@ export class EmployeesService implements OnModuleInit {
           imageUrl      NVARCHAR(500) NULL,
           updatedAt     DATETIME      NOT NULL DEFAULT GETDATE()
         )
+      `);
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsEmployeeProfile') AND name='imageS3Key')
+          ALTER TABLE PSTsEmployeeProfile ADD imageS3Key NVARCHAR(500) NULL
       `);
       this.logger.log('PSTsEmployeeProfile table ready');
     } catch (err) {
@@ -151,6 +157,22 @@ export class EmployeesService implements OnModuleInit {
           VALUES (@employeeNo, @emailId, @subDepartment, @category, @imageUrl);
       `);
     this.logger.log(`Updated PSTsEmployeeProfile for employeeNo=${employeeNo}`);
+  }
+
+  async uploadImage(employeeNo: string, base64: string, mimeType: string, fileName: string): Promise<{ imageUrl: string }> {
+    const s3Key = await this.s3.upload(`employees/${employeeNo}`, fileName, base64, mimeType);
+    const url   = await this.s3.presignedUrl(s3Key, 86400); // 24 h presigned URL
+    await this.devPool.request()
+      .input('employeeNo', mssql.NVarChar(30),  employeeNo)
+      .input('s3Key',      mssql.NVarChar(500), s3Key)
+      .input('imageUrl',   mssql.NVarChar(500), url)
+      .query(`
+        MERGE PSTsEmployeeProfile AS t
+        USING (SELECT @employeeNo AS employeeNo) AS s ON t.employeeNo = s.employeeNo
+        WHEN MATCHED    THEN UPDATE SET imageS3Key = @s3Key, imageUrl = @imageUrl, updatedAt = GETDATE()
+        WHEN NOT MATCHED THEN INSERT (employeeNo, imageS3Key, imageUrl) VALUES (@employeeNo, @s3Key, @imageUrl);
+      `);
+    return { imageUrl: url };
   }
 
   private parseRegionIds(raw?: string): number[] {

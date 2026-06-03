@@ -37,7 +37,10 @@ const CRITERIA_FIELDS = [
   {
     value: 'department',   label: 'Department',
     type: 'select',  source: 'departments',
-    getOptions: (data) => (data || []).map((r) => ({ value: r.departmentCode, label: r.departmentCode })),
+    getOptions: (data) => (data || []).map((r) => ({
+      value: r.departmentCode ?? String(r.departmentId),
+      label: r.departmentCode ?? String(r.departmentId),
+    })),
   },
   {
     value: 'employeeName', label: 'Employee Name',
@@ -370,8 +373,23 @@ function ApprovalForm({ initial, onSave, onClose, saving }) {
   const projQ  = useQuery({ queryKey: ['projects'],         queryFn: () => api.get('/projects').then((r) => r.data),                 staleTime: 60000 });
   const woQ    = useQuery({ queryKey: ['work-orders'],      queryFn: () => api.get('/work-orders').then((r) => r.data),              staleTime: 60000 });
 
+  // Filter departments: active only + module-relevant main department
+  const allDepts = deptQ.data ?? [];
+  const activeDepts = allDepts.filter(d => d.isActive !== false && d.isActive !== 0);
+  const filteredDepts = activeDepts.filter(d => {
+    const md = (d.mainDepartment ?? '').toLowerCase();
+    if (form.module === 'PROD' || form.module === 'WO')
+      return md.includes('production') || md.includes('digital');
+    if (form.module === 'INST')
+      return md.includes('installation');
+    if (form.module === 'PROJ')
+      return md.includes('project') || md.includes('digital');
+    // ALL — show all active departments
+    return true;
+  });
+
   const refData = {
-    departments:   deptQ.data  ?? [],
+    departments:   filteredDepts,
     employees:     empQ.data   ?? [],
     shifts:        shiftQ.data ?? [],
     projects:      projQ.data  ?? [],
@@ -387,7 +405,15 @@ function ApprovalForm({ initial, onSave, onClose, saving }) {
         {/* Module */}
         <div className="form-group">
           <label className="form-label">Module <span className="required">*</span></label>
-          <select className="form-control" value={form.module} onChange={(e) => set('module', e.target.value)}>
+          <select className="form-control" value={form.module} onChange={(e) => {
+            set('module', e.target.value);
+            // Clear department criteria when module changes — previous dept may not belong to new module
+            setForm(f => ({
+              ...f,
+              module: e.target.value,
+              criteria: f.criteria.map(c => c.field === 'department' ? { ...c, value: '' } : c),
+            }));
+          }}>
             {MODULES.filter((m) => m.value !== 'ALL').map((m) => (
               <option key={m.value} value={m.value}>{m.label}</option>
             ))}

@@ -34,7 +34,7 @@ export default function NotificationsPage() {
   });
 
   function handleClick(n) {
-    if (!n.isRead) markRead(n.id);
+    if (!n.isRead) markRead(encodeURIComponent(n.notifKey ?? n.id));
     if (n.link) navigate(n.link);
   }
 
@@ -45,8 +45,8 @@ export default function NotificationsPage() {
         <div>
           <div className="wip-list-title">
             Notifications
-            {notifs.length > 0 && (
-              <span className="wip-count">{notifs.length}</span>
+            {notifs.filter(n => !n.isRead).length > 0 && (
+              <span className="wip-count">{notifs.filter(n => !n.isRead).length} unread</span>
             )}
           </div>
           <div className="wip-list-sub">System alerts, approvals and activity</div>

@@ -136,6 +136,10 @@ export default function ProdTimesheetFormPage() {
   function submit(e) {
     e.preventDefault();
     if (wocWarning) { toast('Cannot save: work order is already complete.', 'error'); return; }
+    if (!header.projectId?.trim())  { toast('Project ID is required.',  'error'); return; }
+    if (!header.workOrder?.trim())  { toast('Work Order is required.',  'error'); return; }
+    if (!header.department?.trim()) { toast('Department is required.',  'error'); return; }
+    if (!header.shift?.trim())      { toast('Shift is required.',       'error'); return; }
     save({
       tsType: 'PROD',
       projectId:   header.projectId,
@@ -165,7 +169,11 @@ export default function ProdTimesheetFormPage() {
   const empOptions   = employees
     .filter((e) => prodInstDepts.includes((e.departmentCode ?? '').toLowerCase()))
     .map((e) => ({ value: e.employeeNo, label: `${e.employeeNo} – ${[e.firstName, e.lastname].filter(Boolean).join(' ')}` }));
-  const itemOptions  = items.map((i, idx) => ({ value: i.itemcode ?? `~${idx}`, label: i.itemName ?? i.description ?? i.itemcode ?? '' }));
+  const itemOptions  = items.map((i, idx) => ({
+    value:        i.itemcode ?? `~${idx}`,
+    label:        `${i.itemcode ? i.itemcode + ' – ' : ''}${i.itemName ?? i.description ?? i.itemcode ?? ''}`,
+    triggerLabel: i.itemcode ?? i.itemName ?? '',   // short code shown in the trigger cell
+  }));
   const machOptions  = machinery.map((m) => ({ value: m.machineName, label: m.machineName }));
 
   const totalLabour = labourRows.reduce((s, r) => s + (r.durationMinutes || 0), 0);
@@ -192,7 +200,7 @@ export default function ProdTimesheetFormPage() {
           {/* ── Left panel: header fields ── */}
           <div className="ts-form-panel">
             <div className="ts-field-group">
-              <label className="ts-field-label">Project ID</label>
+              <label className="ts-field-label">Project ID <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect
                 options={projOptions}
                 value={header.projectId}
@@ -210,22 +218,22 @@ export default function ProdTimesheetFormPage() {
               <input className="form-control ts-input ts-readonly" readOnly value={header.projectName} placeholder="Auto-filled" />
             </div>
             <div className="ts-field-group">
-              <label className="ts-field-label">Work Order</label>
+              <label className="ts-field-label">Work Order <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect options={woOptions} value={header.workOrder}
                 onChange={(v) => setHdr('workOrder', v)} placeholder="Select work order…" />
             </div>
             <div className="ts-field-group">
-              <label className="ts-field-label">Department</label>
+              <label className="ts-field-label">Department <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect options={deptOptions} value={header.department}
                 onChange={(v) => setHdr('department', v)} placeholder="Select department…" />
             </div>
             <div className="ts-field-group">
               <label className="ts-field-label">Date</label>
-              <input type="date" required className="form-control ts-input" value={header.date}
+              <input type="date" className="form-control ts-input" value={header.date}
                 onChange={(e) => setHdr('date', e.target.value)} />
             </div>
             <div className="ts-field-group">
-              <label className="ts-field-label">Shift</label>
+              <label className="ts-field-label">Shift <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect options={shiftOptions} value={header.shift}
                 onChange={(v) => setHdr('shift', v)} placeholder="Select shift…" />
             </div>
@@ -298,7 +306,7 @@ export default function ProdTimesheetFormPage() {
                 </div>
                 <table className="ts-line-table">
                   <thead><tr>
-                    <th style={{ width: 140 }}>Item Code</th>
+                    <th style={{ width: 160 }}>Item Code</th>
                     <th>Description</th>
                     <th style={{ width: 72 }}>UOM</th>
                     <th style={{ width: 100 }}>Qty</th>

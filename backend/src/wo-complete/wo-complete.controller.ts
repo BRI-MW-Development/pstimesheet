@@ -1,7 +1,9 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpException, HttpStatus, NotFoundException, Param, Post, Put, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpException, HttpStatus, NotFoundException, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { WoCompleteService } from './wo-complete.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
+import { PermissionGuard } from '../auth/permission.guard';
+import { RequirePermission } from '../auth/permission.decorator';
 
 @Controller('wo-complete')
 export class WoCompleteController {
@@ -12,16 +14,22 @@ export class WoCompleteController {
   ) {}
 
   @Get('preview-doc-no')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('WO_COMPLETE', 'canRead')
   previewDocNo() {
     return this.svc.previewDocNo();
   }
 
   @Get()
+  @UseGuards(PermissionGuard)
+  @RequirePermission('WO_COMPLETE', 'canRead')
   list() {
     return this.svc.list();
   }
 
   @Post()
+  @UseGuards(PermissionGuard)
+  @RequirePermission('WO_COMPLETE', 'canCreate')
   async create(@Body() body: any, @Req() req: any) {
     try {
     const result = await this.svc.create(body);
@@ -46,6 +54,8 @@ export class WoCompleteController {
   }
 
   @Get(':id')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('WO_COMPLETE', 'canRead')
   async getById(@Param('id') id: string) {
     const rec = await this.svc.getById(Number(id));
     if (!rec) throw new NotFoundException('Record not found');
@@ -53,6 +63,8 @@ export class WoCompleteController {
   }
 
   @Put(':id')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('WO_COMPLETE', 'canWrite')
   async update(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     try {
       const before = await this.svc.getById(Number(id)).catch(() => null);
@@ -69,6 +81,8 @@ export class WoCompleteController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('WO_COMPLETE', 'canDelete')
   async remove(@Param('id') id: string, @Req() req: any) {
     const result = await this.svc.remove(Number(id));
     this.auditService.log({ docType: 'WO-COMPLETE', docRef: id, action: 'DELETE', performedBy: req.currentUser?.userId, performedByName: req.currentUser?.displayName, details: `Deleted WO complete record` });

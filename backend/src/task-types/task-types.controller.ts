@@ -1,13 +1,19 @@
-import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Param, Post, Put } from '@nestjs/common';
+import { UseGuards, Body, Controller, Get, HttpCode, HttpException, HttpStatus, Param, Post, Put } from '@nestjs/common';
 import { TaskTypesService } from './task-types.service';
+import { PermissionGuard } from '../auth/permission.guard';
+import { RequirePermission } from '../auth/permission.decorator';
 
 @Controller('task-types')
 export class TaskTypesController {
   constructor(private readonly taskTypesService: TaskTypesService) {}
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('TASK_TYPES', 'canRead')
   @Get()
   list() { return this.taskTypesService.list(); }
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('TASK_TYPES', 'canCreate')
   @Post()
   @HttpCode(201)
   async create(@Body() body: any) {
@@ -18,6 +24,8 @@ export class TaskTypesController {
     }
   }
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('TASK_TYPES', 'canWrite')
   @Put(':taskTypeId')
   async update(@Param('taskTypeId') taskTypeId: string, @Body() body: any) {
     try {

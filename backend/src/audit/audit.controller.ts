@@ -1,10 +1,14 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AuditService } from './audit.service';
+import { PermissionGuard } from '../auth/permission.guard';
+import { RequirePermission } from '../auth/permission.decorator';
 
 @Controller('audit')
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('REPORTS', 'canRead')
   @Get()
   query(
     @Query('docType')     docType?: string,

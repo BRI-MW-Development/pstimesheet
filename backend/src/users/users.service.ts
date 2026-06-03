@@ -3,6 +3,7 @@ import type { ConnectionPool } from 'mssql';
 import * as mssql from 'mssql';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
+import { S3Service } from '../s3/s3.service';
 import { DEV_SQL_POOL } from '../database/database.constants';
 
 const BCRYPT_ROUNDS = 12;
@@ -29,7 +30,10 @@ const PW_HISTORY_KEEP = 3;
 export class UsersService implements OnModuleInit {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(@Inject(DEV_SQL_POOL) private readonly pool: ConnectionPool) {}
+  constructor(
+    @Inject(DEV_SQL_POOL) private readonly pool: ConnectionPool,
+    private readonly s3: S3Service,
+  ) {}
 
   async onModuleInit() {
     try {
@@ -38,6 +42,8 @@ export class UsersService implements OnModuleInit {
           ALTER TABLE PSTsUsers ADD employeeCode NVARCHAR(30) NULL;
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsUsers') AND name='departmentCode')
           ALTER TABLE PSTsUsers ADD departmentCode NVARCHAR(30) NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsUsers') AND name='profileImageKey')
+          ALTER TABLE PSTsUsers ADD profileImageKey NVARCHAR(500) NULL;
         -- Widen passwordHash column to hold bcrypt hashes (60 chars) and legacy SHA-256 (64 chars)
         IF EXISTS (
           SELECT 1 FROM sys.columns
@@ -54,11 +60,12 @@ export class UsersService implements OnModuleInit {
   }
 
   async findAll(): Promise<User[]> {
-    const res = await this.pool.request().query<User>(`
+    const res = await this.pool.request().query<any>(`
       SELECT u.userId, u.username, u.displayName, u.roleCode,
              ISNULL(r.roleName, u.roleCode) AS roleName,
              u.email, u.phone, u.status,
              u.mustChangePassword, u.employeeCode, u.departmentCode,
+             u.profileImageKey,
              CONVERT(VARCHAR(24), u.createdAt, 126) AS createdAt,
              CONVERT(VARCHAR(24), u.updatedAt, 126) AS updatedAt,
              CONVERT(VARCHAR(24), ll.attemptAt, 126) AS lastLoginAt,
@@ -77,7 +84,15 @@ export class UsersService implements OnModuleInit {
       ) fa
       ORDER BY u.userId
     `);
-    return res.recordset;
+    // Attach presigned profile image URLs for users who have one
+    const rows = res.recordset;
+    await Promise.all(rows.map(async (row) => {
+      if (row.profileImageKey) {
+        try { row.profileImageUrl = await this.s3.presignedUrl(row.profileImageKey, 86400); }
+        catch { row.profileImageUrl = null; }
+      }
+    }));
+    return rows;
   }
 
   async findOne(userId: string): Promise<User> {
@@ -273,6 +288,25 @@ export class UsersService implements OnModuleInit {
   // ── Helpers ────────────────────────────────────────────────────────────────
   hash(plain: string): string {
     return bcrypt.hashSync(plain, BCRYPT_ROUNDS);
+  }
+
+  async uploadProfileImage(userId: string, base64: string, mimeType: string, fileName: string): Promise<{ profileImageUrl: string }> {
+    const s3Key = await this.s3.upload(`users/${userId}`, fileName, base64, mimeType);
+    await this.pool.request()
+      .input('userId', mssql.NVarChar(30), userId)
+      .input('key',    mssql.NVarChar(500), s3Key)
+      .query(`UPDATE PSTsUsers SET profileImageKey = @key WHERE userId = @userId`);
+    const url = await this.s3.presignedUrl(s3Key, 86400); // 24 h
+    return { profileImageUrl: url };
+  }
+
+  async getProfileImageUrl(userId: string): Promise<string | null> {
+    const res = await this.pool.request()
+      .input('userId', mssql.NVarChar(30), userId)
+      .query<{ profileImageKey: string | null }>(`SELECT profileImageKey FROM PSTsUsers WHERE userId = @userId`);
+    const key = res.recordset[0]?.profileImageKey;
+    if (!key) return null;
+    return this.s3.presignedUrl(key, 86400);
   }
 
   private generateTempPassword(): string {

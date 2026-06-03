@@ -393,69 +393,128 @@ function TemplatesTab({ toast, queryClient }) {
 
 // ── Email Log Tab ────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 50;
+const MODULES = ['PROD','INST','PROJ','WOC','QC'];
+const STATUS_COLOR = { sent: '#16a34a', failed: '#dc2626', skipped: '#6b7280' };
+
 function LogTab({ toast, queryClient }) {
-  const { data: logs = [], isLoading, refetch } = useQuery({
-    queryKey: ['email-logs'],
-    queryFn: () => api.get('/email-logs?limit=200').then((r) => r.data),
+  const [filters, setFilters] = useState({ status: '', module: '', dateFrom: '', dateTo: '' });
+  const [page, setPage] = useState(0);
+
+  const params = new URLSearchParams({ limit: PAGE_SIZE, offset: page * PAGE_SIZE });
+  if (filters.status)   params.set('status',   filters.status);
+  if (filters.module)   params.set('module',   filters.module);
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo)   params.set('dateTo',   filters.dateTo);
+
+  const { data: result = {}, isLoading, refetch } = useQuery({
+    queryKey: ['email-logs', filters, page],
+    queryFn:  () => api.get(`/email-logs?${params}`).then(r => r.data),
     refetchInterval: 30000,
   });
 
+  const logs  = result.data  ?? [];
+  const total = result.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   const { mutate: clear, isPending: isClearing } = useMutation({
-    mutationFn: () => api.delete('/email-logs').then((r) => r.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['email-logs'] });
-      toast('Email log cleared.', 'success');
-    },
+    mutationFn: () => api.delete('/email-logs').then(r => r.data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['email-logs'] }); setPage(0); toast('Email log cleared.', 'success'); },
     onError: (err) => toast(err?.response?.data?.message ?? 'Clear failed.', 'error'),
   });
 
-  const STATUS_COLOR = { sent: '#16a34a', failed: '#dc2626', skipped: '#6b7280' };
+  function setF(k, v) { setFilters(f => ({ ...f, [k]: v })); setPage(0); }
 
-  if (isLoading) return <p>Loading…</p>;
+  /* CSV export */
+  function exportCSV() {
+    const header = ['Time','Recipient','Subject','Module','Event','Status','Error'];
+    const rows   = logs.map(l => [
+      l.sentAt ? new Date(l.sentAt).toLocaleString('en-GB') : '',
+      l.recipient, l.subject, l.module ?? '', l.event ?? '', l.status, l.errorMsg ?? '',
+    ]);
+    const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `email-log-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-        <span style={{ fontSize: 13, color: 'var(--text3)' }}>{logs.length} entries</span>
-        <button className="btn btn-ghost btn-sm" onClick={() => refetch()}>Refresh</button>
-        <button className="btn btn-ghost btn-sm" disabled={isClearing || logs.length === 0}
-          onClick={() => { if (confirm('Clear all email logs?')) clear(); }}>
-          {isClearing ? 'Clearing…' : 'Clear Log'}
+      {/* ── Filter bar ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select className="form-control" style={{ width: 120, fontSize: 12 }} value={filters.status} onChange={e => setF('status', e.target.value)}>
+          <option value="">All Status</option>
+          <option value="sent">Sent</option>
+          <option value="failed">Failed</option>
+          <option value="skipped">Skipped</option>
+        </select>
+        <select className="form-control" style={{ width: 110, fontSize: 12 }} value={filters.module} onChange={e => setF('module', e.target.value)}>
+          <option value="">All Modules</option>
+          {MODULES.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <input type="date" className="form-control" style={{ width: 140, fontSize: 12 }} value={filters.dateFrom} onChange={e => setF('dateFrom', e.target.value)} />
+        <span style={{ color: 'var(--text3)', fontSize: 12 }}>to</span>
+        <input type="date" className="form-control" style={{ width: 140, fontSize: 12 }} value={filters.dateTo} onChange={e => setF('dateTo', e.target.value)} />
+        {(filters.status || filters.module || filters.dateFrom || filters.dateTo) && (
+          <button className="btn btn-ghost btn-sm" onClick={() => { setFilters({ status:'', module:'', dateFrom:'', dateTo:'' }); setPage(0); }}>Clear Filters</button>
+        )}
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 12, color: 'var(--text3)' }}>{total} entries</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => refetch()}>↺ Refresh</button>
+        <button className="btn btn-ghost btn-sm" disabled={logs.length === 0} onClick={exportCSV}>⬇ Export CSV</button>
+        <button className="btn btn-ghost btn-sm" disabled={isClearing || total === 0}
+          onClick={() => { if (confirm('Clear ALL email logs? This cannot be undone.')) clear(); }}>
+          {isClearing ? 'Clearing…' : '🗑 Clear Log'}
         </button>
       </div>
-      <div className="wip-table-wrap">
-        <table className="wip-table">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Recipient</th>
-              <th>Subject</th>
-              <th>Module / Event</th>
-              <th style={{ width: 80 }}>Status</th>
-              <th>Error</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.length === 0 && <tr><td colSpan={6} className="table-empty">No email logs yet.</td></tr>}
-            {logs.map((log) => (
-              <tr key={log.id}>
-                <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-                  {log.sentAt ? new Date(log.sentAt).toLocaleString('en-GB') : '—'}
-                </td>
-                <td style={{ fontSize: 12 }}>{log.recipient}</td>
-                <td style={{ fontSize: 12 }}>{log.subject}</td>
-                <td style={{ fontSize: 11 }}>{log.module ? `${log.module} / ${log.event}` : '—'}</td>
-                <td>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: STATUS_COLOR[log.status] ?? '#374151' }}>
-                    {log.status}
-                  </span>
-                </td>
-                <td style={{ fontSize: 11, color: '#dc2626' }}>{log.errorMsg ?? ''}</td>
+
+      {/* ── Table ── */}
+      {isLoading ? <p>Loading…</p> : (
+        <div className="wip-table-wrap">
+          <table className="wip-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Recipient</th>
+                <th>Subject</th>
+                <th style={{ width: 110 }}>Module / Event</th>
+                <th style={{ width: 80 }}>Status</th>
+                <th>Error</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {logs.length === 0 && <tr><td colSpan={6} className="table-empty">No email logs match the current filters.</td></tr>}
+              {logs.map(log => (
+                <tr key={log.id}>
+                  <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{log.sentAt ? new Date(log.sentAt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'}</td>
+                  <td style={{ fontSize: 12 }}>{log.recipient}</td>
+                  <td style={{ fontSize: 12 }}>{log.subject}</td>
+                  <td style={{ fontSize: 11 }}>{log.module ? `${log.module} / ${log.event}` : '—'}</td>
+                  <td>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: STATUS_COLOR[log.status] ?? '#374151' }}>
+                      {log.status}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 11, color: '#dc2626' }}>{log.errorMsg ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Pagination ── */}
+      {pages > 1 && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 12, alignItems: 'center', justifyContent: 'center' }}>
+          <button className="btn btn-ghost btn-sm" disabled={page === 0} onClick={() => setPage(0)}>«</button>
+          <button className="btn btn-ghost btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>‹</button>
+          <span style={{ fontSize: 12, color: 'var(--text2)' }}>Page {page + 1} of {pages} · {total} total</span>
+          <button className="btn btn-ghost btn-sm" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}>›</button>
+          <button className="btn btn-ghost btn-sm" disabled={page >= pages - 1} onClick={() => setPage(pages - 1)}>»</button>
+        </div>
+      )}
     </div>
   );
 }

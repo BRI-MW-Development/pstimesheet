@@ -119,6 +119,12 @@ function WocFormModal({ initial, onClose, onSaved }) {
     queryFn: () => api.get('/wo-complete').then(r => r.data.map(w => w.workOrderNumber)),
   });
 
+  // WOs that have a Full QC inspection (required before WO Complete)
+  const { data: qcEligibleWos = [] } = useQuery({
+    queryKey: ['qc-eligible-wos'],
+    queryFn: () => api.get('/qc/eligible-wos').then(r => r.data),
+  });
+
   // Existing attachments for edit
   useEffect(() => {
     if (isEdit && initial?.id) {
@@ -140,14 +146,21 @@ function WocFormModal({ initial, onClose, onSaved }) {
     .map(w => (w.departmentName || w.parentDepartmentName || '').trim())
     .filter(Boolean))].sort();
 
-  const completedSet = new Set(completedWoNos);
+  const completedSet  = new Set(completedWoNos);
+  const eligibleSet   = new Set(qcEligibleWos);
+  const currentWoNo   = (initial?.workOrderNumber || '').trim();
+
+  const isProductionDept = form.department?.toLowerCase().includes('production');
+
   const filteredWOs = !form.department ? [] : allWorkOrders.filter(w => {
     const woNo  = (w.workOrderNumber || '').trim();
     const wProj = w.projectCode || '';
     const wDept = (w.departmentName || w.parentDepartmentName || '').toLowerCase();
     if (form.projectId && wProj !== form.projectId) return false;
     if (!wDept.includes(form.department.toLowerCase())) return false;
-    if (completedSet.has(woNo) && woNo !== (initial?.workOrderNumber || '').trim()) return false;
+    if (completedSet.has(woNo) && woNo !== currentWoNo) return false;
+    // Full QC check only applies to Production department
+    if (isProductionDept && woNo !== currentWoNo && !eligibleSet.has(woNo)) return false;
     return true;
   });
   const woOptions = filteredWOs.map(w => ({
@@ -159,7 +172,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
     const proj = tsProjects.find(p => p.projectId === pid);
     const raw  = proj?.projectName ?? '';
     const customer = raw.includes(':') ? raw.split(':').slice(1).join(':').trim() : raw;
-    setForm(f => ({ ...f, projectId: pid, customerName: customer, workOrderNumber: '', workOrderStatus: '', sourceType: '' }));
+    setForm(f => ({ ...f, projectId: pid, customerName: customer, workOrderNumber: '', workOrderStatus: '', sourceType: '', department: '' }));
     setTsRows(null);
   }
 
@@ -193,6 +206,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
   });
 
   // Save
+  const [uploadProgress, setUploadProgress] = useState('');
   const { mutate: save, isPending: saving } = useMutation({
     mutationFn: async (payload) => {
       let id;
@@ -203,10 +217,15 @@ function WocFormModal({ initial, onClose, onSaved }) {
         const res = await api.post('/wo-complete', payload);
         id = res.data.id;
       }
-      for (const f of stagedFiles) {
-        await api.post(`/wo-complete/${id}/attachments`, {
-          fileName: f.name, mimeType: f.type, fileData: f.data, fileSize: f.size,
-        }).catch(() => {});
+      if (stagedFiles.length > 0) {
+        for (let i = 0; i < stagedFiles.length; i++) {
+          const f = stagedFiles[i];
+          setUploadProgress(`Uploading file ${i + 1} of ${stagedFiles.length}…`);
+          await api.post(`/wo-complete/${id}/attachments`, {
+            fileName: f.name, mimeType: f.type, fileData: f.data, fileSize: f.size,
+          }).catch(() => {});
+        }
+        setUploadProgress('');
       }
       return id;
     },
@@ -279,6 +298,12 @@ function WocFormModal({ initial, onClose, onSaved }) {
                   <SearchSelect options={woOptions} value={form.workOrderNumber}
                     onChange={onWoChange}
                     placeholder={form.department ? 'Select work order…' : 'Select department first…'} />
+                  {isProductionDept && (
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      Production: only Work Orders with a completed Full QC inspection are listed.
+                    </div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Status <span style={{ color: '#ef4444' }}>*</span></label>
@@ -398,7 +423,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
           <div className="woc-modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={saving || !form.workOrderNumber || !form.status}>
-              {saving ? 'Saving…' : isEdit ? '✏️ Save Changes' : '✅ Mark Complete'}
+              {uploadProgress || (saving ? 'Saving…' : isEdit ? '✏️ Save Changes' : '✅ Mark Complete')}
             </button>
           </div>
         </form>

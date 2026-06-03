@@ -39,7 +39,9 @@ export class AuthController {
 
   @Get('profile')
   async getProfile(@Req() req: any) {
-    return this.usersService.findOne(req.currentUser.userId);
+    const user = await this.usersService.findOne(req.currentUser.userId);
+    const profileImageUrl = await this.usersService.getProfileImageUrl(req.currentUser.userId);
+    return { ...user, profileImageUrl };
   }
 
   @Patch('profile')
@@ -49,6 +51,28 @@ export class AuthController {
       return await this.usersService.update(req.currentUser.userId, { displayName, email, phone });
     } catch (err) {
       throw new HttpException({ message: err?.message || 'Update failed' }, err?.status ?? HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Post('profile/image')
+  async uploadProfileImage(
+    @Body() body: { fileData: string; mimeType: string; fileName: string },
+    @Req() req: any,
+  ) {
+    try {
+      // Validate MIME type and data URL signature on the backend
+      const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/gif'];
+      if (!body.mimeType || !allowed.includes(body.mimeType.toLowerCase()))
+        throw new HttpException({ message: 'Only image files are accepted (JPEG, PNG, WEBP, HEIC).' }, HttpStatus.BAD_REQUEST);
+      if (!body.fileData?.startsWith('data:image/'))
+        throw new HttpException({ message: 'Invalid image data.' }, HttpStatus.BAD_REQUEST);
+      // Limit base64 payload to ~10 MB
+      if (body.fileData.length > 14_000_000)
+        throw new HttpException({ message: 'Image exceeds the 10 MB size limit.' }, HttpStatus.BAD_REQUEST);
+      return await this.usersService.uploadProfileImage(req.currentUser.userId, body.fileData, body.mimeType, body.fileName);
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      throw new HttpException({ message: err?.message || 'Upload failed' }, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

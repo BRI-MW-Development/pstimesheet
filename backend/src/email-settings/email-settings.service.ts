@@ -327,11 +327,45 @@ export class EmailSettingsService implements OnModuleInit {
       .query(`INSERT INTO PSEmailLog (module, event, recipient, subject, status, errorMsg) VALUES (@module, @event, @recipient, @subject, @status, @errorMsg)`);
   }
 
-  async getLogs(limit = 100) {
-    const res = await this.pool.request()
-      .input('limit', mssql.Int, limit)
-      .query(`SELECT TOP (@limit) * FROM PSEmailLog ORDER BY sentAt DESC`);
-    return res.recordset;
+  async getLogs(opts: { limit?: number; offset?: number; status?: string; module?: string; dateFrom?: string; dateTo?: string } = {}) {
+    const limit  = opts.limit  ?? 50;
+    const offset = opts.offset ?? 0;
+    const req    = this.pool.request()
+      .input('limit',  mssql.Int, limit)
+      .input('offset', mssql.Int, offset);
+
+    let where = 'WHERE 1=1';
+    if (opts.status) { where += ' AND status = @status'; req.input('status', mssql.NVarChar(10), opts.status); }
+    if (opts.module) { where += ' AND module = @module'; req.input('module', mssql.NVarChar(20), opts.module); }
+    if (opts.dateFrom) { where += ' AND sentAt >= @dateFrom'; req.input('dateFrom', mssql.NVarChar(20), opts.dateFrom); }
+    if (opts.dateTo)   { where += ' AND sentAt <= @dateTo';   req.input('dateTo',   mssql.NVarChar(20), opts.dateTo); }
+
+    const [dataRes, countRes] = await Promise.all([
+      req.query(`SELECT * FROM PSEmailLog ${where} ORDER BY sentAt DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`),
+      this.pool.request()
+        .input('status',   mssql.NVarChar(10),  opts.status   || null)
+        .input('module',   mssql.NVarChar(20),  opts.module   || null)
+        .input('dateFrom', mssql.NVarChar(20),  opts.dateFrom || null)
+        .input('dateTo',   mssql.NVarChar(20),  opts.dateTo   || null)
+        .query(`SELECT COUNT(*) AS total FROM PSEmailLog ${where
+          .replace('@status',   "''").replace('@module', "''")
+          .replace('@dateFrom', "''").replace('@dateTo', "''")}`)
+        .catch(() => ({ recordset: [{ total: 0 }] })),
+    ]);
+    // Simpler count query
+    const countReq = this.pool.request();
+    if (opts.status)   countReq.input('status',   mssql.NVarChar(10),  opts.status);
+    if (opts.module)   countReq.input('module',   mssql.NVarChar(20),  opts.module);
+    if (opts.dateFrom) countReq.input('dateFrom', mssql.NVarChar(20),  opts.dateFrom);
+    if (opts.dateTo)   countReq.input('dateTo',   mssql.NVarChar(20),  opts.dateTo);
+    const cntRes = await countReq.query(`SELECT COUNT(*) AS total FROM PSEmailLog ${where}`);
+
+    return {
+      data:  dataRes.recordset,
+      total: cntRes.recordset[0]?.total ?? 0,
+      limit,
+      offset,
+    };
   }
 
   async clearLogs() {

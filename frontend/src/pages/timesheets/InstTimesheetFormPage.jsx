@@ -22,7 +22,7 @@ function calcDuration(start, end) {
 }
 
 function minsToHm(mins) {
-  if (!mins) return '';
+  if (!mins) return '0h 0m';
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
@@ -50,7 +50,7 @@ export default function InstTimesheetFormPage() {
   });
   const [wocWarning, setWocWarning] = useState('');
   const [labourRows,   setLabourRows]   = useState([{ ...EMPTY_LABOUR }]);
-  const [materialRows, setMaterialRows] = useState([{ ...EMPTY_MATERIAL }]);
+  const [materialRows, setMaterialRows] = useState([]);   // consistent with ProdTimesheetFormPage
   const [vehicleRows,  setVehicleRows]  = useState([]);
   const [accessRows,   setAccessRows]   = useState([]);
 
@@ -153,7 +153,11 @@ export default function InstTimesheetFormPage() {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (wocWarning) return;
+    if (wocWarning) { toast('Cannot save: work order is already complete.', 'error'); return; }
+    if (!header.projectId?.trim())  { toast('Project ID is required.',  'error'); return; }
+    if (!header.workOrder?.trim())  { toast('Work Order is required.',  'error'); return; }
+    if (!header.department?.trim()) { toast('Department is required.',  'error'); return; }
+    if (!header.shift?.trim())      { toast('Shift is required.',       'error'); return; }
     save({
       tsType: 'INST',
       projectId: header.projectId,
@@ -205,7 +209,11 @@ export default function InstTimesheetFormPage() {
   const empOptions = employees
     .filter((e) => instDepts.includes((e.departmentCode ?? '').toLowerCase()))
     .map((e) => ({ value: e.employeeNo, label: `${e.employeeNo} – ${[e.firstName, e.lastname].filter(Boolean).join(' ')}` }));
-  const itemOptions  = items.map((it, idx) => ({ value: it.itemcode ?? `~${idx}`, label: it.itemName ?? it.description ?? it.itemcode ?? '' }));
+  const itemOptions  = items.map((it, idx) => ({
+    value:        it.itemcode ?? `~${idx}`,
+    label:        `${it.itemcode ? it.itemcode + ' – ' : ''}${it.itemName ?? it.description ?? it.itemcode ?? ''}`,
+    triggerLabel: it.itemcode ?? it.itemName ?? '',   // short code shown in the trigger cell
+  }));
   const vehOptions   = vehicles.map((v) => ({ value: v.vehicleId ?? v.plateNo, label: `${v.plateNo} – ${v.vehicleType ?? ''}` }));
   const accOptions   = accessEquipment.map((a) => ({ value: a.equipmentName ?? a.name, label: a.equipmentName ?? a.name }));
 
@@ -229,7 +237,7 @@ export default function InstTimesheetFormPage() {
           {/* Left panel — header fields */}
           <div className="ts-form-panel">
             <div className="ts-field-group">
-              <label className="ts-field-label">Project ID</label>
+              <label className="ts-field-label">Project ID <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect
                 options={projOptions}
                 value={header.projectId}
@@ -244,7 +252,7 @@ export default function InstTimesheetFormPage() {
             </div>
 
             <div className="ts-field-group">
-              <label className="ts-field-label">Work Order</label>
+              <label className="ts-field-label">Work Order <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect
                 options={woOptions}
                 value={header.workOrder}
@@ -254,7 +262,7 @@ export default function InstTimesheetFormPage() {
             </div>
 
             <div className="ts-field-group">
-              <label className="ts-field-label">Department</label>
+              <label className="ts-field-label">Department <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect
                 options={deptOptions}
                 value={header.department}
@@ -265,11 +273,11 @@ export default function InstTimesheetFormPage() {
 
             <div className="ts-field-group">
               <label className="ts-field-label">Date</label>
-              <input type="date" required className="form-control ts-input" value={header.date}
+              <input type="date" className="form-control ts-input" value={header.date}
                 onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))} />
             </div>
             <div className="ts-field-group">
-              <label className="ts-field-label">Shift</label>
+              <label className="ts-field-label">Shift <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect
                 options={shiftOptions}
                 value={header.shift}
@@ -287,6 +295,7 @@ export default function InstTimesheetFormPage() {
 
             <div className="ts-summary">
               <div className="ts-summary-row"><span>Labour rows</span><span>{labourRows.filter((r) => r.employee).length}</span></div>
+              <div className="ts-summary-row"><span>Total Labour</span><span>{minsToHm(labourRows.reduce((s, r) => s + (r.durationMinutes || 0), 0))}</span></div>
               <div className="ts-summary-row"><span>Material rows</span><span>{materialRows.filter((r) => r.itemCode).length}</span></div>
               <div className="ts-summary-row"><span>Vehicle rows</span><span>{vehicleRows.filter((r) => r.vehicle).length}</span></div>
               <div className="ts-summary-row"><span>Access Equipment</span><span>{accessRows.filter((r) => r.equipment).length}</span></div>
@@ -361,7 +370,7 @@ export default function InstTimesheetFormPage() {
                 <table className="ts-line-table">
                   <thead>
                     <tr>
-                      <th style={{ width: 140 }}>Item Code</th>
+                      <th style={{ width: 160 }}>Item Code</th>
                       <th>Description</th>
                       <th style={{ width: 72 }}>UOM</th>
                       <th style={{ width: 100 }}>Qty</th>
