@@ -194,7 +194,8 @@ export default function QCFormPage() {
   const fileInputRef   = useRef(null);
   const loadedId       = useRef(null);
   const pendingFilesRef = useRef([]);  // holds files queued before record exists
-  const [showCamera, setShowCamera] = useState(false);
+  const [showCamera,  setShowCamera]  = useState(false);
+  const [mobQcTab,    setMobQcTab]    = useState('details'); // 'details' | 'checklist' | 'info'
 
   const isApprover = user?.canApprove || ['Admin', 'Manager', 'Supervisor'].includes(user?.roleCode);
 
@@ -456,10 +457,27 @@ export default function QCFormPage() {
         </div>
       </div>
 
-      <form onSubmit={e => { e.preventDefault(); if (validate()) save({ ...header, checklistData: { ...checklist, __sectionNA: sectionNA } }); }} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <form onSubmit={e => { e.preventDefault(); if (validate()) save({ ...header, checklistData: { ...checklist, __sectionNA: sectionNA } }); }}
+        className="ts-modal"
+        data-qc-tab={mobQcTab}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* ── Mobile tab bar (hidden on desktop via CSS) ── */}
+        <div className="ts-mob-tabs qc-mob-tabs">
+          {[['details','📋','Details'],['checklist','✅','Checklist'],['info','📌','Info']].map(([key,ic,lbl]) => (
+            <button key={key} type="button"
+              className={`ts-mob-tab${mobQcTab === key ? ' ts-mob-tab-active' : ''}`}
+              onClick={() => setMobQcTab(key)}>
+              {ic} {lbl}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Three-panel row ── */}
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* Left panel */}
-        <div className="ts-form-panel" style={{ width: 260, flexShrink: 0, borderRight: '1px solid var(--border)', overflowY: 'auto' }}>
+        <div className="ts-form-panel qc-panel-details" style={{ flexShrink: 0, borderRight: '1px solid var(--border)', overflowY: 'auto' }}>
           <div className="ts-field-group"><label className="ts-field-label">Work Order # <span style={{ color: C.fail }}>*</span></label>
             <SearchSelect options={woOptions} value={header.workOrderNo} onChange={onWorkOrderChange} placeholder="Production WOs…" disabled={isReadonly} /></div>
           <div className="ts-field-group"><label className="ts-field-label">QC Number</label>
@@ -510,7 +528,7 @@ export default function QCFormPage() {
         </div>
 
         {/* Centre: checklist */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '16px 18px 80px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="qc-panel-checklist" style={{ flex: 1, overflow: 'auto', padding: '16px 18px 80px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Inspection Checklist — {QC_SECTIONS.length} sections · {allItems.length} items
             {naSection > 0 && <span style={{ color: C.na }}> · {naSection} section(s) N/A</span>}
@@ -528,7 +546,7 @@ export default function QCFormPage() {
         </div>
 
         {/* Right sidebar */}
-        <div style={{ width: 280, flexShrink: 0, borderLeft: '1px solid var(--border2)', display: 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden' }}>
+        <div className="qc-panel-info" style={{ flexShrink: 0, borderLeft: '1px solid var(--border2)', display: 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden' }}>
           <div style={{ display: 'flex', borderBottom: '2px solid var(--border2)', flexShrink: 0 }}>
             {[['history', '📋', 'History'], ['comments', '💬', comments.length ? `(${comments.length})` : 'Comments'], ['files', '📎', attachments.length ? `(${attachments.length})` : 'Files']].map(([key, ic, lbl]) => (
               <button key={key} type="button" onClick={() => setActiveTab(key)}
@@ -692,8 +710,10 @@ export default function QCFormPage() {
           )}
         </div>
 
+        </div>{/* end three-panel row */}
+
         {/* Footer */}
-        <div style={{ position: 'absolute', bottom: 0, left: 260, right: 280, background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '10px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10, zIndex: 10 }}>
+        <div className="ts-modal-footer" style={{ borderTop: '1px solid var(--border)', padding: '10px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10, flexShrink: 0 }}>
           {isReadonly ? (
             <button type="button" onClick={() => navigate('/qc')} className="btn btn-ghost">← Back to List</button>
           ) : (
