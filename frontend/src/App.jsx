@@ -112,7 +112,7 @@ export default function App() {
                   <Route path="timesheets/project"              element={<ProjTimesheetPage />} />
                   <Route path="timesheets/pending-approvals"    element={<PendingApprovalsPage />} />
 
-                  {/* WOC + Reports */}
+                  {/* QC */}
                   <Route path="qc"             element={<QCListPage />} />
                   <Route path="qc/new"         element={<QCFormPage />} />
                   <Route path="qc/:id/edit"    element={<QCFormPage />} />

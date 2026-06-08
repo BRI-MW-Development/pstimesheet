@@ -55,11 +55,13 @@ export default function SearchSelect({ options = [], value, onChange, placeholde
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  /* ── Close (and don't reopen) when ANY ancestor scrolls ── */
+  /* ── Close when an ancestor scrolls, but NOT when the dropdown list itself scrolls ── */
   useEffect(() => {
     if (!open) return;
-    function onScroll() { setOpen(false); }
-    // Capture scroll on all scrollable ancestors
+    function onScroll(e) {
+      if (dropdownRef.current?.contains(e.target)) return; // scroll inside dropdown list — keep open
+      setOpen(false);
+    }
     window.addEventListener('scroll', onScroll, true);
     return () => window.removeEventListener('scroll', onScroll, true);
   }, [open]);

@@ -40,7 +40,7 @@ const QC_SECTIONS = [
 
 function defaultChecklist() {
   const cl = {};
-  QC_SECTIONS.forEach(s => { cl[s.name] = {}; s.items.forEach(i => { cl[s.name][i] = 'Pass'; }); });
+  QC_SECTIONS.forEach(s => { cl[s.name] = {}; s.items.forEach(i => { cl[s.name][i] = ''; }); });
   return cl;
 }
 function defaultSectionNA() {
@@ -51,9 +51,10 @@ function defaultSectionNA() {
 
 /* ── Checklist item row ────────────────────────────── */
 function ItemRow({ label, value, onChange, disabled, readonly }) {
-  const isPass = value === 'Pass';
-  const isFail = value === 'Fail';
-  const isNA   = value === 'N/A' || disabled;
+  const isPass  = value === 'Pass';
+  const isFail  = value === 'Fail';
+  const isNA    = value === 'N/A' || disabled;
+  const isEmpty = !value && !disabled; // not yet selected
 
   if (readonly) {
     return (
@@ -61,26 +62,31 @@ function ItemRow({ label, value, onChange, disabled, readonly }) {
         <span style={{ flex: 1, fontSize: 12, color: 'var(--text2)', textDecoration: isNA ? 'line-through' : 'none' }}>{label}</span>
         <span style={{
           padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-          background: isNA ? C.naBg : isPass ? C.passBg : C.failBg,
-          color:      isNA ? C.na   : isPass ? C.pass   : C.fail,
+          background: isNA ? C.naBg : isPass ? C.passBg : isFail ? C.failBg : 'var(--surface2)',
+          color:      isNA ? C.na   : isPass ? C.pass   : isFail ? C.fail   : 'var(--text3)',
         }}>
-          {isNA ? 'N/A' : isPass ? '✓ Pass' : '✗ Fail'}
+          {isNA ? 'N/A' : isPass ? '✓ Pass' : isFail ? '✗ Fail' : '—'}
         </span>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', padding: '7px 14px', borderBottom: '1px solid var(--border)', gap: 10,
-      background: isNA ? 'var(--surface2)' : isPass ? '#f0fdf4' : isFail ? '#fff5f5' : 'var(--surface)',
-      opacity: isNA ? 0.5 : 1, transition: 'background 0.15s, opacity 0.15s' }}>
-      <div style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-        background: isNA ? 'var(--text3)' : isPass ? C.pass : C.fail, transition: 'background 0.15s' }} />
+    <div style={{
+      display: 'flex', alignItems: 'center', padding: '7px 14px', borderBottom: '1px solid var(--border)', gap: 10,
+      background: isNA ? 'var(--surface2)' : isPass ? '#f0fdf4' : isFail ? '#fff5f5' : isEmpty ? '#fffbeb' : 'var(--surface)',
+      opacity: isNA ? 0.5 : 1, transition: 'background 0.15s, opacity 0.15s',
+    }}>
+      <div style={{
+        width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+        background: isNA ? 'var(--text3)' : isPass ? C.pass : isFail ? C.fail : '#f59e0b',
+        transition: 'background 0.15s',
+      }} />
       <span style={{ flex: 1, fontSize: 12, color: isNA ? 'var(--text3)' : 'var(--text)', fontWeight: 500, textDecoration: isNA ? 'line-through' : 'none' }}>
         {label}
       </span>
-      <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border2)', flexShrink: 0 }}>
-        {[['Pass', '✓', C.pass, C.passBg, C.passBd], ['Fail', '✗', C.fail, C.failBg, C.failBd]].map(([opt, sym, col, bg]) => (
+      <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: `1px solid ${isEmpty ? '#fbbf24' : 'var(--border2)'}`, flexShrink: 0 }}>
+        {[['Pass', '✓', C.pass, C.passBg], ['Fail', '✗', C.fail, C.failBg]].map(([opt, sym, col, bg]) => (
           <button key={opt} type="button" disabled={disabled}
             onClick={() => onChange(opt)}
             style={{
@@ -96,7 +102,7 @@ function ItemRow({ label, value, onChange, disabled, readonly }) {
       </div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 3, cursor: disabled ? 'default' : 'pointer', flexShrink: 0 }}>
         <input type="checkbox" checked={value === 'N/A'} disabled={disabled}
-          onChange={e => onChange(e.target.checked ? 'N/A' : 'Pass')}
+          onChange={e => onChange(e.target.checked ? 'N/A' : '')}
           style={{ width: 12, height: 12, cursor: disabled ? 'default' : 'pointer', accentColor: C.na }} />
         <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>N/A</span>
       </label>
@@ -110,12 +116,14 @@ function SectionCard({ section, values, sectionNA, onItemChange, onSectionNA, re
   const pass    = section.items.filter(i => !na && values[i] === 'Pass').length;
   const fail    = section.items.filter(i => !na && values[i] === 'Fail').length;
   const itemNA  = section.items.filter(i => !na && values[i] === 'N/A').length;
+  const empty   = section.items.filter(i => !na && !values[i]).length;
   const active  = na ? 0 : section.items.length - itemNA;
-  const allPass = !na && active > 0 && pass === active;
+  const allPass = !na && active > 0 && pass === active && empty === 0;
   const hasFail = !na && fail > 0;
+  const hasEmpty = !na && empty > 0;
 
-  const borderColor = na ? C.na : hasFail ? C.fail : allPass ? C.pass : C.amber;
-  const headerBg    = na ? 'var(--surface2)' : hasFail ? '#fff5f5' : allPass ? '#f0fdf4' : 'var(--bg2)';
+  const borderColor = na ? C.na : hasFail ? C.fail : allPass ? C.pass : hasEmpty ? '#f59e0b' : C.amber;
+  const headerBg    = na ? 'var(--surface2)' : hasFail ? '#fff5f5' : allPass ? '#f0fdf4' : hasEmpty ? '#fffbeb' : 'var(--bg2)';
 
   return (
     <div style={{ background: 'var(--surface)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border2)', borderLeft: `4px solid ${borderColor}`, boxShadow: 'var(--sh-sm)', transition: 'border-color 0.2s' }}>
@@ -126,6 +134,7 @@ function SectionCard({ section, values, sectionNA, onItemChange, onSectionNA, re
         </span>
         {!na && (
           <div style={{ display: 'flex', gap: 4 }}>
+            {empty > 0 && <span style={{ padding: '1px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#d97706' }}>{empty} pending</span>}
             {pass > 0 && <span style={{ padding: '1px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700, background: C.passBg, color: C.pass }}>{pass}✓</span>}
             {fail > 0 && <span style={{ padding: '1px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700, background: C.failBg, color: C.fail }}>{fail}✗</span>}
             {itemNA > 0 && <span style={{ padding: '1px 7px', borderRadius: 10, fontSize: 10, fontWeight: 700, background: 'var(--surface3)', color: 'var(--text3)' }}>{itemNA} N/A</span>}
@@ -196,6 +205,14 @@ export default function QCFormPage() {
   const pendingFilesRef = useRef([]);  // holds files queued before record exists
   const [showCamera,  setShowCamera]  = useState(false);
   const [mobQcTab,    setMobQcTab]    = useState('details'); // 'details' | 'checklist' | 'info'
+  const [windowW, setWindowW] = useState(window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWindowW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  // No sidebar in this route — full viewport. Tabs on tablet/mobile.
+  const isNarrow = windowW <= 900;
 
   const isApprover = user?.canApprove || ['Admin', 'Manager', 'Supervisor'].includes(user?.roleCode);
 
@@ -248,13 +265,17 @@ export default function QCFormPage() {
   /* ── Auto-status from checklist ─────────────────── */
   useEffect(() => {
     if (isReadonly) return;
-    const activeResults = QC_SECTIONS
+    // Only count items that have been explicitly answered (Pass or Fail — not empty or N/A)
+    const answered = QC_SECTIONS
       .filter(s => !sectionNA[s.name])
-      .flatMap(s => s.items.map(i => checklist[s.name]?.[i]).filter(v => v !== 'N/A'));
-    if (activeResults.length === 0) return;
-    const autoStatus = activeResults.some(v => v === 'Fail') ? 'Failed'
-      : activeResults.every(v => v === 'Pass') ? 'Passed'
-      : 'In Progress';
+      .flatMap(s => s.items.map(i => checklist[s.name]?.[i]).filter(v => v === 'Pass' || v === 'Fail'));
+    const hasEmpty = QC_SECTIONS
+      .filter(s => !sectionNA[s.name])
+      .some(s => s.items.some(i => !checklist[s.name]?.[i]));
+    if (answered.length === 0) return;
+    const autoStatus = hasEmpty ? 'In Progress'
+      : answered.some(v => v === 'Fail') ? 'Failed'
+      : 'Passed';
     setHeader(h => h.status === autoStatus ? h : { ...h, status: autoStatus });
   }, [checklist, sectionNA, isReadonly]);
 
@@ -383,13 +404,14 @@ export default function QCFormPage() {
 
   /* ── Summary values ────────────────────────────── */
   const activeSections = QC_SECTIONS.filter(s => !sectionNA[s.name]);
-  const allItems   = activeSections.flatMap(s => s.items.map(i => checklist[s.name]?.[i]));
-  const passTotal  = allItems.filter(v => v === 'Pass').length;
-  const failTotal  = allItems.filter(v => v === 'Fail').length;
-  const naTotal    = allItems.filter(v => v === 'N/A').length;
-  const naSection  = QC_SECTIONS.length - activeSections.length;
-  const activeItems = allItems.length - naTotal;
-  const passRate   = activeItems > 0 ? Math.round((passTotal / activeItems) * 100) : 100;
+  const allItems    = activeSections.flatMap(s => s.items.map(i => checklist[s.name]?.[i]));
+  const passTotal   = allItems.filter(v => v === 'Pass').length;
+  const failTotal   = allItems.filter(v => v === 'Fail').length;
+  const naTotal     = allItems.filter(v => v === 'N/A').length;
+  const emptyTotal  = allItems.filter(v => !v).length;
+  const naSection   = QC_SECTIONS.length - activeSections.length;
+  const answeredItems = allItems.length - naTotal - emptyTotal;
+  const passRate    = answeredItems > 0 ? Math.round((passTotal / answeredItems) * 100) : 0;
 
   const sts = STATUS_STYLE[header.status] ?? STATUS_STYLE['In Progress'];
 
@@ -418,6 +440,12 @@ export default function QCFormPage() {
     if (activeSections.length === 0) {
       toast('At least one checklist section must be active (not all N/A).', 'error'); return false;
     }
+    // Every active item must have a selection
+    const unanswered = activeSections.reduce((acc, s) =>
+      acc + s.items.filter(i => !checklist[s.name]?.[i] || checklist[s.name][i] === '').length, 0);
+    if (unanswered > 0) {
+      toast(`${unanswered} checklist item(s) have no selection. Please mark each item as Pass, Fail, or N/A before saving.`, 'error'); return false;
+    }
     // 3-image minimum only enforced when marking as Passed — drafts/in-progress can be saved with fewer
     if (header.status === 'Passed' && totalImages < 3) {
       toast(`Minimum 3 images required to mark as Passed — you have ${totalImages}. Go to the Files tab to add photos.`, 'error'); return false;
@@ -429,7 +457,7 @@ export default function QCFormPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
 
       {/* ── Top bar ── */}
       <div style={{ background: `linear-gradient(135deg,${C.teal} 0%,${C.tealMid} 100%)`, padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
@@ -450,90 +478,114 @@ export default function QCFormPage() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {emptyTotal > 0 && <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fef3c7', color: '#d97706' }}>{emptyTotal} Pending</span>}
           <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: C.passBg,  color: C.pass  }}>{passTotal} Pass</span>
           <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: C.failBg,  color: C.fail  }}>{failTotal} Fail</span>
-          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: 'rgba(255,255,255,0.15)', color: '#fff' }}>{naTotal + naSection * 1} N/A</span>
-          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: failTotal > 0 ? C.failBg : C.passBg, color: failTotal > 0 ? C.fail : C.pass }}>{passRate}%</span>
+          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: 'rgba(255,255,255,0.15)', color: '#fff' }}>{naTotal + naSection} N/A</span>
+          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: emptyTotal > 0 ? '#fef3c7' : failTotal > 0 ? C.failBg : C.passBg, color: emptyTotal > 0 ? '#d97706' : failTotal > 0 ? C.fail : C.pass }}>{passRate}%</span>
         </div>
       </div>
 
       <form onSubmit={e => { e.preventDefault(); if (validate()) save({ ...header, checklistData: { ...checklist, __sectionNA: sectionNA } }); }}
-        className="ts-modal"
         data-qc-tab={mobQcTab}
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, width: '100%' }}>
 
-        {/* ── Mobile tab bar (hidden on desktop via CSS) ── */}
-        <div className="ts-mob-tabs qc-mob-tabs">
-          {[['details','📋','Details'],['checklist','✅','Checklist'],['info','📌','Info']].map(([key,ic,lbl]) => (
-            <button key={key} type="button"
-              className={`ts-mob-tab${mobQcTab === key ? ' ts-mob-tab-active' : ''}`}
-              onClick={() => setMobQcTab(key)}>
-              {ic} {lbl}
-            </button>
-          ))}
-        </div>
+        {/* ── Mobile tab bar — visible when window ≤ 1440px ── */}
+        {isNarrow && (
+          <div style={{ display: 'flex', flexShrink: 0, borderBottom: '2px solid var(--border2)', background: 'var(--surface)' }}>
+            {[['details','📋','Details'],['checklist','✅','Checklist'],['info','📌','Info']].map(([key,ic,lbl]) => (
+              <button key={key} type="button"
+                onClick={() => setMobQcTab(key)}
+                style={{ flex: 1, padding: '10px 6px', border: 'none', borderBottom: `2px solid ${mobQcTab === key ? 'var(--accent)' : 'transparent'}`, marginBottom: -2, background: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: mobQcTab === key ? 'var(--accent)' : 'var(--text3)', transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+                {ic} {lbl}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ── Three-panel row ── */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* Left panel */}
-        <div className="ts-form-panel qc-panel-details" style={{ flexShrink: 0, borderRight: '1px solid var(--border)', overflowY: 'auto' }}>
+        <div className="ts-form-panel qc-panel-details" style={{ flexShrink: 0, borderRight: '1px solid var(--border)', overflowY: 'auto', display: isNarrow && mobQcTab !== 'details' ? 'none' : undefined, width: isNarrow ? '100%' : undefined }}>
+
+          {/* Work Order — full width */}
           <div className="ts-field-group"><label className="ts-field-label">Work Order # <span style={{ color: C.fail }}>*</span></label>
             <SearchSelect options={woOptions} value={header.workOrderNo} onChange={onWorkOrderChange} placeholder="Production WOs…" disabled={isReadonly} /></div>
-          <div className="ts-field-group"><label className="ts-field-label">QC Number</label>
-            <input className="form-control ts-input ts-readonly" value={existing?.docNo ?? '(auto)'} readOnly /></div>
+
+          {/* QC No + Date side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div className="ts-field-group"><label className="ts-field-label">QC Number</label>
+              <input className="form-control ts-input ts-readonly" value={existing?.docNo ?? '(auto)'} readOnly /></div>
+            <div className="ts-field-group"><label className="ts-field-label">Date</label>
+              <input type="date" required className="form-control ts-input"
+                value={header.qcDate} min={new Date().toISOString().slice(0, 10)} max={new Date().toISOString().slice(0, 10)}
+                disabled={isReadonly} onChange={e => setHdr('qcDate', e.target.value)} /></div>
+          </div>
+
+          {/* Project ID — full width */}
           <div className="ts-field-group"><label className="ts-field-label">Project ID</label>
             <SearchSelect options={projOptions} value={header.projectCode} onChange={v => { const p = projects.find(x => (x.projectCode ?? x.projectId) === v); const raw = p?.projectName ?? ''; setHeader(h => ({ ...h, projectCode: v, projectName: raw.includes(':') ? raw.split(':').slice(1).join(':').trim() : raw, customerName: p?.customerName ?? h.customerName })); }} placeholder="Search project…" disabled={isReadonly} /></div>
-          <div className="ts-field-group"><label className="ts-field-label">Project Name</label>
-            <input className="form-control ts-input ts-readonly" value={header.projectName} readOnly placeholder="Auto-filled" /></div>
-          <div className="ts-field-group"><label className="ts-field-label">Customer</label>
-            <input className="form-control ts-input ts-readonly" value={header.customerName} readOnly placeholder="Auto-filled" /></div>
+
+          {/* Project Name + Customer side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div className="ts-field-group"><label className="ts-field-label">Project Name</label>
+              <input className="form-control ts-input ts-readonly" value={header.projectName} readOnly placeholder="Auto-filled" /></div>
+            <div className="ts-field-group"><label className="ts-field-label">Customer</label>
+              <input className="form-control ts-input ts-readonly" value={header.customerName} readOnly placeholder="Auto-filled" /></div>
+          </div>
+
+          {/* Sign Type — full width */}
           <div className="ts-field-group"><label className="ts-field-label">Sign Type</label>
             <input className="form-control ts-input" value={header.signType} disabled={isReadonly} onChange={e => setHdr('signType', e.target.value)} placeholder="e.g. Metal Fabrication" /></div>
-          <div className="ts-field-group"><label className="ts-field-label">Date</label>
-            <input type="date" required className="form-control ts-input"
-              value={header.qcDate}
-              min={new Date().toISOString().slice(0, 10)}
-              max={new Date().toISOString().slice(0, 10)}
-              disabled={isReadonly}
-              onChange={e => setHdr('qcDate', e.target.value)} /></div>
-          <div className="ts-field-group"><label className="ts-field-label">Quantity <span style={{ color: C.fail }}>*</span></label>
-            <input type="number" className="form-control ts-input" value={header.quantity} disabled={isReadonly} min={1} onChange={e => setHdr('quantity', e.target.value)} placeholder="1" /></div>
-          <div className="ts-field-group"><label className="ts-field-label">Partial / Full</label>
-            <select className="form-control ts-input" value={header.partialFull} disabled={isReadonly} onChange={e => setHdr('partialFull', e.target.value)}><option>Full</option><option>Partial</option></select></div>
-          <div className="ts-field-group"><label className="ts-field-label">QC Inspector</label>
-            <input className="form-control ts-input ts-readonly" value={header.qcInspector} readOnly /></div>
-          <div className="ts-field-group"><label className="ts-field-label">Status</label>
-            {isReadonly
-              ? <input className="form-control ts-input ts-readonly" value={header.status} readOnly />
-              : tsStatus === 'Passed'
-                ? <input className="form-control ts-input ts-readonly" value={header.status} readOnly title="Passed QC records cannot be changed to another status" />
-                : <select className="form-control ts-input" value={header.status} onChange={e => setHdr('status', e.target.value)}>{STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}</select>}
+
+          {/* Qty + Partial/Full side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div className="ts-field-group"><label className="ts-field-label">Qty <span style={{ color: C.fail }}>*</span></label>
+              <input type="number" className="form-control ts-input" value={header.quantity} disabled={isReadonly} min={1} onChange={e => setHdr('quantity', e.target.value)} placeholder="1" /></div>
+            <div className="ts-field-group"><label className="ts-field-label">Partial / Full</label>
+              <select className="form-control ts-input" value={header.partialFull} disabled={isReadonly} onChange={e => setHdr('partialFull', e.target.value)}><option>Full</option><option>Partial</option></select></div>
           </div>
+
+          {/* Inspector + Status side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div className="ts-field-group"><label className="ts-field-label">Inspector</label>
+              <input className="form-control ts-input ts-readonly" value={header.qcInspector} readOnly /></div>
+            <div className="ts-field-group"><label className="ts-field-label">Status</label>
+              {isReadonly
+                ? <input className="form-control ts-input ts-readonly" value={header.status} readOnly />
+                : tsStatus === 'Passed'
+                  ? <input className="form-control ts-input ts-readonly" value={header.status} readOnly title="Passed QC records cannot be changed to another status" />
+                  : <select className="form-control ts-input" value={header.status} onChange={e => setHdr('status', e.target.value)}>{STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}</select>}
+            </div>
+          </div>
+
+          {/* Remarks — full width */}
           <div className="ts-field-group"><label className="ts-field-label">Remarks <span style={{ color: C.fail }}>*</span></label>
             <input className="form-control ts-input" value={header.remarks} disabled={isReadonly} onChange={e => setHdr('remarks', e.target.value)} placeholder="Required — describe inspection outcome" /></div>
 
+          {/* Compact summary */}
           <div className="ts-divider" />
-          <div className="ts-summary">
-            <div className="ts-summary-row"><span>Sections</span><span>{QC_SECTIONS.length}</span></div>
-            <div className="ts-summary-row"><span>Active Sections</span><span>{activeSections.length}</span></div>
-            <div className="ts-summary-row"><span>Pass</span><span style={{ color: C.pass, fontWeight: 700 }}>{passTotal}</span></div>
-            <div className="ts-summary-row"><span>Fail</span><span style={{ color: failTotal > 0 ? C.fail : 'inherit', fontWeight: failTotal > 0 ? 700 : 400 }}>{failTotal}</span></div>
-            <div className="ts-summary-row"><span>N/A</span><span>{naTotal}</span></div>
-            <div className="ts-summary-row"><span>Pass Rate</span><span style={{ color: failTotal > 0 ? C.fail : C.pass, fontWeight: 700 }}>{passRate}%</span></div>
+          <div style={{ padding: '8px 16px 12px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 4px' }}>
+            {[['Pass', passTotal, C.pass, C.passBg], ['Fail', failTotal, C.fail, C.failBg], ['Pending', emptyTotal, '#d97706', '#fef3c7'], ['N/A', naTotal, 'var(--text3)', 'var(--surface2)'], ['Sections', activeSections.length + '/' + QC_SECTIONS.length, 'var(--text2)', 'var(--surface2)'], ['Rate', passRate + '%', failTotal > 0 ? C.fail : C.pass, failTotal > 0 ? C.failBg : C.passBg]].map(([label, val, color, bg]) => (
+              <div key={label} style={{ background: bg, borderRadius: 6, padding: '5px 6px', textAlign: 'center' }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color }}>{val}</div>
+                <div style={{ fontSize: 9, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 1 }}>{label}</div>
+              </div>
+            ))}
           </div>
-          <div style={{ margin: '4px 16px 16px', borderRadius: 4, overflow: 'hidden', height: 6, background: 'var(--border)' }}>
+          <div style={{ margin: '0 16px 12px', borderRadius: 4, overflow: 'hidden', height: 5, background: 'var(--border)' }}>
             <div style={{ height: '100%', width: `${passRate}%`, background: failTotal > 0 ? C.fail : C.pass, transition: 'width 0.3s' }} />
           </div>
         </div>
 
         {/* Centre: checklist */}
-        <div className="qc-panel-checklist" style={{ flex: 1, overflow: 'auto', padding: '16px 18px 80px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="qc-panel-checklist" style={{ flex: 1, overflow: 'auto', padding: '16px 18px 80px', display: isNarrow && mobQcTab !== 'checklist' ? 'none' : 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Inspection Checklist — {QC_SECTIONS.length} sections · {allItems.length} items
             {naSection > 0 && <span style={{ color: C.na }}> · {naSection} section(s) N/A</span>}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
             {QC_SECTIONS.map(section => (
               <SectionCard key={section.name} section={section}
                 values={checklist[section.name] ?? {}}
@@ -546,7 +598,7 @@ export default function QCFormPage() {
         </div>
 
         {/* Right sidebar */}
-        <div className="qc-panel-info" style={{ flexShrink: 0, borderLeft: '1px solid var(--border2)', display: 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden' }}>
+        <div className="qc-panel-info" style={{ flexShrink: 0, borderLeft: isNarrow ? 'none' : '1px solid var(--border2)', display: isNarrow && mobQcTab !== 'info' ? 'none' : 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden', width: isNarrow ? '100%' : undefined }}>
           <div style={{ display: 'flex', borderBottom: '2px solid var(--border2)', flexShrink: 0 }}>
             {[['history', '📋', 'History'], ['comments', '💬', comments.length ? `(${comments.length})` : 'Comments'], ['files', '📎', attachments.length ? `(${attachments.length})` : 'Files']].map(([key, ic, lbl]) => (
               <button key={key} type="button" onClick={() => setActiveTab(key)}

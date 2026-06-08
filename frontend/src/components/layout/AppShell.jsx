@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
 import { useLogout } from '../../hooks/useAuth';
@@ -256,6 +256,9 @@ function NotifPanel({ onClose }) {
 
 /* ─── Main AppShell ─── */
 export default function AppShell() {
+  const location = useLocation();
+  // QC form pages fill the full content area — remove main-content padding for them
+  const isFullBleed = /^\/qc\/(new|[^/]+(\/edit|\/view)?)$/.test(location.pathname);
   const [openGroup,   setOpenGroup]   = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showNotif,   setShowNotif]   = useState(false);
@@ -489,7 +492,7 @@ export default function AppShell() {
 
       {/* ════════════════ MAIN CONTENT ════════════════ */}
       <div className="app-shell" onClick={closeAll}>
-        <main className="main-content" onClick={(e) => e.stopPropagation()}>
+        <main className="main-content" style={isFullBleed ? { padding: 0, overflow: 'hidden' } : undefined} onClick={(e) => e.stopPropagation()}>
           <Outlet />
         </main>
       </div>

@@ -1104,48 +1104,12 @@ html, body { height: 100%; overflow: hidden; }
 /* ── QC Form Responsive Layout ───────────────────────────────────── */
 
 /* Desktop: fixed widths for the three panels */
-.qc-panel-details { width: 260px; }
-.qc-panel-info    { width: 280px; }
+.qc-panel-details { width: 300px; flex-shrink: 0; }
+.qc-panel-info    { width: 280px; flex-shrink: 0; }
 
-/* Mobile tab bar — hidden on desktop */
-.qc-mob-tabs { display: none !important; }
-
-/* ≤ 1024px (tablet): tab-based switching */
-@media (max-width: 1024px) {
-  .qc-mob-tabs {
-    display: flex !important;
-    flex-shrink: 0;
-    border-bottom: 2px solid var(--border2);
-    background: var(--surface);
-  }
-
-  /* Show/hide panels based on selected tab */
-  form[data-qc-tab="details"]  .qc-panel-checklist,
-  form[data-qc-tab="details"]  .qc-panel-info       { display: none !important; }
-  form[data-qc-tab="checklist"] .qc-panel-details,
-  form[data-qc-tab="checklist"] .qc-panel-info       { display: none !important; }
-  form[data-qc-tab="info"]      .qc-panel-details,
-  form[data-qc-tab="info"]      .qc-panel-checklist  { display: none !important; }
-
-  .qc-panel-details, .qc-panel-info, .qc-panel-checklist {
-    width: 100% !important;
-    border-right: none !important;
-    border-left: none !important;
-    border-bottom: 1px solid var(--border) !important;
-  }
-
-  /* Checklist: single column on tablet */
-  .qc-panel-checklist > div:last-child {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-/* ≤ 768px (mobile): reduce font/padding in panels */
+/* ≤ 768px (mobile): tighter padding in checklist panel */
 @media (max-width: 768px) {
   .qc-panel-checklist {
-    padding: 12px 12px 80px !important;
-  }
-  .ts-modal-footer {
-    padding: 8px 12px !important;
+    padding: 12px 10px 80px !important;
   }
 }
