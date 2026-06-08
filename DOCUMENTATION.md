@@ -1,6 +1,6 @@
 # PS TimeSheet Pro — Technical Documentation
 
-**Version:** 3.0  
+**Version:** 3.1  
 **Last Updated:** June 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -212,11 +212,29 @@ Route: `/woc`
 
 ### QC Module
 
-Route: `/qc`
+Routes: `/qc` (list) · `/qc/new` · `/qc/:id/edit` · `/qc/:id/view` · `/qc/:id/print`
 
-**Mandatory fields:** Work Order, Quantity, Remarks, QC Inspector (auto-filled from login)
+**Layout:** Full-screen three-panel form (fills content area below the AppShell menu bar with zero padding). On screens ≤ 900px the form switches to a three-tab layout (Details / Checklist / Info).
+
+**Mandatory fields:** Work Order, Quantity, Remarks, QC Inspector (auto-filled from logged-in user)
 
 **Date restriction:** QC date must be today only (no past or future dates)
+
+**Inspection Checklist (11 sections · 45 items):**
+- Items start **blank** — the user must manually select **Pass**, **Fail**, or **N/A** for every item
+- Unselected items are highlighted in amber with a "pending" badge
+- Section header shows pending / pass / fail / N/A counts in real time
+- Saving is blocked until every active item (in non-NA sections) has a selection
+- Auto-status: stays *In Progress* while any item is unanswered; flips to *Passed* or *Failed* once all are filled
+- Section N/A: mark an entire section not applicable with the "N/A Section" checkbox
+- Desktop layout: 3-column grid (11 sections in 4 rows); tablet/mobile: single column
+
+**Left panel compact layout:**
+Fields are arranged in 2-column pairs to reduce vertical scrolling:
+- QC Number + Date
+- Project Name + Customer
+- Quantity + Partial/Full
+- Inspector + Status
 
 **Image requirements:**
 - Minimum 3 images required when setting status to **Passed**
@@ -413,6 +431,30 @@ fix: rejected timesheets now show Edit button only
 security: add permission guards to analytics controller
 ```
 
+### Full-Screen Page Pattern
+
+Pages that need to fill the entire content area below the AppShell topbar (e.g., QC Form) use the following pattern:
+
+**App.jsx** — route stays inside `<AppShell>` so the topbar remains visible:
+```jsx
+<Route path="qc/new" element={<QCFormPage />} />
+```
+
+**AppShell.jsx** — detect the route and zero out `main-content` padding:
+```jsx
+const location = useLocation();
+const isFullBleed = /^\/qc\/(new|[^/]+(\/edit|\/view)?)$/.test(location.pathname);
+// ...
+<main className="main-content"
+  style={isFullBleed ? { padding: 0, overflow: 'hidden' } : undefined}
+>
+```
+
+**Page component** — outer div fills 100% of the (now padding-free) container:
+```jsx
+<div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', overflow: 'hidden' }}>
+```
+
 ### Adding a New Module
 
 **1. Backend — create the module folder:**
@@ -539,6 +581,10 @@ const options = items.map(i => ({
   triggerLabel: i.itemcode,                  // shown in trigger button
 }));
 ```
+
+**Scroll behaviour:** Scrolling inside the dropdown list does **not** close it. Scrolling any ancestor (page, sidebar) closes it. Implemented via capture-phase scroll listener that checks `dropdownRef.current.contains(e.target)`.
+
+**Portal:** Dropdown renders via `createPortal(…, document.body)` so it is never clipped by parent `overflow: hidden` containers. Position is `fixed` calculated from `getBoundingClientRect()`. Opens upward automatically when there is insufficient space below the trigger.
 
 ### Validation Pattern
 
@@ -704,6 +750,15 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v3.1 (June 2026)
+- **QC Form — full-screen layout:** form fills the full content area below the AppShell menu bar; `main-content` padding zeroed on QC form routes via `useLocation` in AppShell
+- **QC Form — responsive layout:** screens ≤ 900px switch to a three-tab layout (Details / Checklist / Info) using React `window.innerWidth` state (no CSS-only selector dependency)
+- **QC Checklist — no default selection:** all items start blank; user must manually choose Pass, Fail, or N/A for every item; amber highlight + "pending" badge for unanswered items; save blocked until all active items are filled
+- **QC Checklist — 3-column desktop grid:** 11 sections now display in 3 columns (4 rows) instead of 2 columns (6 rows), significantly reducing scrolling
+- **QC Left panel — compact 2-column field pairs:** QC No + Date, Project Name + Customer, Qty + Partial/Full, Inspector + Status displayed side-by-side; summary replaced with a compact 3×2 tile grid
+- **SearchSelect — scroll fix:** scrolling inside the dropdown list no longer closes it; only ancestor/page scroll closes the dropdown
+- **Auto-status logic:** status stays *In Progress* while any checklist item is unanswered; only resolves to *Passed*/*Failed* when all items have been answered
 
 ### v3.0 (June 2026)
 - QC Module: full inspection workflow, S3 photos, PDF print
