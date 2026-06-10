@@ -257,8 +257,10 @@ function NotifPanel({ onClose }) {
 /* ─── Main AppShell ─── */
 export default function AppShell() {
   const location = useLocation();
-  // QC form pages fill the full content area — remove main-content padding for them
-  const isFullBleed = /^\/qc\/(new|[^/]+(\/edit|\/view)?)$/.test(location.pathname);
+  // Form pages fill the full content area.
+  // Removing main-content padding + setting overflow:hidden fixes the height:100% chain
+  // so inner scroll panels (ts-scroll-panel, qc-panel-*) get a finite height to scroll within.
+  const isFullBleed = /^\/(qc\/(new|[^/]+(\/edit|\/view)?)|timesheets\/(prod|inst|project)\/(new|[^/]+(\/edit|\/view)?))$/.test(location.pathname);
   const [openGroup,   setOpenGroup]   = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showNotif,   setShowNotif]   = useState(false);
