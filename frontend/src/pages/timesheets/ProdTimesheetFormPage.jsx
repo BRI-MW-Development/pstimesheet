@@ -47,6 +47,7 @@ export default function ProdTimesheetFormPage() {
     shift: '',
     entryPerson: user?.employeeCode ?? user?.username ?? '',
   });
+  const [isDirty, setIsDirty] = useState(false);
   const [wocWarning, setWocWarning] = useState('');
   const [labourRows, setLabourRows]   = useState([{ ...EMPTY_LABOUR }]);
   const [materialRows, setMaterialRows] = useState([]);
@@ -83,6 +84,7 @@ export default function ProdTimesheetFormPage() {
       : [{ ...EMPTY_LABOUR }]);
     setMaterialRows(existing.materialLines?.map((m) => ({ itemCode: m.itemCode ?? '', description: m.itemName ?? m.itemDescription ?? m.description ?? '', qty: m.qty ?? '', uom: m.uom ?? '' })) ?? []);
     setMachRows(existing.equipmentLines?.map((e) => ({ machineName: e.equipmentName ?? e.machineName ?? '', minutes: e.hoursUsed ?? e.durationMinutes ?? e.minutes ?? '' })) ?? []);
+    setIsDirty(false);
   }, [existing]);
 
   // Filter work orders: production department only, matching project, exclude completed
@@ -97,6 +99,21 @@ export default function ProdTimesheetFormPage() {
     if (header.projectId) return w.projectCode === header.projectId;
     return true;
   });
+
+  // #27 — warn on browser close/refresh when dirty
+  useEffect(() => {
+    if (!isDirty) return;
+    const fn = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', fn);
+    return () => window.removeEventListener('beforeunload', fn);
+  }, [isDirty]);
+
+  // #27 — guard Cancel/Back navigation when dirty
+  function confirmLeave(destination) {
+    if (!isDirty || window.confirm('You have unsaved changes. Leave without saving?')) {
+      navigate(destination);
+    }
+  }
 
   // WOC check when work order changes
   useEffect(() => {
@@ -113,6 +130,7 @@ export default function ProdTimesheetFormPage() {
         ? api.put(`/timesheets/${docNo}`, payload).then((r) => r.data)
         : api.post('/timesheets', payload).then((r) => r.data),
     onSuccess: () => {
+      setIsDirty(false);
       queryClient.invalidateQueries({ queryKey: ['prod-timesheets'] });
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
       toast(isEdit ? 'Timesheet updated.' : 'Timesheet saved.', 'success');
@@ -121,7 +139,7 @@ export default function ProdTimesheetFormPage() {
     onError: (err) => toast(err?.response?.data?.message ?? 'Save failed.', 'error'),
   });
 
-  function setHdr(field, val) { setHeader((h) => ({ ...h, [field]: val })); }
+  function setHdr(field, val) { setIsDirty(true); setHeader((h) => ({ ...h, [field]: val })); }
 
   function setLabour(idx, field, val) {
     setLabourRows((rows) => rows.map((r, i) => {
@@ -140,6 +158,39 @@ export default function ProdTimesheetFormPage() {
     if (!header.workOrder?.trim())  { toast('Work Order is required.',  'error'); return; }
     if (!header.department?.trim()) { toast('Department is required.',  'error'); return; }
     if (!header.shift?.trim())      { toast('Shift is required.',       'error'); return; }
+
+    // #15 — date validation (no future dates, must be set)
+    if (!header.date) { toast('Date is required.', 'error'); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    if (header.date > today) { toast('Date cannot be in the future.', 'error'); return; }
+
+    // #10 — at least one filled labour row
+    const filledLabour = labourRows.filter((r) => r.employee);
+    if (filledLabour.length === 0) { toast('At least one employee entry is required.', 'error'); return; }
+
+    // #12 — duplicate employee + time combination
+    const seen = new Set();
+    for (const r of filledLabour) {
+      const key = `${r.employee}|${r.startTime}|${r.endTime}`;
+      if (seen.has(key)) { toast(`Duplicate entry: ${r.employee} with the same time already added.`, 'error'); return; }
+      seen.add(key);
+    }
+
+    // #13 — overlapping times for the same employee
+    const byEmp = {};
+    for (const r of filledLabour) {
+      if (!r.startTime || !r.endTime) continue;
+      (byEmp[r.employee] = byEmp[r.employee] || []).push({ s: r.startTime, e: r.endTime });
+    }
+    for (const [emp, slots] of Object.entries(byEmp)) {
+      slots.sort((a, b) => a.s.localeCompare(b.s));
+      for (let i = 1; i < slots.length; i++) {
+        if (slots[i].s < slots[i - 1].e) {
+          toast(`Overlapping time entries for employee ${emp}.`, 'error'); return;
+        }
+      }
+    }
+
     save({
       tsType: 'PROD',
       projectId:   header.projectId,
@@ -161,7 +212,7 @@ export default function ProdTimesheetFormPage() {
     .filter((d) => {
       if (!d.mainDepartment || d.isActive === false || d.isActive === 0) return false;
       const md = d.mainDepartment.toLowerCase();
-      return md.includes('production') || md.includes('installation') || md.includes('digital');
+      return md.includes('production');
     })
     .map((d) => ({ value: d.departmentCode ?? String(d.departmentId), label: d.departmentCode ?? String(d.departmentId) }));
   const shiftOptions = shifts.map((s) => ({ value: s.shiftCode, label: s.shiftName }));
@@ -191,20 +242,21 @@ export default function ProdTimesheetFormPage() {
           </div>
           {isEdit && <span className="ts-docno-pill">{docNo}</span>}
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/timesheets/prod')}>← Back</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => confirmLeave('/timesheets/prod')}>← Back</button>
       </div>
 
-      <form onSubmit={submit} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden', pointerEvents: isReadonly ? 'none' : undefined }}>
+      <form onSubmit={submit} onChange={() => !isDirty && setIsDirty(true)} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden' }}>
 
           {/* ── Left panel: header fields ── */}
-          <div className="ts-form-panel">
+          <div className="ts-form-panel" style={{ pointerEvents: isReadonly ? 'none' : undefined }}>
             <div className="ts-field-group">
               <label className="ts-field-label">Project ID <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect
                 options={projOptions}
                 value={header.projectId}
                 onChange={(v) => {
+                  setIsDirty(true);
                   const proj = projects.find((p) => (p.projectCode ?? p.projectId) === v);
                   const rawName = proj?.projectName ?? '';
                   const projectName = rawName.includes(':') ? rawName.split(':').slice(1).join(':').trim() : rawName;
@@ -230,6 +282,7 @@ export default function ProdTimesheetFormPage() {
             <div className="ts-field-group">
               <label className="ts-field-label">Date</label>
               <input type="date" className="form-control ts-input" value={header.date}
+                max={new Date().toISOString().slice(0, 10)}
                 onChange={(e) => setHdr('date', e.target.value)} />
             </div>
             <div className="ts-field-group">
@@ -254,6 +307,7 @@ export default function ProdTimesheetFormPage() {
           {/* ── Right panel: lines ── */}
           <div className="ts-lines-panel">
             <div className="ts-scroll-panel">
+              <div style={{ display: 'contents', pointerEvents: isReadonly ? 'none' : undefined }}>
 
               {/* Labour */}
               <div className="ts-section">
@@ -275,6 +329,7 @@ export default function ProdTimesheetFormPage() {
                         <td>
                           <SearchSelect options={empOptions} value={row.employee}
                             onChange={(v) => {
+                              setIsDirty(true);
                               const emp = employees.find((e) => e.employeeNo === v);
                               setLabourRows((p) => p.map((r, j) => j === i ? { ...r, employee: v, employeeName: [emp?.firstName, emp?.lastname].filter(Boolean).join(' ') } : r));
                             }} placeholder="Employee…" />
@@ -318,6 +373,7 @@ export default function ProdTimesheetFormPage() {
                         <td>
                           <SearchSelect options={itemOptions} value={row.itemCode}
                             onChange={(v) => {
+                              setIsDirty(true);
                               const it = String(v).startsWith('~') ? items[parseInt(v.slice(1))] : items.find((x) => x.itemcode === v);
                               setMaterialRows((p) => p.map((r, j) => j === i ? { ...r, itemCode: it?.itemcode ?? v, description: it?.description ?? it?.itemName ?? '', uom: it?.UOM ?? '' } : r));
                             }} placeholder="Item…" />
@@ -354,7 +410,7 @@ export default function ProdTimesheetFormPage() {
                       <tr key={i}>
                         <td>
                           <SearchSelect options={machOptions} value={row.machineName}
-                            onChange={(v) => setMachRows((p) => p.map((r, j) => j === i ? { ...r, machineName: v } : r))}
+                            onChange={(v) => { setIsDirty(true); setMachRows((p) => p.map((r, j) => j === i ? { ...r, machineName: v } : r)); }}
                             placeholder="Machine…" />
                         </td>
                         <td><input type="number" min="0" value={row.minutes} onChange={(e) => setMachRows((p) => p.map((r, j) => j === i ? { ...r, minutes: e.target.value } : r))} /></td>
@@ -370,6 +426,7 @@ export default function ProdTimesheetFormPage() {
                 </div>
               </div>
 
+              </div>{/* end pointer-events wrapper */}
             </div>
           </div>
         </div>
@@ -387,7 +444,7 @@ export default function ProdTimesheetFormPage() {
             <button type="button" className="ts-footer-cancel" onClick={() => navigate('/timesheets/prod')}>← Back to List</button>
           ) : (
             <>
-              <button type="button" className="ts-footer-cancel" onClick={() => navigate('/timesheets/prod')}>Cancel</button>
+              <button type="button" className="ts-footer-cancel" onClick={() => confirmLeave('/timesheets/prod')}>Cancel</button>
               <button type="submit" className="ts-footer-save" disabled={saving || Boolean(wocWarning)}>
                 {saving ? 'Saving…' : 'Save Timesheet'}
               </button>

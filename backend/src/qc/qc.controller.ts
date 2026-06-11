@@ -82,6 +82,9 @@ export class QcController {
       ['Admin', 'Manager', 'Supervisor'].includes(req.currentUser?.roleCode);
     if (rec.status === 'Passed' && !isApprover)
       throw new HttpException({ message: 'A Passed QC record can only be deleted by an approver.' }, HttpStatus.FORBIDDEN);
+    const comments = await this.svc.commentCount(Number(id));
+    if (comments > 0 && !isApprover)
+      throw new HttpException({ message: 'This QC record has comments and cannot be deleted. Contact a supervisor or admin.' }, HttpStatus.FORBIDDEN);
     const result = await this.svc.remove(Number(id));
     this.auditService.log({ docType: 'QC', docRef: id, action: 'DELETE', performedBy: req.currentUser?.userId, performedByName: req.currentUser?.displayName, details: 'Deleted QC record' });
     return result;

@@ -87,6 +87,10 @@ export class TimesheetsService implements OnModuleInit {
         IF NOT EXISTS (SELECT 1 FROM psTsDocSequence WHERE docType='WOC')
           INSERT INTO psTsDocSequence (docType,prefix,yearNo,currentNo,sequenceDigits) VALUES ('WOC','WO-COMP',0,0,5);
       `);
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='entered_by_user_id')
+          ALTER TABLE PSTsHeader ADD entered_by_user_id NVARCHAR(50) NULL;
+      `);
       const res = await this.devPool.request().query(`
         UPDATE PSTsHeader SET status = 'Submitted' WHERE status = 'Draft'
       `);
@@ -365,16 +369,17 @@ export class TimesheetsService implements OnModuleInit {
         .input('workOrderNo',    mssql.NVarChar(60),  n(body.workOrder))
         .input('departmentCode', mssql.NVarChar(50),  n(body.department))
         .input('shiftCode',      mssql.NVarChar(30),  n(body.shift))
-        .input('enteredByName',  mssql.NVarChar(150), n(body.entryPerson))
-        .input('remarks',        mssql.NVarChar(500), n(body.remarks))
+        .input('enteredByName',   mssql.NVarChar(150), n(body.entryPerson))
+        .input('enteredByUserId', mssql.NVarChar(50),  n(body.enteredByUserId))
+        .input('remarks',         mssql.NVarChar(500), n(body.remarks))
         .query<{ tsId: number }>(`
           INSERT INTO PSTsHeader
             (tsDocNo, tsType, entryDate, projectId, projectName, workOrderNo,
-             department_code, shiftCode, entered_by_name, remarks, status)
+             department_code, shiftCode, entered_by_name, entered_by_user_id, remarks, status)
           OUTPUT INSERTED.tsId
           VALUES
             (@tsDocNo, @tsType, @entryDate, @projectId, @projectName, @workOrderNo,
-             @departmentCode, @shiftCode, @enteredByName, @remarks,
+             @departmentCode, @shiftCode, @enteredByName, @enteredByUserId, @remarks,
              CASE @tsType WHEN 'PROJ' THEN 'Approved' ELSE 'Draft' END)
         `);
 
@@ -413,6 +418,8 @@ export class TimesheetsService implements OnModuleInit {
     dateTo?: string,
     status?: string,
     department?: string,
+    userId?: string,
+    seeAll?: boolean,
   ): Promise<any[]> {
     const req = this.devPool.request();
     if (type)        req.input('tsType',      mssql.NVarChar(20),  type);
@@ -421,6 +428,9 @@ export class TimesheetsService implements OnModuleInit {
     if (dateTo)      req.input('dateTo',      mssql.NVarChar(20),  dateTo);
     if (status)      req.input('status',      mssql.NVarChar(30),  status);
     if (department)  req.input('department',  mssql.NVarChar(50),  department);
+    // Scope to own records when userId is known and user is not an approver/admin
+    const scopeToUser = userId && !seeAll;
+    if (scopeToUser)  req.input('userId',     mssql.NVarChar(50),  userId);
 
     const result = await req.query(`
       SELECT
@@ -450,6 +460,7 @@ export class TimesheetsService implements OnModuleInit {
         ${dateTo      ? 'AND h.entryDate       <= @dateTo'      : ''}
         ${status      ? 'AND h.status           = @status'      : ''}
         ${department  ? 'AND h.department_code  = @department'  : ''}
+        ${scopeToUser ? 'AND (h.entered_by_user_id = @userId OR h.entered_by_user_id IS NULL)' : ''}
       ORDER BY h.entryDate DESC, h.createdAt DESC
     `);
 

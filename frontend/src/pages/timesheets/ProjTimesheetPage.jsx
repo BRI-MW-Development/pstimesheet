@@ -105,6 +105,9 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
 
   function handleSubmit(e) {
     e.preventDefault();
+    if (!form.projectId?.trim())  { toast('Project ID is required.',  'error'); return; }
+    if (!form.taskType?.trim())   { toast('Task Type is required.',   'error'); return; }
+    if (!form.employee?.trim() && !userEmployeeCode?.trim()) { toast('Employee is required.', 'error'); return; }
     save({
       tsType: 'PROJ',
       date: form.date,
@@ -154,8 +157,9 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
       <form
         id="pt-daily-form"
         onSubmit={handleSubmit}
-        style={{ flex: 1, overflowY: 'auto', padding: '20px', pointerEvents: readOnly ? 'none' : undefined }}
+        style={{ flex: 1, overflowY: 'auto', padding: '20px' }}
       >
+        <div style={{ pointerEvents: readOnly ? 'none' : undefined }}>
         <div className="card">
           <div className="card-body">
             <div className="form-grid-2">
@@ -229,6 +233,7 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
             </div>
           </div>
         </div>
+        </div>{/* end pointer-events wrapper */}
       </form>
 
       {/* ── Footer ── */}

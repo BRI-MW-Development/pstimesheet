@@ -64,15 +64,20 @@ export class TimesheetsController {
   }
 
   @Get()
-  list(
+  async list(
     @Query('type')        type?: string,
     @Query('workOrderNo') workOrderNo?: string,
     @Query('dateFrom')    dateFrom?: string,
     @Query('dateTo')      dateTo?: string,
     @Query('status')      status?: string,
     @Query('department')  department?: string,
+    @Req() req?: any,
   ) {
-    return this.timesheetsService.list(type, workOrderNo, dateFrom, dateTo, status, department);
+    const userId = req?.currentUser?.userId;
+    const roleCode = req?.currentUser?.roleCode ?? '';
+    const isAdmin = ['Admin', 'Manager', 'Supervisor'].includes(roleCode);
+    const seeAll = isAdmin || (await this.timesheetsService.isTimesheetApprover(roleCode));
+    return this.timesheetsService.list(type, workOrderNo, dateFrom, dateTo, status, department, userId, seeAll);
   }
 
   @Get('pending-approvals')

@@ -1,6 +1,6 @@
 # PS TimeSheet Pro — Technical Documentation
 
-**Version:** 3.1  
+**Version:** 3.2  
 **Last Updated:** June 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -293,6 +293,9 @@ Requires `REPORTS.canRead` permission.
 | `PSDepartmentProfile` | Department overrides (mainDepartment, isActive) |
 | `psTsDocSequence` | Auto-incrementing doc numbers |
 | `PsNotifSeen` | Notification read state |
+
+### Key Column: `PSTsHeader.entered_by_user_id`
+Added in v3.2. Stores the creator's user ID for data scoping. Auto-migrated via `onModuleInit()` (`ALTER TABLE ... ADD ... NULL`). Existing records have NULL and are visible to all users until re-saved.
 
 ### Auto-Schema Migration
 All tables are created automatically on first startup via `onModuleInit()` in each service. No manual migration scripts needed.
@@ -746,10 +749,39 @@ curl http://localhost:3000/api/auth/login \
 | QC date locked to today | By design — cannot backdate QC inspections |
 | Analytics runs synchronously | Large date ranges may be slow for high-volume data |
 | Email delivery confirmation | Only tracks SMTP acceptance, not actual inbox delivery |
+| Unsaved-warning scope | `beforeunload` + Cancel/Back buttons guarded; clicking sidebar nav links without saving does NOT warn (requires router migration to `createBrowserRouter` to support `useBlocker`) |
+| Role-scoped list — old records | Timesheets created before v3.2 have `entered_by_user_id = NULL` and are visible to all users; they will be scoped correctly once re-saved |
 
 ---
 
 ## Changelog
+
+### v3.2 (June 2026)
+Bug-fix release from manual QA testing (44 items reviewed).
+
+**Timesheet — Production & Installation**
+- **#27 Unsaved-form warning:** Cancel and Back buttons now show a `confirm()` dialog when the form has unsaved changes. `beforeunload` also fires on browser close/refresh.
+- **#10 Empty labour guard:** save blocked if no employee row is filled.
+- **#12 Duplicate entry guard:** save blocked if the same employee + time slot appears twice.
+- **#13 Overlapping time guard:** save blocked if two rows for the same employee have overlapping start/end times.
+- **#15 Future date guard:** date field capped at today (`max` attribute + server-side check).
+- **#31 Edit button role check:** Submitted timesheets show the Edit button only to users with the `canReport` permission (approvers).
+- **#19/#20 Edit form data loss (Installation):** fixed field-name mismatch in the load `useEffect`; `itemName`, `equipmentName`, and `hoursUsed` DB columns now map correctly so material descriptions, vehicle plates, vehicle KM, and access equipment restore correctly on edit.
+- **Dept filter:** Production timesheet only shows production departments; Installation only shows installation departments.
+
+**QC Module**
+- **#44 Photo mandatory:** save/submit blocked with a toast if no photo has been attached. Applies to both pending uploads and already-uploaded files.
+- **#43 Delete guard after comments:** `DELETE /qc/:id` now returns `403` if the record has any comments and the requesting user is not an Admin/Manager/Supervisor.
+
+**Global**
+- **#8/#9 Role-based data scope:** `PSTsHeader` now stores `entered_by_user_id`. The `/timesheets` list endpoint scopes results to the requesting user's own records unless the user has `canReport` / is Admin/Manager/Supervisor. Records created before v3.2 (NULL `entered_by_user_id`) remain visible to all users.
+
+**SearchSelect**
+- **#32 Multi-word search:** filter changed from `token.startsWith(query)` to `.includes(query)` — searching "triple bay" now finds "Triple Bay Sign".
+- **Dropdown last-item clipping:** `DROPDOWN_MAX_H` increased from 240 → 260 px; added `padding-bottom: 4px` to the list so the last item is never clipped.
+
+**Project Timesheet**
+- **#34 Task Type mapping:** `taskType` field correctly round-trips from `shiftCode` DB column on load.
 
 ### v3.1 (June 2026)
 - **QC Form — full-screen layout:** form fills the full content area below the AppShell menu bar; `main-content` padding zeroed on QC form routes via `useLocation` in AppShell

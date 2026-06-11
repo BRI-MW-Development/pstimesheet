@@ -352,6 +352,13 @@ export class QcService implements OnModuleInit {
     return { success: true };
   }
 
+  async commentCount(qcId: number): Promise<number> {
+    const res = await this.pool.request()
+      .input('qcId', mssql.BigInt, qcId)
+      .query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM PsQcComment WHERE qcId = @qcId`);
+    return res.recordset[0]?.cnt ?? 0;
+  }
+
   // ── Attachments ───────────────────────────────────────
   async listAttachments(qcId: number) {
     const result = await this.pool.request()

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-const DROPDOWN_MAX_H = 240; // px — max height of the dropdown list
+const DROPDOWN_MAX_H = 260; // px — container max height (input ~30px + list 220px + breathing room)
 const GAP = 4;              // px — gap between trigger bottom and dropdown top
 
 export default function SearchSelect({ options = [], value, onChange, placeholder = 'Select…', disabled }) {
@@ -68,12 +68,9 @@ export default function SearchSelect({ options = [], value, onChange, placeholde
 
   /* ── Filter ── */
   const q = query.toLowerCase().trim();
-  const filtered = !q ? options : options.filter((o) => {
-    const label = o.label.toLowerCase();
-    if (!o.search) return label.includes(q);
-    const tokens = o.search.toLowerCase().split(/[\s-]+/).filter(Boolean);
-    return tokens.some((t) => t.startsWith(q));
-  });
+  const filtered = !q ? options : options.filter((o) =>
+    (o.search ?? o.label).toLowerCase().includes(q)
+  );
 
   return (
     <>

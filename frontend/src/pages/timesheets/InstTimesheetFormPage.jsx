@@ -48,6 +48,7 @@ export default function InstTimesheetFormPage() {
     date: new Date().toISOString().slice(0, 10),
     shift: '',
   });
+  const [isDirty, setIsDirty] = useState(false);
   const [wocWarning, setWocWarning] = useState('');
   const [labourRows,   setLabourRows]   = useState([{ ...EMPTY_LABOUR }]);
   const [materialRows, setMaterialRows] = useState([]);   // consistent with ProdTimesheetFormPage
@@ -94,18 +95,20 @@ export default function InstTimesheetFormPage() {
     );
     setMaterialRows(
       existing.materialLines?.length
-        ? existing.materialLines.map((m) => ({ itemCode: m.itemCode ?? '', description: m.description ?? '', uom: m.uom ?? '', qty: m.qty ?? '' }))
-        : [{ ...EMPTY_MATERIAL }]
+        ? existing.materialLines.map((m) => ({ itemCode: m.itemCode ?? '', description: m.itemName ?? m.description ?? '', uom: m.uom ?? '', qty: m.qty ?? '' }))
+        : []
     );
     setVehicleRows(
-      existing.vehicleLines?.map((v) => ({ vehicle: v.vehicleCode ?? v.vehicle ?? '', km: v.km ?? '' })) ?? []
+      existing.vehicleLines?.map((v) => ({ vehicle: v.equipmentName ?? v.vehicleCode ?? v.vehicle ?? '', km: String(v.hoursUsed ?? v.km ?? '') })) ?? []
     );
     setAccessRows(
-      existing.accessLines?.map((a) => ({ equipment: a.equipment ?? '', hours: a.hours ?? '' })) ?? []
+      existing.accessLines?.map((a) => ({ equipment: a.equipmentName ?? a.equipment ?? '', hours: String(a.hoursUsed ?? a.hours ?? '') })) ?? []
     );
+    setIsDirty(false);
   }, [existing, projects]);
 
   function onProjectChange(pid) {
+    setIsDirty(true);
     const proj = projects.find((p) => p.projectCode === pid);
     const rawName = proj?.projectName ?? '';
     const projectName = rawName.includes(':') ? rawName.split(':').slice(1).join(':').trim() : rawName;
@@ -114,6 +117,7 @@ export default function InstTimesheetFormPage() {
   }
 
   function onWorkOrderChange(wo) {
+    setIsDirty(true);
     setHeader((h) => ({ ...h, workOrder: wo }));
     if (wo && completedSet.has(wo)) {
       setWocWarning(`Work order ${wo} has already been marked as complete. Please select a different work order.`);
@@ -123,6 +127,21 @@ export default function InstTimesheetFormPage() {
     const matched = allWorkOrders.find((w) => w.workOrderNumber === wo);
     if (matched?.departmentCode && !header.department) {
       setHeader((h) => ({ ...h, workOrder: wo, department: matched.departmentCode }));
+    }
+  }
+
+  // #27 — warn on browser close/refresh when dirty
+  useEffect(() => {
+    if (!isDirty) return;
+    const fn = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', fn);
+    return () => window.removeEventListener('beforeunload', fn);
+  }, [isDirty]);
+
+  // #27 — guard Cancel/Back navigation when dirty
+  function confirmLeave(destination) {
+    if (!isDirty || window.confirm('You have unsaved changes. Leave without saving?')) {
+      navigate(destination);
     }
   }
 
@@ -143,6 +162,7 @@ export default function InstTimesheetFormPage() {
         ? api.put(`/timesheets/${docNo}`, payload).then((r) => r.data)
         : api.post('/timesheets', payload).then((r) => r.data),
     onSuccess: () => {
+      setIsDirty(false);
       queryClient.invalidateQueries({ queryKey: ['inst-timesheets'] });
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
       toast(isEdit ? 'Timesheet updated.' : 'Timesheet created.', 'success');
@@ -158,6 +178,39 @@ export default function InstTimesheetFormPage() {
     if (!header.workOrder?.trim())  { toast('Work Order is required.',  'error'); return; }
     if (!header.department?.trim()) { toast('Department is required.',  'error'); return; }
     if (!header.shift?.trim())      { toast('Shift is required.',       'error'); return; }
+
+    // #15 — no future dates
+    if (!header.date) { toast('Date is required.', 'error'); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    if (header.date > today) { toast('Date cannot be in the future.', 'error'); return; }
+
+    // #10 — at least one filled labour row
+    const filledLabour = labourRows.filter((r) => r.employee);
+    if (filledLabour.length === 0) { toast('At least one employee entry is required.', 'error'); return; }
+
+    // #12 — duplicate employee + time
+    const seen = new Set();
+    for (const r of filledLabour) {
+      const key = `${r.employee}|${r.startTime}|${r.endTime}`;
+      if (seen.has(key)) { toast(`Duplicate entry: ${r.employee} with the same time already added.`, 'error'); return; }
+      seen.add(key);
+    }
+
+    // #13 — overlapping times for same employee
+    const byEmp = {};
+    for (const r of filledLabour) {
+      if (!r.startTime || !r.endTime) continue;
+      (byEmp[r.employee] = byEmp[r.employee] || []).push({ s: r.startTime, e: r.endTime });
+    }
+    for (const [emp, slots] of Object.entries(byEmp)) {
+      slots.sort((a, b) => a.s.localeCompare(b.s));
+      for (let i = 1; i < slots.length; i++) {
+        if (slots[i].s < slots[i - 1].e) {
+          toast(`Overlapping time entries for employee ${emp}.`, 'error'); return;
+        }
+      }
+    }
+
     save({
       tsType: 'INST',
       projectId: header.projectId,
@@ -201,7 +254,7 @@ export default function InstTimesheetFormPage() {
     .filter((d) => {
       if (!d.mainDepartment || d.isActive === false || d.isActive === 0) return false;
       const md = d.mainDepartment.toLowerCase();
-      return md.includes('production') || md.includes('installation') || md.includes('digital');
+      return md.includes('installation');
     })
     .map((d) => ({ value: d.departmentCode ?? String(d.departmentId), label: d.departmentCode ?? String(d.departmentId) }));
   const shiftOptions = shifts.map((s) => ({ value: s.shiftCode, label: `${s.shiftCode} — ${s.shiftName ?? ''}` }));
@@ -222,7 +275,7 @@ export default function InstTimesheetFormPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <form onSubmit={handleSubmit} onChange={() => !isDirty && setIsDirty(true)} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="ts-modal-head" style={{ padding: '16px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div>
@@ -230,12 +283,12 @@ export default function InstTimesheetFormPage() {
               <div className="ts-modal-sub">{isReadonly ? (tsStatus === 'Approved' ? 'Approved — read-only' : tsStatus === 'Rejected' ? 'Rejected — read-only' : tsStatus === 'Submitted' ? 'Submitted — read-only' : 'Read-only view') : 'Fill in the details below and save'}</div>
             </div>
           </div>
-          <button type="button" className="btn btn-ghost" onClick={() => navigate('/timesheets/inst')}>← Back</button>
+          <button type="button" className="btn btn-ghost" onClick={() => confirmLeave('/timesheets/inst')}>← Back</button>
         </div>
 
-        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden', pointerEvents: isReadonly ? 'none' : undefined }}>
+        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden' }}>
           {/* Left panel — header fields */}
-          <div className="ts-form-panel">
+          <div className="ts-form-panel" style={{ pointerEvents: isReadonly ? 'none' : undefined }}>
             <div className="ts-field-group">
               <label className="ts-field-label">Project ID <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect
@@ -266,7 +319,7 @@ export default function InstTimesheetFormPage() {
               <SearchSelect
                 options={deptOptions}
                 value={header.department}
-                onChange={(v) => setHeader((h) => ({ ...h, department: v }))}
+                onChange={(v) => { setIsDirty(true); setHeader((h) => ({ ...h, department: v })); }}
                 placeholder="Select department…"
               />
             </div>
@@ -274,6 +327,7 @@ export default function InstTimesheetFormPage() {
             <div className="ts-field-group">
               <label className="ts-field-label">Date</label>
               <input type="date" className="form-control ts-input" value={header.date}
+                max={new Date().toISOString().slice(0, 10)}
                 onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))} />
             </div>
             <div className="ts-field-group">
@@ -281,7 +335,7 @@ export default function InstTimesheetFormPage() {
               <SearchSelect
                 options={shiftOptions}
                 value={header.shift}
-                onChange={(v) => setHeader((h) => ({ ...h, shift: v }))}
+                onChange={(v) => { setIsDirty(true); setHeader((h) => ({ ...h, shift: v })); }}
                 placeholder="Select shift…"
               />
             </div>
@@ -305,6 +359,7 @@ export default function InstTimesheetFormPage() {
           {/* Right panel — line sections */}
           <div className="ts-lines-panel">
             <div className="ts-scroll-panel">
+              <div style={{ display: 'contents', pointerEvents: isReadonly ? 'none' : undefined }}>
 
               {/* Labour Time */}
               <div className="ts-section">
@@ -328,7 +383,7 @@ export default function InstTimesheetFormPage() {
                       <tr key={i}>
                         <td>
                           <SearchSelect options={empOptions} value={row.employee}
-                            onChange={(v) => setLabour(i, 'employee', v)} placeholder="Employee…" />
+                            onChange={(v) => { setIsDirty(true); setLabour(i, 'employee', v); }} placeholder="Employee…" />
                         </td>
                         <td>
                           <TimeInput value={row.startTime} onChange={(v) => setLabour(i, 'startTime', v)} className="line-input" />
@@ -382,7 +437,7 @@ export default function InstTimesheetFormPage() {
                       <tr key={i}>
                         <td>
                           <SearchSelect options={itemOptions} value={row.itemCode}
-                            onChange={(v) => onItemSelect(i, v)} placeholder="Item code…" />
+                            onChange={(v) => { setIsDirty(true); onItemSelect(i, v); }} placeholder="Item code…" />
                         </td>
                         <td>
                           <input className="line-input" value={row.description}
@@ -435,7 +490,7 @@ export default function InstTimesheetFormPage() {
                       <tr key={i}>
                         <td>
                           <SearchSelect options={vehOptions} value={row.vehicle}
-                            onChange={(v) => setVehicleRows((p) => p.map((r, j) => j === i ? { ...r, vehicle: v } : r))}
+                            onChange={(v) => { setIsDirty(true); setVehicleRows((p) => p.map((r, j) => j === i ? { ...r, vehicle: v } : r)); }}
                             placeholder="Select vehicle…" />
                         </td>
                         <td>
@@ -481,7 +536,7 @@ export default function InstTimesheetFormPage() {
                       <tr key={i}>
                         <td>
                           <SearchSelect options={accOptions} value={row.equipment}
-                            onChange={(v) => setAccessRows((p) => p.map((r, j) => j === i ? { ...r, equipment: v } : r))}
+                            onChange={(v) => { setIsDirty(true); setAccessRows((p) => p.map((r, j) => j === i ? { ...r, equipment: v } : r)); }}
                             placeholder="Select equipment…" />
                         </td>
                         <td>
@@ -507,6 +562,7 @@ export default function InstTimesheetFormPage() {
                 </div>
               </div>
 
+              </div>{/* end pointer-events wrapper */}
             </div>
           </div>
         </div>
@@ -522,7 +578,7 @@ export default function InstTimesheetFormPage() {
             <button type="button" className="ts-footer-cancel" onClick={() => navigate('/timesheets/inst')}>← Back to List</button>
           ) : (
             <>
-              <button type="button" className="ts-footer-cancel" onClick={() => navigate('/timesheets/inst')}>Cancel</button>
+              <button type="button" className="ts-footer-cancel" onClick={() => confirmLeave('/timesheets/inst')}>Cancel</button>
               <button type="submit" className="ts-footer-save" disabled={saving || Boolean(wocWarning)}>
                 {saving ? 'Saving…' : 'Save Timesheet'}
               </button>

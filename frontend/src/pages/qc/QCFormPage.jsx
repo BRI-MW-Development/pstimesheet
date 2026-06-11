@@ -446,7 +446,11 @@ export default function QCFormPage() {
     if (unanswered > 0) {
       toast(`${unanswered} checklist item(s) have no selection. Please mark each item as Pass, Fail, or N/A before saving.`, 'error'); return false;
     }
-    // 3-image minimum only enforced when marking as Passed — drafts/in-progress can be saved with fewer
+    // #44 — at least 1 photo required for all saves
+    if (totalImages < 1) {
+      toast('At least 1 photo is required. Go to the Files tab to add a photo.', 'error'); return false;
+    }
+    // 3-image minimum enforced when marking as Passed
     if (header.status === 'Passed' && totalImages < 3) {
       toast(`Minimum 3 images required to mark as Passed — you have ${totalImages}. Go to the Files tab to add photos.`, 'error'); return false;
     }
