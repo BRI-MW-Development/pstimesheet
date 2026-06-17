@@ -1,6 +1,6 @@
 # PS TimeSheet Pro — Technical Documentation
 
-**Version:** 3.2  
+**Version:** 3.3  
 **Last Updated:** June 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -297,6 +297,9 @@ Requires `REPORTS.canRead` permission.
 ### Key Column: `PSTsHeader.entered_by_user_id`
 Added in v3.2. Stores the creator's user ID for data scoping. Auto-migrated via `onModuleInit()` (`ALTER TABLE ... ADD ... NULL`). Existing records have NULL and are visible to all users until re-saved.
 
+### Column Width: `PSTsMaterialLine.itemName`
+Widened to `NVARCHAR(500)` in v3.3 via `onModuleInit()` migration. Columns narrower than 500 chars are auto-altered on startup to prevent "transaction aborted" / string-truncation errors when saving long item descriptions.
+
 ### Auto-Schema Migration
 All tables are created automatically on first startup via `onModuleInit()` in each service. No manual migration scripts needed.
 
@@ -328,13 +331,18 @@ Permission fields per module: `canRead`, `canCreate`, `canWrite`, `canDelete`, `
 
 **Auto-grant rule:** Roles with `PROD` or `INST` canRead automatically receive `QC` permissions if no explicit QC row exists.
 
+**Timesheets controller (v3.3):** Uses `TimesheetsService.assertPermission()` inline (not the decorator) because the module must be resolved dynamically from the request type (`PROD`/`INST`/`PROJ`). The `typeFromDocNo()` helper derives the module from the document number prefix (`TS-INST-*` → `INST`, `TS-PROJ-*` → `PROJ`, default `PROD`).
+
 ### Approval Authorization
-Approve/Reject timesheets requires `canWrite` on PROD/INST/PROJ (checked via DB query, not hardcoded role names).
+Approve/Reject timesheets requires `canWrite` on PROD/INST/PROJ (checked via `isTimesheetApprover()` DB query, not hardcoded role names). Pending Approvals list is accessible to any role with `canWrite` on at least one timesheet type.
 
 Approval Settings rules further restrict which specific user can approve which timesheet (by department, shift, project, WO criteria).
 
 ### Navigation Filtering
 Frontend sidebar shows only links the user has `canRead` permission for. Backend enforces the same via permission guards independently.
+
+### Shift Time Validation (v3.3)
+On save, the Production and Installation timesheet forms validate that every labour row's start and end times fall within the selected shift's configured window. Overnight shifts (where `endTime < startTime`, e.g. 18:00–06:00) are handled correctly using wrap-around comparison.
 
 ---
 
@@ -669,9 +677,19 @@ All endpoints require: `Authorization: Bearer <sessionToken>`
 | GET | `/auth/profile` | Authenticated | Current user + profileImageUrl |
 | POST | `/auth/profile/image` | Authenticated | Upload profile photo to S3 |
 | GET | `/auth/permissions` | Authenticated | Role permissions + dataScope |
-| GET | `/timesheets` | PROD/INST/PROJ.canRead | List timesheets |
-| POST | `/timesheets` | Authenticated | Create timesheet |
-| POST | `/timesheets/:docNo/submit` | Authenticated | Submit for approval |
+| GET | `/timesheets` | PROD/INST/PROJ.canRead (by type param) | List timesheets |
+| GET | `/timesheets/pending-approvals` | canWrite on any PROD/INST/PROJ | Pending approvals list |
+| GET | `/timesheets/ts-employees` | canRead on any PROD/INST/PROJ | Employee lookup |
+| GET | `/timesheets/preview-docno` | type.canCreate | Preview next doc number |
+| GET | `/timesheets/report-detail` | type.canReport | Detail report |
+| GET | `/timesheets/report-summary` | type.canReport | Summary report |
+| GET | `/timesheets/:docNo` | type.canRead (derived from docNo) | Get single timesheet |
+| POST | `/timesheets` | body.tsType.canCreate | Create timesheet |
+| PUT | `/timesheets/:docNo` | type.canWrite (derived from docNo) | Update timesheet |
+| POST | `/timesheets/:docNo/submit` | type.canCreate (derived from docNo) | Submit for approval |
+| POST | `/timesheets/weekly` | PROJ.canCreate | Create weekly project timesheet |
+| POST | `/timesheets/batch` | batchType.canCreate | Batch create timesheets |
+| DELETE | `/timesheets/:docNo` | type.canDelete (derived from docNo) | Delete timesheet |
 | POST | `/timesheets/:docNo/approve` | canWrite permission | Approve timesheet |
 | POST | `/timesheets/:docNo/reject` | canWrite permission | Reject timesheet |
 | GET | `/qc` | QC.canRead | List QC records |
@@ -755,6 +773,30 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v3.3 (June 2026)
+Bug-fix and security release covering Installation timesheet, QC print, and backend permission enforcement.
+
+**Installation & Production Timesheet**
+- **Department dropdown fix:** filter now checks both `mainDepartment` and `departmentCode` for `install`/`produc` prefix so abbreviated ERP codes (e.g. "INST") are correctly matched; dropdown no longer appears empty.
+- **Shift dropdown — Active only:** shift list filtered to `status === 'Active'` entries; inactive/retired shifts no longer appear.
+- **Shift time window validation:** on save, every labour row's start and end times are checked against the selected shift's configured window; overnight shifts (end < start) handled with wrap-around comparison; save is blocked with a toast if times fall outside the shift window.
+- **Same start/end time guard:** save blocked if a labour row has identical start and end times.
+- **Qty required:** save blocked if a material row is added without a quantity.
+
+**QC Module**
+- **Print — N/A count fix:** N/A item count in the printed summary was always 0 because `activeSections` already excluded N/A sections before counting. Fixed by computing `naCount` directly from `QC_SECTIONS` filtered by `snNA`.
+
+**Backend — Database**
+- **`PSTsMaterialLine.itemName` column widened:** auto-altered to `NVARCHAR(500)` on startup via `onModuleInit()` migration if the column is narrower than 500 chars. Fixes "transaction aborted / string-truncation" errors when saving long item descriptions.
+
+**Backend — Security**
+- **Timesheets controller permission guards:** all 16 timesheet API routes now call `assertPermission()` before executing. Previously, any authenticated user could call any endpoint regardless of role. Module is resolved dynamically from the request (PROD/INST/PROJ) using `typeFromDocNo()` and `typeToModule()`.
+- **Pending Approvals guard fix:** guard now uses `isTimesheetApprover()` (checks canWrite on any of PROD/INST/PROJ) instead of `PROD.canWrite`; Installation Lead role (INST.canWrite only) can now access the pending approvals list correctly.
+
+**Role Permissions**
+- **ROLE-009 (QC Inspector):** removed erroneous `SHIFTS.canWrite` permission.
+- **ROLE-010 (Viewer):** removed erroneous `VEHICLES.canDelete` permission.
 
 ### v3.2 (June 2026)
 Bug-fix release from manual QA testing (44 items reviewed).
