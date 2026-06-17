@@ -127,10 +127,10 @@ export default function QCPrintPage() {
 
   const activeSections = QC_SECTIONS.filter(s => !snNA[s.name]);
   const allVals   = activeSections.flatMap(s => s.items.map(i => getVal(cl, snNA, s.name, i)));
-  const active    = allVals.filter(v => v !== 'N/A').length;
+  const active    = allVals.length;
   const passCount = allVals.filter(v => v === 'Pass').length;
   const failCount = allVals.filter(v => v === 'Fail').length;
-  const naCount   = allVals.filter(v => v === 'N/A').length;
+  const naCount   = QC_SECTIONS.filter(s => snNA[s.name]).reduce((sum, s) => sum + s.items.length, 0);
   const pct       = active > 0 ? Math.round((passCount / active) * 100) : 100;
   const sc        = statusCfg(rec?.status ?? '');
   const isLoading = !rec || !ready;

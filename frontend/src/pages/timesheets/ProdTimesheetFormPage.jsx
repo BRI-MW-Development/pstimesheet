@@ -208,6 +208,21 @@ export default function ProdTimesheetFormPage() {
       }
     }
 
+    // shift time window validation
+    const selectedShift = shifts.find((s) => s.shiftCode === header.shift);
+    if (selectedShift?.startTime && selectedShift?.endTime) {
+      const sStart = selectedShift.startTime;
+      const sEnd   = selectedShift.endTime;
+      const overnight = sEnd < sStart;
+      const inWindow  = (t) => overnight ? (t >= sStart || t <= sEnd) : (t >= sStart && t <= sEnd);
+      for (const r of filledLabour) {
+        if (!r.startTime || !r.endTime) continue;
+        if (!inWindow(r.startTime) || !inWindow(r.endTime)) {
+          toast(`Employee ${r.employee || r.employeeName} times (${r.startTime}–${r.endTime}) are outside the ${selectedShift.shiftName} shift window (${sStart}–${sEnd}).`, 'error'); return;
+        }
+      }
+    }
+
     save({
       tsType: 'PROD',
       projectId:   header.projectId,
@@ -227,12 +242,15 @@ export default function ProdTimesheetFormPage() {
   const woOptions    = filteredWOs.map((w) => ({ value: w.workOrderNumber, label: w.workOrderNumber, search: `${w.workOrderNumber} ${w.projectName ?? ''}` }));
   const deptOptions  = departments
     .filter((d) => {
-      if (!d.mainDepartment || d.isActive === false || d.isActive === 0) return false;
-      const md = d.mainDepartment.toLowerCase();
-      return md.includes('production');
+      if (d.isActive === false || d.isActive === 0) return false;
+      const md = (d.mainDepartment ?? '').toLowerCase();
+      const dc = (d.departmentCode ?? '').toLowerCase();
+      return md.includes('produc') || dc.includes('produc');
     })
     .map((d) => ({ value: d.departmentCode ?? String(d.departmentId), label: d.departmentCode ?? String(d.departmentId) }));
-  const shiftOptions = shifts.map((s) => ({ value: s.shiftCode, label: s.shiftName }));
+  const shiftOptions = shifts
+    .filter((s) => s.status === 'Active')
+    .map((s) => ({ value: s.shiftCode, label: s.shiftName }));
   const prodInstDepts = ['production', 'installation'];
   const empOptions   = employees
     .filter((e) => prodInstDepts.includes((e.departmentCode ?? '').toLowerCase()))

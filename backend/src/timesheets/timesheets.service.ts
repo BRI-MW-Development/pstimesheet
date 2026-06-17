@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { ConnectionPool, Transaction } from 'mssql';
 import * as mssql from 'mssql';
 import { DEV_SQL_POOL, SQL_POOL } from '../database/database.constants';
@@ -90,6 +90,17 @@ export class TimesheetsService implements OnModuleInit {
       await this.devPool.request().query(`
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='entered_by_user_id')
           ALTER TABLE PSTsHeader ADD entered_by_user_id NVARCHAR(50) NULL;
+      `);
+      // Widen itemName if the column exists but is too narrow (< NVARCHAR(500))
+      await this.devPool.request().query(`
+        IF EXISTS (
+          SELECT 1 FROM sys.columns
+          WHERE object_id = OBJECT_ID('PSTsMaterialLine')
+            AND name = 'itemName'
+            AND max_length != -1
+            AND max_length < 1000
+        )
+          ALTER TABLE PSTsMaterialLine ALTER COLUMN itemName NVARCHAR(500) NULL;
       `);
       const res = await this.devPool.request().query(`
         UPDATE PSTsHeader SET status = 'Submitted' WHERE status = 'Draft'
@@ -874,6 +885,29 @@ export class TimesheetsService implements OnModuleInit {
       ORDER BY h.createdAt ASC
     `);
     return res.recordset.map(r => ({ ...r, entryDate: toDateStr(r.entryDate) }));
+  }
+
+  /** Throw 403 if the role does not have the required action on the given module */
+  async assertPermission(roleCode: string, module: string, action: 'canRead' | 'canCreate' | 'canWrite' | 'canDelete' | 'canReport'): Promise<void> {
+    if (!roleCode) throw new ForbiddenException('No role assigned');
+    const res = await this.devPool.request()
+      .input('roleCode', mssql.NVarChar(30), roleCode)
+      .input('module',   mssql.NVarChar(50), module)
+      .query<Record<string, boolean>>(`
+        SELECT canCreate, canRead, canWrite, canDelete, canReport
+        FROM   PSTsRolePermissions
+        WHERE  roleCode = @roleCode AND module = @module
+      `);
+    const row = res.recordset[0];
+    if (!row || !row[action])
+      throw new ForbiddenException(`You do not have ${action} permission for the ${module} module`);
+  }
+
+  /** Derive the tsType module name (PROD/INST/PROJ) from a document number */
+  typeFromDocNo(docNo: string): string {
+    if (docNo.startsWith('TS-INST')) return 'INST';
+    if (docNo.startsWith('TS-PROJ')) return 'PROJ';
+    return 'PROD';
   }
 
   /** Check if a role has canWrite on any timesheet module — determines approver eligibility */

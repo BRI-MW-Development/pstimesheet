@@ -63,6 +63,14 @@ export class TimesheetsController {
     }
   }
 
+  /** Normalize ?type query param to uppercase module name */
+  private typeToModule(type?: string): string {
+    const t = (type ?? '').toUpperCase();
+    if (t === 'INST') return 'INST';
+    if (t === 'PROJ') return 'PROJ';
+    return 'PROD';
+  }
+
   @Get()
   async list(
     @Query('type')        type?: string,
@@ -73,31 +81,49 @@ export class TimesheetsController {
     @Query('department')  department?: string,
     @Req() req?: any,
   ) {
-    const userId = req?.currentUser?.userId;
     const roleCode = req?.currentUser?.roleCode ?? '';
+    await this.timesheetsService.assertPermission(roleCode, this.typeToModule(type), 'canRead');
+    const userId = req?.currentUser?.userId;
     const isAdmin = ['Admin', 'Manager', 'Supervisor'].includes(roleCode);
     const seeAll = isAdmin || (await this.timesheetsService.isTimesheetApprover(roleCode));
     return this.timesheetsService.list(type, workOrderNo, dateFrom, dateTo, status, department, userId, seeAll);
   }
 
   @Get('pending-approvals')
-  getPendingApprovals(@Query('department') department?: string) {
+  async getPendingApprovals(@Query('department') department?: string, @Req() req?: any) {
+    // Accessible to any role that can approve (canWrite) on at least one timesheet type
+    const isApprover = await this.timesheetsService.isTimesheetApprover(req?.currentUser?.roleCode ?? '');
+    if (!isApprover) throw new HttpException({ message: 'You do not have permission to view pending approvals' }, HttpStatus.FORBIDDEN);
     return this.timesheetsService.getPendingApprovals(department);
   }
 
   @Get('ts-employees')
-  getTsEmployees() {
+  async getTsEmployees(@Req() req?: any) {
+    const roleCode = req?.currentUser?.roleCode ?? '';
+    // Accessible to anyone with at least one timesheet read permission
+    const hasProd = await this.timesheetsService.assertPermission(roleCode, 'PROD', 'canRead').then(() => true).catch(() => false);
+    const hasInst = !hasProd && await this.timesheetsService.assertPermission(roleCode, 'INST', 'canRead').then(() => true).catch(() => false);
+    const hasProj = !hasProd && !hasInst && await this.timesheetsService.assertPermission(roleCode, 'PROJ', 'canRead').then(() => true).catch(() => false);
+    if (!hasProd && !hasInst && !hasProj) throw new HttpException({ message: 'Forbidden' }, HttpStatus.FORBIDDEN);
     return this.timesheetsService.getTsEmployees();
   }
 
   @Get('project-codes')
-  getProjectCodes() {
+  async getProjectCodes(@Req() req?: any) {
+    const roleCode = req?.currentUser?.roleCode ?? '';
+    const ok = await Promise.any([
+      this.timesheetsService.assertPermission(roleCode, 'PROD', 'canRead'),
+      this.timesheetsService.assertPermission(roleCode, 'INST', 'canRead'),
+      this.timesheetsService.assertPermission(roleCode, 'PROJ', 'canRead'),
+    ]).then(() => true).catch(() => false);
+    if (!ok) throw new HttpException({ message: 'Forbidden' }, HttpStatus.FORBIDDEN);
     return this.timesheetsService.getDistinctProjectCodes();
   }
 
   @Post(':docNo/submit')
   async submitForApproval(@Param('docNo') docNo: string, @Req() req: any) {
     try {
+      await this.timesheetsService.assertPermission(req.currentUser?.roleCode ?? '', this.timesheetsService.typeFromDocNo(docNo), 'canCreate');
       const ts = await this.timesheetsService.get(docNo);
       if (!ts) throw new NotFoundException(`Timesheet ${docNo} not found`);
       const byName = req.currentUser?.displayName || '';
@@ -199,40 +225,47 @@ export class TimesheetsController {
   }
 
   @Get('report-detail')
-  reportDetail(
+  async reportDetail(
     @Query('dateFrom')    dateFrom?: string,
     @Query('dateTo')      dateTo?: string,
     @Query('type')        type?: string,
     @Query('status')      status?: string,
     @Query('department')  department?: string,
     @Query('workOrderNo') workOrderNo?: string,
+    @Req() req?: any,
   ) {
+    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', this.typeToModule(type), 'canReport');
     return this.timesheetsService.reportDetail({ dateFrom, dateTo, type, status, department, workOrderNo });
   }
 
   @Get('report-summary')
-  reportSummary(
+  async reportSummary(
     @Query('dateFrom')   dateFrom?: string,
     @Query('dateTo')     dateTo?: string,
     @Query('type')       type?: string,
     @Query('status')     status?: string,
     @Query('department') department?: string,
+    @Req() req?: any,
   ) {
+    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', this.typeToModule(type), 'canReport');
     return this.timesheetsService.reportSummary({ dateFrom, dateTo, type, status, department });
   }
 
   @Get('preview-docno')
-  previewDocNo(@Query('type') type?: string) {
+  async previewDocNo(@Query('type') type?: string, @Req() req?: any) {
+    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', this.typeToModule(type), 'canCreate');
     return this.timesheetsService.previewDocNo(type || 'PROD');
   }
 
   @Get('doc-numbering')
-  getDocNumbering() {
+  async getDocNumbering(@Req() req?: any) {
+    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', 'DOC_NUMBERING', 'canRead');
     return this.timesheetsService.getDocNumberingSettings();
   }
 
   @Put('doc-numbering')
-  async updateDocNumbering(@Body() body: { rows: { docType: string; prefix: string; sequenceDigits: number }[] }) {
+  async updateDocNumbering(@Body() body: { rows: { docType: string; prefix: string; sequenceDigits: number }[] }, @Req() req?: any) {
+    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', 'DOC_NUMBERING', 'canWrite');
     try {
       await this.timesheetsService.updateDocNumberingSettings(body.rows);
       return { ok: true };
@@ -246,7 +279,8 @@ export class TimesheetsController {
   }
 
   @Get(':docNo')
-  async get(@Param('docNo') docNo: string) {
+  async get(@Param('docNo') docNo: string, @Req() req?: any) {
+    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', this.timesheetsService.typeFromDocNo(docNo), 'canRead');
     const record = await this.timesheetsService.get(docNo);
     if (!record) throw new NotFoundException(`Timesheet ${docNo} not found`);
     return record;
@@ -256,6 +290,7 @@ export class TimesheetsController {
   @HttpCode(201)
   async create(@Body() body: any, @Req() req: any) {
     try {
+      await this.timesheetsService.assertPermission(req.currentUser?.roleCode ?? '', (body.tsType ?? 'PROD').toUpperCase(), 'canCreate');
       // Enforce entry person from authenticated session — never trust client
       body.entryPerson    = req.currentUser?.displayName ?? req.currentUser?.username ?? body.entryPerson;
       body.entered_by_name = body.entryPerson;
@@ -273,6 +308,7 @@ export class TimesheetsController {
   @Put(':docNo')
   async update(@Param('docNo') docNo: string, @Body() body: any, @Req() req: any) {
     try {
+      await this.timesheetsService.assertPermission(req.currentUser?.roleCode ?? '', this.timesheetsService.typeFromDocNo(docNo), 'canWrite');
       const before = await this.timesheetsService.get(docNo).catch(() => null);
       const isApprover = await this.isTimesheetApprover(req.currentUser?.roleCode);
       // Non-approvers cannot edit a Submitted timesheet
@@ -298,6 +334,7 @@ export class TimesheetsController {
     @Req() req: any,
   ) {
     try {
+      await this.timesheetsService.assertPermission(req.currentUser?.roleCode ?? '', 'PROJ', 'canCreate');
       const entryPerson = req.currentUser?.displayName || '';
       const records: any[] = [];
 
@@ -351,6 +388,8 @@ export class TimesheetsController {
   @HttpCode(201)
   async batchCreate(@Body() body: { records: any[] }, @Req() req: any) {
     try {
+      const batchType = ((body.records?.[0]?.tsType) ?? 'PROD').toUpperCase();
+      await this.timesheetsService.assertPermission(req.currentUser?.roleCode ?? '', batchType, 'canCreate');
       const results = await this.timesheetsService.batchCreate(body.records ?? []);
       const type = body.records?.[0]?.tsType || 'PROD';
       const count = results?.results?.length ?? 0;
@@ -365,6 +404,7 @@ export class TimesheetsController {
   @Delete(':docNo')
   async remove(@Param('docNo') docNo: string, @Req() req: any) {
     try {
+      await this.timesheetsService.assertPermission(req.currentUser?.roleCode ?? '', this.timesheetsService.typeFromDocNo(docNo), 'canDelete');
       await this.timesheetsService.remove(docNo);
       this.auditService.log({ docType: 'TIMESHEET', docRef: docNo, action: 'DELETE', performedBy: req.currentUser?.userId, performedByName: req.currentUser?.displayName, details: `Deleted timesheet` });
       return { ok: true };
