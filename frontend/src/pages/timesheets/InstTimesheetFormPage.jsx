@@ -73,6 +73,8 @@ export default function InstTimesheetFormPage() {
     queryKey: ['timesheet', docNo],
     queryFn: () => api.get(`/timesheets/${docNo}`).then((r) => r.data),
     enabled: isEdit,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 
   useEffect(() => {
@@ -196,6 +198,13 @@ export default function InstTimesheetFormPage() {
       seen.add(key);
     }
 
+    // same start & end time = zero duration
+    for (const r of filledLabour) {
+      if (r.startTime && r.endTime && r.startTime === r.endTime) {
+        toast(`Start time and end time cannot be the same for employee ${r.employee}.`, 'error'); return;
+      }
+    }
+
     // #13 — overlapping times for same employee
     const byEmp = {};
     for (const r of filledLabour) {
@@ -208,6 +217,14 @@ export default function InstTimesheetFormPage() {
         if (slots[i].s < slots[i - 1].e) {
           toast(`Overlapping time entries for employee ${emp}.`, 'error'); return;
         }
+      }
+    }
+
+    // material qty required
+    const filledMaterial = materialRows.filter((r) => r.itemCode);
+    for (const r of filledMaterial) {
+      if (!r.qty || Number(r.qty) <= 0) {
+        toast(`Qty is required for material item ${r.itemCode}.`, 'error'); return;
       }
     }
 
