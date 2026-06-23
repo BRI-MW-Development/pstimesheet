@@ -427,7 +427,7 @@ export class AuthService implements OnModuleInit {
     const tsWhere = `isDeleted = 0 AND ${typeSql} ${ownSql}`;
 
     // ── 3. Run queries in parallel ─────────────────────────────────────────
-    const addScopeParams = (req: any) => {
+    const addScopeParams = (req: mssql.Request): mssql.Request => {
       req.input('uid', mssql.NVarChar(30), userId);
       if (dataScope === 'OwnDept' && departmentCode) req.input('deptCode', mssql.NVarChar(30), departmentCode);
       return req;
