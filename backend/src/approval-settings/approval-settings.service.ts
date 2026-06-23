@@ -197,11 +197,15 @@ export class ApprovalSettingsService implements OnModuleInit {
         : { allowed: false, reason: 'No approval rules configured and you do not have canWrite permission.' };
     }
 
-    // Score each rule: count how many criteria match
+    // Score each rule: count how many real criteria match.
+    // Rules with no real criteria (catch-alls) score 0.
+    // Rules with n matching criteria score n (higher = more specific = wins).
+    // Returns -1 if any criterion fails to match (AND logic).
     const scoreRule = (rule: any): number => {
-      if (!rule.criteria?.length) return 1; // no criteria = lowest priority match
+      const realCriteria = (rule.criteria ?? []).filter((c: any) => c.field && c.value);
+      if (!realCriteria.length) return 0; // no real criteria = catch-all, lowest priority
       let score = 0;
-      for (const c of rule.criteria) {
+      for (const c of realCriteria) {
         const tsVal = (
           c.field === 'department'   ? ts.department_code :
           c.field === 'shift'        ? ts.shiftCode :
@@ -211,14 +215,14 @@ export class ApprovalSettingsService implements OnModuleInit {
         const ruleVal = (c.value ?? '').toString().toLowerCase();
         const op = c.operator ?? 'equals';
         const matches =
-          op === 'equals'     ? tsVal === ruleVal :
-          op === 'not equals' ? tsVal !== ruleVal :
-          op === 'contains'   ? tsVal.includes(ruleVal) :
-          op === 'starts with'? tsVal.startsWith(ruleVal) : false;
+          op === 'equals'      ? tsVal === ruleVal :
+          op === 'not equals'  ? tsVal !== ruleVal :
+          op === 'contains'    ? tsVal.includes(ruleVal) :
+          op === 'starts with' ? tsVal.startsWith(ruleVal) : false;
         if (matches) score++;
         else return -1; // AND logic — all criteria must match
       }
-      return score;
+      return score; // ≥ 1 for any real match
     };
 
     const scored = applicableRules
