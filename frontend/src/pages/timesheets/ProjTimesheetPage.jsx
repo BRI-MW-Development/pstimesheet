@@ -8,6 +8,7 @@ import Table, { WipListHeader } from '../../components/ui/Table';
 import TimeInput from '../../components/ui/TimeInput';
 import { useToast } from '../../context/ToastContext';
 import { useAuthStore } from '../../store/authStore';
+import { usePermission } from '../../hooks/usePermission';
 import { formatDate } from '../../utils/format';
 
 const STATUS_VARIANT = { Draft: 'draft', Submitted: 'submitted', Approved: 'approved', Rejected: 'rejected' };
@@ -528,6 +529,9 @@ function FilterPanel({ filters, setFilters, onClear }) {
 export default function ProjTimesheetPage() {
   const toast        = useToast();
   const queryClient  = useQueryClient();
+  const canCreate    = usePermission('PROJ', 'canCreate');
+  const canWrite     = usePermission('PROJ', 'canWrite');
+  const canDelete    = usePermission('PROJ', 'canDelete');
   const [view, setView] = useState('list'); // 'list' | 'daily' | 'weekly'
   const [editDocNo, setEditDocNo] = useState(null);
   const [isReadonly, setIsReadonly] = useState(false);
@@ -577,13 +581,13 @@ export default function ProjTimesheetPage() {
             onClick={() => { setEditDocNo(row.docNo); setIsReadonly(true); setView('daily'); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
-          {isWithin24h(row.createdAt) && (
+          {canWrite && isWithin24h(row.createdAt) && (
             <button className="wip-icon-btn wip-icon-btn-edit" title="Edit"
               onClick={() => { setEditDocNo(row.docNo); setIsReadonly(false); setView('daily'); }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
           )}
-          {isWithin24h(row.createdAt) && (
+          {canDelete && isWithin24h(row.createdAt) && (
             <button className="wip-icon-btn wip-icon-btn-delete" title="Delete"
               onClick={() => { if (confirm('Delete this timesheet?')) deleteTs(row.docNo); }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
@@ -616,7 +620,7 @@ export default function ProjTimesheetPage() {
               setFilters={setFilters}
               onClear={() => setFilters({ dateFrom: '', dateTo: '', status: '' })}
             />
-            <button className="btn btn-primary btn-sm" onClick={() => setShowTypeModal(true)}>+ New</button>
+            {canCreate && <button className="btn btn-primary btn-sm" onClick={() => setShowTypeModal(true)}>+ New</button>}
           </>
         }
       />

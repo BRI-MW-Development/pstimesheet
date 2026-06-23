@@ -5,6 +5,7 @@ import Table, { WipListHeader } from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import { useToast } from '../../context/ToastContext';
+import { usePermission } from '../../hooks/usePermission';
 
 const MODULE_LABELS = {
   PROD: 'Production Timesheets', INST: 'Installation Timesheets', PROJ: 'Projects Timesheets',
@@ -214,6 +215,7 @@ function RoleModal({ role, onClose }) {
 export default function RolesPage() {
   const [editing, setEditing] = useState(null);
   const [search, setSearch]   = useState('');
+  const canWrite = usePermission('ROLES', 'canWrite');
 
   const { data: roles = [], isLoading, isError, error } = useQuery({
     queryKey: ['roles'],
@@ -242,11 +244,11 @@ export default function RolesPage() {
     { key: 'userCount', label: 'Users', sort: true, render: (r) => r.userCount ?? 0 },
     {
       key: 'actions', label: '', sort: false,
-      render: (row) => (
+      render: (row) => canWrite ? (
         <button className="wip-icon-btn wip-icon-btn-edit" title="Edit" onClick={() => setEditing(row)}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
-      ),
+      ) : null,
     },
   ];
 
@@ -258,7 +260,7 @@ export default function RolesPage() {
         search={search}
         onSearch={setSearch}
         actions={
-          <button className="btn btn-primary btn-sm" onClick={() => setEditing({})}>+ Add Role</button>
+          {canWrite && <button className="btn btn-primary btn-sm" onClick={() => setEditing({})}>+ Add Role</button>}
         }
       />
       {isError && (

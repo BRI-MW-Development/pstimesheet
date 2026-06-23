@@ -6,6 +6,7 @@ import Table, { WipListHeader } from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useToast } from '../../context/ToastContext';
 import { useAuthStore } from '../../store/authStore';
+import { usePermission } from '../../hooks/usePermission';
 import { formatDate } from '../../utils/format';
 
 const STATUS_VARIANT = { Draft: 'draft', Submitted: 'submitted', Approved: 'approved', Rejected: 'rejected' };
@@ -111,7 +112,10 @@ export default function InstTimesheetListPage() {
     onError: (err) => toast(err?.response?.data?.message ?? 'Action failed.', 'error'),
   });
 
-  const isApprover = permissions.some((p) => p.module === 'Installation Timesheets' && p.canReport === true);
+  const isApprover = permissions.some((p) => p.module === 'INST' && p.canWrite && p.canReport);
+  const canCreate  = usePermission('INST', 'canCreate');
+  const canWrite   = usePermission('INST', 'canWrite');
+  const canDelete  = usePermission('INST', 'canDelete');
 
   const columns = [
     { key: '#',              label: '#',            num: true,  sort: false, render: (_, i) => i + 1 },
@@ -136,7 +140,7 @@ export default function InstTimesheetListPage() {
             onClick={() => navigate(`/timesheets/inst/${row.docNo}/view`)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
-          {row.status === 'Draft' || (row.status === 'Submitted' && isApprover) ? (
+          {canWrite && (row.status === 'Draft' || (row.status === 'Submitted' && isApprover)) ? (
             <button className="wip-icon-btn wip-icon-btn-edit" title="Edit"
               onClick={() => navigate(`/timesheets/inst/${row.docNo}/edit`)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -144,14 +148,18 @@ export default function InstTimesheetListPage() {
           ) : null}
           {row.status === 'Draft' && (
             <>
-              <button className="wip-icon-btn wip-icon-btn-submit" title="Submit for approval"
-                onClick={() => submitTs(row.docNo)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              </button>
-              <button className="wip-icon-btn wip-icon-btn-delete" title="Delete"
-                onClick={() => { if (confirm('Delete?')) deleteTs(row.docNo); }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-              </button>
+              {canWrite && (
+                <button className="wip-icon-btn wip-icon-btn-submit" title="Submit for approval"
+                  onClick={() => submitTs(row.docNo)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+              )}
+              {canDelete && (
+                <button className="wip-icon-btn wip-icon-btn-delete" title="Delete"
+                  onClick={() => { if (confirm('Delete?')) deleteTs(row.docNo); }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
+              )}
             </>
           )}
         </div>
@@ -173,9 +181,11 @@ export default function InstTimesheetListPage() {
               setFilters={setFilters}
               onClear={() => setFilters({ dateFrom: '', dateTo: '', status: '' })}
             />
-            <button className="btn btn-primary btn-sm" onClick={() => navigate('/timesheets/inst/new')}>
-              + New
-            </button>
+            {canCreate && (
+              <button className="btn btn-primary btn-sm" onClick={() => navigate('/timesheets/inst/new')}>
+                + New
+              </button>
+            )}
           </>
         }
       />
