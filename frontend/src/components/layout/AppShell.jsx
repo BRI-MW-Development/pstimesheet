@@ -20,7 +20,7 @@ const NAV_GROUPS = [
       { label: 'Production',        to: '/timesheets/prod',              perm: { module: 'PROD',        action: 'canRead' } },
       { label: 'Installation',      to: '/timesheets/inst',              perm: { module: 'INST',        action: 'canRead' } },
       { label: 'Projects Team',     to: '/timesheets/project',           perm: { module: 'PROJ',        action: 'canRead' } },
-      { label: 'Pending Approvals', to: '/timesheets/pending-approvals', perm: { module: 'PROD',        action: 'canWrite' } },
+      { label: 'Pending Approvals', to: '/timesheets/pending-approvals', perm: { module: 'PENDING_APPROVALS', action: 'canRead' } },
       { label: 'WO Complete',       to: '/woc',                          perm: { module: 'WO_COMPLETE', action: 'canRead' } },
     ],
   },
