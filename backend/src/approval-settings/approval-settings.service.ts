@@ -231,22 +231,18 @@ export class ApprovalSettingsService implements OnModuleInit {
 
     const best = scored[0].rule;
 
-    if (best.anyApprover) {
-      return hasCanWrite
-        ? { allowed: true,  reason: `Rule "${best.module}" allows any approver with permission.` }
-        : { allowed: false, reason: 'You do not have approver permission on this timesheet module.' };
-    }
+    // Always check the designated approver list first.
+    // anyApprover = true means "one of the listed approvers is sufficient" (not "anyone can approve").
+    // We only fall back to anyApprover behaviour when the list is completely empty.
+    const allowedIds   = this.splitTrim(best.approverUserIds);
+    const allowedNames = this.splitTrim(best.approverNames);
 
-    // Check by userId first (most reliable)
-    const allowedIds = this.splitTrim(best.approverUserIds);
     if (allowedIds.length > 0) {
       return allowedIds.includes(userId)
         ? { allowed: true,  reason: 'You are a designated approver for this rule.' }
-        : { allowed: false, reason: `This timesheet requires approval by a designated approver. You are not listed.` };
+        : { allowed: false, reason: 'This timesheet requires approval by a designated approver. You are not listed.' };
     }
 
-    // Fall back to display name match when userId was not recorded
-    const allowedNames = this.splitTrim(best.approverNames);
     if (allowedNames.length > 0) {
       const nameMatch = allowedNames.some(
         n => n.toLowerCase() === (displayName ?? '').toLowerCase()
@@ -254,6 +250,14 @@ export class ApprovalSettingsService implements OnModuleInit {
       return nameMatch
         ? { allowed: true,  reason: 'You are a designated approver (matched by name).' }
         : { allowed: false, reason: `This timesheet requires approval by: ${allowedNames.join(', ')}. You are not listed.` };
+    }
+
+    // No specific approvers configured — fall back to the anyApprover flag.
+    // anyApprover = true → any role-level approver with canWrite can approve.
+    if (best.anyApprover) {
+      return hasCanWrite
+        ? { allowed: true,  reason: `Rule "${best.module}" allows any approver with permission.` }
+        : { allowed: false, reason: 'You do not have approver permission on this timesheet module.' };
     }
 
     return { allowed: false, reason: 'No approvers are configured for this rule. Contact your administrator.' };
