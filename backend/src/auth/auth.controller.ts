@@ -88,7 +88,7 @@ export class AuthController {
 
   @Get('dashboard-stats')
   getDashboardStats(@Req() req: any) {
-    return this.authService.getDashboardStats(req.currentUser.userId, req.currentUser.roleCode);
+    return this.authService.getDashboardStats(req.currentUser.userId, req.currentUser.roleCode, req.currentUser.departmentCode ?? null);
   }
 
   @Get('login-history')

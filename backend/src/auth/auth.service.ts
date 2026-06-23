@@ -148,11 +148,11 @@ export class AuthService implements OnModuleInit {
   }
 
   // ── Validate session (used by guard) ──────────────────────────────────────
-  async validateSession(token: string): Promise<{ userId: string; username: string; displayName: string; roleCode: string; employeeCode: string | null }> {
+  async validateSession(token: string): Promise<{ userId: string; username: string; displayName: string; roleCode: string; employeeCode: string | null; departmentCode: string | null }> {
     const res = await this.pool.request()
       .input('token', mssql.NVarChar(64), token)
-      .query<{ userId: string; username: string; displayName: string; roleCode: string; employeeCode: string | null; expiresAt: Date; isActive: boolean }>(`
-        SELECT s.userId, u.username, u.displayName, u.roleCode, u.employeeCode, s.expiresAt, s.isActive
+      .query<{ userId: string; username: string; displayName: string; roleCode: string; employeeCode: string | null; departmentCode: string | null; expiresAt: Date; isActive: boolean }>(`
+        SELECT s.userId, u.username, u.displayName, u.roleCode, u.employeeCode, u.departmentCode, s.expiresAt, s.isActive
         FROM   PSTsSessions s
         JOIN   PSTsUsers    u ON u.userId = s.userId
         WHERE  s.sessionToken = @token
@@ -166,7 +166,7 @@ export class AuthService implements OnModuleInit {
       .input('token', mssql.NVarChar(64), token)
       .query(`UPDATE PSTsSessions SET lastActiveAt=GETDATE() WHERE sessionToken=@token`);
 
-    return { userId: session.userId, username: session.username, displayName: session.displayName, roleCode: session.roleCode, employeeCode: session.employeeCode ?? null };
+    return { userId: session.userId, username: session.username, displayName: session.displayName, roleCode: session.roleCode, employeeCode: session.employeeCode ?? null, departmentCode: session.departmentCode ?? null };
   }
 
   // ── Login history ──────────────────────────────────────────────────────────
@@ -378,7 +378,7 @@ export class AuthService implements OnModuleInit {
   }
 
   // ── Dashboard stats (role-aware) ──────────────────────────────────────────
-  async getDashboardStats(userId: string, roleCode: string) {
+  async getDashboardStats(userId: string, roleCode: string, departmentCode: string | null = null) {
     // ── 1. Look up role's dataScope and accessible TS modules ──────────────
     const [roleQ, permsQ] = await Promise.all([
       this.pool.request()
@@ -416,16 +416,24 @@ export class AuthService implements OnModuleInit {
         : '1=1';
 
     // 'Own'     → filter to records entered by this user only.
-    // 'OwnDept' → dept-level leaders see all records of their accessible tsTypes (no extra filter
-    //             needed — the tsType permission above already restricts to their dept's type).
+    // 'OwnDept' → filter to records in the user's assigned department.
     // 'All'     → no additional filter.
-    const ownSql = dataScope === 'Own' ? `AND enteredByUserId = @uid` : '';
+    const ownSql = dataScope === 'Own'
+      ? `AND enteredByUserId = @uid`
+      : dataScope === 'OwnDept' && departmentCode
+        ? `AND department_code = @deptCode`
+        : '';
 
     const tsWhere = `isDeleted = 0 AND ${typeSql} ${ownSql}`;
 
     // ── 3. Run queries in parallel ─────────────────────────────────────────
-    const tsReq    = this.pool.request().input('uid', mssql.NVarChar(30), userId);
-    const recReq   = this.pool.request().input('uid', mssql.NVarChar(30), userId);
+    const addScopeParams = (req: any) => {
+      req.input('uid', mssql.NVarChar(30), userId);
+      if (dataScope === 'OwnDept' && departmentCode) req.input('deptCode', mssql.NVarChar(30), departmentCode);
+      return req;
+    };
+    const tsReq  = addScopeParams(this.pool.request());
+    const recReq = addScopeParams(this.pool.request());
 
     const [tsRes, wocRes, qcRes, recentRes] = await Promise.all([
       tsReq.query<{ total: number; draft: number; submitted: number; approved: number; thisMonth: number; prodCount: number; instCount: number; projCount: number }>(`

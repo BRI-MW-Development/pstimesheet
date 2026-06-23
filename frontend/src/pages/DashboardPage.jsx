@@ -48,7 +48,7 @@ export default function DashboardPage() {
   const hasInst    = permissions.some(p => p.module === 'INST'        && p.canRead);
   const hasProj    = permissions.some(p => p.module === 'PROJ'        && p.canRead);
   const hasWoc     = permissions.some(p => p.module === 'WO_COMPLETE' && p.canRead);
-  const canApprove = permissions.some(p => ['PROD','INST','PROJ'].includes(p.module) && p.canWrite);
+  const canApprove = permissions.some(p => ['PROD','INST','PROJ'].includes(p.module) && p.canWrite && p.canReport);
   const isOwnScope = dataScope === 'Own';
   const tsTypeCount = [hasProd, hasInst, hasProj].filter(Boolean).length;
 
