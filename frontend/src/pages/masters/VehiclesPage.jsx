@@ -36,7 +36,6 @@ function VehicleForm({ initial, onSave, onClose, saving, title }) {
           <select className="form-control" value={form.status ?? 'Active'} onChange={(e) => set('status', e.target.value)}>
             <option>Active</option>
             <option>Inactive</option>
-            <option>Under Maintenance</option>
           </select>
         </div>
         <div className="modal-foot">
@@ -59,7 +58,7 @@ function VehicleDetail({ vehicle, onClose, onEdit }) {
           <div className="modal-banner-sub">{vehicle.vehicleType ?? 'Unknown type'}</div>
         </div>
         <div className="modal-banner-right">
-          <Badge variant={vehicle.status === 'Active' ? 'active' : vehicle.status === 'Under Maintenance' ? 'warning' : 'inactive'}>
+          <Badge variant={vehicle.status === 'Active' ? 'active' : 'inactive'}>
             {vehicle.status ?? '—'}
           </Badge>
         </div>
@@ -70,7 +69,7 @@ function VehicleDetail({ vehicle, onClose, onEdit }) {
         <div className="detail-row"><span>Type</span><span>{vehicle.vehicleType ?? '—'}</span></div>
         <div className="detail-row">
           <span>Status</span>
-          <Badge variant={vehicle.status === 'Active' ? 'active' : vehicle.status === 'Under Maintenance' ? 'warning' : 'inactive'}>
+          <Badge variant={vehicle.status === 'Active' ? 'active' : 'inactive'}>
             {vehicle.status ?? '—'}
           </Badge>
         </div>
@@ -131,7 +130,7 @@ export default function VehiclesPage() {
     {
       key: 'status', label: 'Status', sort: true,
       render: (row) => (
-        <Badge variant={row.status === 'Active' ? 'active' : row.status === 'Under Maintenance' ? 'warning' : 'inactive'}>
+        <Badge variant={row.status === 'Active' ? 'active' : 'inactive'}>
           {row.status}
         </Badge>
       ),

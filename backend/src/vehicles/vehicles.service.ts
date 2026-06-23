@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import type { ConnectionPool } from 'mssql';
 import * as mssql from 'mssql';
 import { DEV_SQL_POOL } from '../database/database.constants';
@@ -17,8 +17,26 @@ export interface Vehicle {
 }
 
 @Injectable()
-export class VehiclesService {
+export class VehiclesService implements OnModuleInit {
+  private readonly logger = new Logger(VehiclesService.name);
+
   constructor(@Inject(DEV_SQL_POOL) private readonly pool: ConnectionPool) {}
+
+  async onModuleInit() {
+    try {
+      await this.pool.request().query(`
+        IF NOT EXISTS (
+          SELECT 1 FROM sys.indexes
+          WHERE object_id = OBJECT_ID('PSTsVehicles') AND name = 'UQ_PSTsVehicles_plateNo'
+        )
+        BEGIN
+          ALTER TABLE PSTsVehicles ADD CONSTRAINT UQ_PSTsVehicles_plateNo UNIQUE (plateNo)
+        END
+      `);
+    } catch (err: any) {
+      this.logger.warn('Could not create unique constraint on PSTsVehicles.plateNo: ' + err?.message);
+    }
+  }
 
   async findAll(): Promise<Vehicle[]> {
     const res = await this.pool.request().query<Vehicle>(`
@@ -87,21 +105,28 @@ export class VehiclesService {
     yearModel?: number; status?: string; remarks?: string;
   }): Promise<Vehicle> {
     const existing = await this.findOne(vehicleId);
-    await this.pool.request()
-      .input('vehicleId',   mssql.NVarChar(30),  existing.vehicleId)
-      .input('plateNo',     mssql.NVarChar(30),  body.plateNo?.trim().toUpperCase()  ?? existing.plateNo)
-      .input('vehicleType', mssql.NVarChar(50),  body.vehicleType?.trim()            ?? existing.vehicleType)
-      .input('make',        mssql.NVarChar(80),  body.make    !== undefined ? (body.make    || null) : existing.make)
-      .input('model',       mssql.NVarChar(80),  body.model   !== undefined ? (body.model   || null) : existing.model)
-      .input('yearModel',   mssql.Int,            body.yearModel !== undefined ? (body.yearModel ? Number(body.yearModel) : null) : existing.yearModel)
-      .input('status',      mssql.NVarChar(10),  body.status  ?? existing.status)
-      .input('remarks',     mssql.NVarChar(250), body.remarks !== undefined ? (body.remarks || null) : existing.remarks)
-      .query(`
-        UPDATE PSTsVehicles
-        SET    plateNo=@plateNo, vehicleType=@vehicleType, make=@make, model=@model,
-               yearModel=@yearModel, status=@status, remarks=@remarks, updatedAt=GETDATE()
-        WHERE  vehicleId=@vehicleId
-      `);
+    const newPlateNo = body.plateNo?.trim().toUpperCase() ?? existing.plateNo;
+    try {
+      await this.pool.request()
+        .input('vehicleId',   mssql.NVarChar(30),  existing.vehicleId)
+        .input('plateNo',     mssql.NVarChar(30),  newPlateNo)
+        .input('vehicleType', mssql.NVarChar(50),  body.vehicleType?.trim()            ?? existing.vehicleType)
+        .input('make',        mssql.NVarChar(80),  body.make    !== undefined ? (body.make    || null) : existing.make)
+        .input('model',       mssql.NVarChar(80),  body.model   !== undefined ? (body.model   || null) : existing.model)
+        .input('yearModel',   mssql.Int,            body.yearModel !== undefined ? (body.yearModel ? Number(body.yearModel) : null) : existing.yearModel)
+        .input('status',      mssql.NVarChar(10),  body.status  ?? existing.status)
+        .input('remarks',     mssql.NVarChar(250), body.remarks !== undefined ? (body.remarks || null) : existing.remarks)
+        .query(`
+          UPDATE PSTsVehicles
+          SET    plateNo=@plateNo, vehicleType=@vehicleType, make=@make, model=@model,
+                 yearModel=@yearModel, status=@status, remarks=@remarks, updatedAt=GETDATE()
+          WHERE  vehicleId=@vehicleId
+        `);
+    } catch (err: any) {
+      if (err?.number === 2627 || err?.number === 2601)
+        throw new BadRequestException(`Plate number '${newPlateNo}' already exists`);
+      throw err;
+    }
     return this.findOne(vehicleId);
   }
 
