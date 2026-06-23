@@ -112,6 +112,26 @@ export class TimesheetsService implements OnModuleInit {
         )
           ALTER TABLE PSTsMaterialLine ALTER COLUMN itemCode NVARCHAR(100) NULL;
       `);
+      // Widen PSTsHeader.workOrderNo to NVARCHAR(100) — ERP WO numbers can exceed 60 chars
+      await this.devPool.request().query(`
+        IF EXISTS (
+          SELECT 1 FROM sys.columns
+          WHERE object_id = OBJECT_ID('PSTsHeader')
+            AND name = 'workOrderNo'
+            AND max_length < 200
+        )
+          ALTER TABLE PSTsHeader ALTER COLUMN workOrderNo NVARCHAR(100) NULL;
+      `);
+      // Widen PSTsLabourLine.employeeCode to NVARCHAR(100)
+      await this.devPool.request().query(`
+        IF EXISTS (
+          SELECT 1 FROM sys.columns
+          WHERE object_id = OBJECT_ID('PSTsLabourLine')
+            AND name = 'employeeCode'
+            AND max_length < 200
+        )
+          ALTER TABLE PSTsLabourLine ALTER COLUMN employeeCode NVARCHAR(100) NULL;
+      `);
       const res = await this.devPool.request().query(`
         UPDATE PSTsHeader SET status = 'Submitted' WHERE status = 'Draft'
       `);
@@ -271,7 +291,7 @@ export class TimesheetsService implements OnModuleInit {
       await tx.request()
         .input('tsId',           mssql.BigInt,        tsId)
         .input('lineNumber',     mssql.Int,           i + 1)
-        .input('employeeCode',   mssql.NVarChar(50),  lr.employee   || null)
+        .input('employeeCode',   mssql.NVarChar(100), lr.employee   || null)
         .input('employeeName',   mssql.NVarChar(200), emp.name      || lr.employeeName || lr.employee || null)
         .input('departmentCode', mssql.NVarChar(50),  emp.dept      || null)
         .input('designation',    mssql.NVarChar(100), emp.designation || null)
@@ -397,7 +417,7 @@ export class TimesheetsService implements OnModuleInit {
         .input('entryDate',      mssql.NVarChar(20),  n(body.date))
         .input('projectId',      mssql.NVarChar(50),  n(body.projectId))
         .input('projectName',    mssql.NVarChar(250), n(body.projectName))
-        .input('workOrderNo',    mssql.NVarChar(60),  n(body.workOrder))
+        .input('workOrderNo',    mssql.NVarChar(100),  n(body.workOrder))
         .input('departmentCode', mssql.NVarChar(50),  n(body.department))
         .input('shiftCode',      mssql.NVarChar(30),  n(body.shift))
         .input('enteredByName',   mssql.NVarChar(150), n(body.entryPerson))
@@ -454,7 +474,7 @@ export class TimesheetsService implements OnModuleInit {
   ): Promise<any[]> {
     const req = this.devPool.request();
     if (type)        req.input('tsType',      mssql.NVarChar(20),  type);
-    if (workOrderNo) req.input('workOrderNo', mssql.NVarChar(60),  workOrderNo);
+    if (workOrderNo) req.input('workOrderNo', mssql.NVarChar(100),  workOrderNo);
     if (dateFrom)    req.input('dateFrom',    mssql.NVarChar(20),  dateFrom);
     if (dateTo)      req.input('dateTo',      mssql.NVarChar(20),  dateTo);
     if (status)      req.input('status',      mssql.NVarChar(30),  status);
@@ -538,7 +558,7 @@ export class TimesheetsService implements OnModuleInit {
     const { dateFrom, dateTo, type, status, department, workOrderNo } = filters;
     const req = this.devPool.request();
     if (type)        req.input('tsType',     mssql.NVarChar(20),  type);
-    if (workOrderNo) req.input('workOrderNo',mssql.NVarChar(60),  workOrderNo);
+    if (workOrderNo) req.input('workOrderNo',mssql.NVarChar(100),  workOrderNo);
     if (dateFrom)    req.input('dateFrom',   mssql.NVarChar(20),  dateFrom);
     if (dateTo)      req.input('dateTo',     mssql.NVarChar(20),  dateTo);
     if (status)      req.input('status',     mssql.NVarChar(30),  status);
@@ -734,7 +754,7 @@ export class TimesheetsService implements OnModuleInit {
         .input('entryDate',      mssql.NVarChar(20),  n(body.date))
         .input('projectId',      mssql.NVarChar(50),  n(body.projectId))
         .input('projectName',    mssql.NVarChar(250), n(body.projectName))
-        .input('workOrderNo',    mssql.NVarChar(60),  n(body.workOrder))
+        .input('workOrderNo',    mssql.NVarChar(100),  n(body.workOrder))
         .input('departmentCode', mssql.NVarChar(50),  n(body.department))
         .input('shiftCode',      mssql.NVarChar(30),  n(body.shift))
         .input('enteredByName',  mssql.NVarChar(150), n(body.entryPerson))
