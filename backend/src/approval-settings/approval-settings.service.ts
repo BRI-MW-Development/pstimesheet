@@ -197,32 +197,45 @@ export class ApprovalSettingsService implements OnModuleInit {
         : { allowed: false, reason: 'No approval rules configured and you do not have canWrite permission.' };
     }
 
-    // Score each rule: count how many real criteria match.
-    // Rules with no real criteria (catch-alls) score 0.
-    // Rules with n matching criteria score n (higher = more specific = wins).
-    // Returns -1 if any criterion fails to match (AND logic).
+    // Score each rule by how many distinct fields match.
+    // Rules with no real criteria (catch-alls) score 0 — lowest priority.
+    // Within the same field, criteria are OR (e.g. Department=CNC OR Department=Acrylic).
+    // Across different fields, groups are AND (Department must match AND Shift must match).
+    // Returns -1 if any field group has no match.
+    const evalCriterion = (c: any): boolean => {
+      const tsVal = (
+        c.field === 'department'  ? ts.department_code :
+        c.field === 'shift'       ? ts.shiftCode :
+        c.field === 'projectNo'   ? ts.projectId :
+        c.field === 'workOrderNo' ? ts.workOrderNo : null
+      )?.toString().toLowerCase() ?? '';
+      const ruleVal = (c.value ?? '').toString().toLowerCase();
+      const op = c.operator ?? 'equals';
+      return op === 'equals'      ? tsVal === ruleVal
+           : op === 'not equals'  ? tsVal !== ruleVal
+           : op === 'contains'    ? tsVal.includes(ruleVal)
+           : op === 'starts with' ? tsVal.startsWith(ruleVal)
+           : false;
+    };
+
     const scoreRule = (rule: any): number => {
       const realCriteria = (rule.criteria ?? []).filter((c: any) => c.field && c.value);
-      if (!realCriteria.length) return 0; // no real criteria = catch-all, lowest priority
-      let score = 0;
+      if (!realCriteria.length) return 0; // catch-all, lowest priority
+
+      // Group by field name
+      const groups: Record<string, any[]> = {};
       for (const c of realCriteria) {
-        const tsVal = (
-          c.field === 'department'   ? ts.department_code :
-          c.field === 'shift'        ? ts.shiftCode :
-          c.field === 'projectNo'    ? ts.projectId :
-          c.field === 'workOrderNo'  ? ts.workOrderNo : null
-        )?.toString().toLowerCase() ?? '';
-        const ruleVal = (c.value ?? '').toString().toLowerCase();
-        const op = c.operator ?? 'equals';
-        const matches =
-          op === 'equals'      ? tsVal === ruleVal :
-          op === 'not equals'  ? tsVal !== ruleVal :
-          op === 'contains'    ? tsVal.includes(ruleVal) :
-          op === 'starts with' ? tsVal.startsWith(ruleVal) : false;
-        if (matches) score++;
-        else return -1; // AND logic — all criteria must match
+        (groups[c.field] ??= []).push(c);
       }
-      return score; // ≥ 1 for any real match
+
+      let score = 0;
+      for (const fieldCriteria of Object.values(groups)) {
+        // OR within same field: at least one criterion must match
+        const fieldMatches = fieldCriteria.some(evalCriterion);
+        if (!fieldMatches) return -1; // AND across fields: one miss = rule fails
+        score++;
+      }
+      return score; // number of distinct fields matched (higher = more specific)
     };
 
     const scored = applicableRules
