@@ -187,8 +187,11 @@ export class ApprovalSettingsService implements OnModuleInit {
       r.module === 'ALL' || r.module === tsModule
     );
 
+    this.logger.debug(`[canApprove] tsType=${ts.tsType} module=${tsModule} allRules=${allRules.length} applicable=${applicableRules.length} userId=${userId} displayName="${displayName}"`);
+
     if (applicableRules.length === 0) {
       // No rules configured — fall back to permission-based check
+      this.logger.warn(`[canApprove] No applicable rules for module=${tsModule} — falling back to canWrite (${hasCanWrite})`);
       return hasCanWrite
         ? { allowed: true,  reason: 'No approval rules configured — permission-based approval allowed.' }
         : { allowed: false, reason: 'No approval rules configured and you do not have canWrite permission.' };
@@ -230,6 +233,7 @@ export class ApprovalSettingsService implements OnModuleInit {
     }
 
     const best = scored[0].rule;
+    this.logger.debug(`[canApprove] best rule id=${best.id} module=${best.module} anyApprover=${best.anyApprover} approverUserIds="${best.approverUserIds}" approverNames="${best.approverNames}"`);
 
     // Always check the designated approver list first.
     // anyApprover = true means "one of the listed approvers is sufficient" (not "anyone can approve").

@@ -108,8 +108,10 @@ export class TimesheetsController {
         { tsType: ts.tsType, department_code: ts.department_code, shiftCode: ts.shiftCode, projectId: ts.projectId, workOrderNo: ts.workOrderNo },
         true,
       );
+      this.logger.debug(`[pending-approvals] ${ts.tsDocNo} (${ts.tsType}) user=${userId} displayName="${displayName}" → allowed=${check.allowed} reason="${check.reason}"`);
       if (check.allowed) allowed.push(ts);
     }
+    this.logger.log(`[pending-approvals] user=${userId} total=${all.length} allowed=${allowed.length}`);
     return allowed;
   }
 
