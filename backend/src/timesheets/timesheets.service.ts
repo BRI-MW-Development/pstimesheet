@@ -91,16 +91,26 @@ export class TimesheetsService implements OnModuleInit {
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='entered_by_user_id')
           ALTER TABLE PSTsHeader ADD entered_by_user_id NVARCHAR(50) NULL;
       `);
-      // Widen itemName if the column exists but is too narrow (< NVARCHAR(500))
+      // Widen itemName to NVARCHAR(MAX) — ERP item descriptions can be very long
       await this.devPool.request().query(`
         IF EXISTS (
           SELECT 1 FROM sys.columns
           WHERE object_id = OBJECT_ID('PSTsMaterialLine')
             AND name = 'itemName'
             AND max_length != -1
-            AND max_length < 1000
         )
-          ALTER TABLE PSTsMaterialLine ALTER COLUMN itemName NVARCHAR(500) NULL;
+          ALTER TABLE PSTsMaterialLine ALTER COLUMN itemName NVARCHAR(MAX) NULL;
+      `);
+      // Widen itemCode to NVARCHAR(100) — some ERP item codes exceed 60 chars
+      await this.devPool.request().query(`
+        IF EXISTS (
+          SELECT 1 FROM sys.columns
+          WHERE object_id = OBJECT_ID('PSTsMaterialLine')
+            AND name = 'itemCode'
+            AND max_length != -1
+            AND max_length < 200
+        )
+          ALTER TABLE PSTsMaterialLine ALTER COLUMN itemCode NVARCHAR(100) NULL;
       `);
       const res = await this.devPool.request().query(`
         UPDATE PSTsHeader SET status = 'Submitted' WHERE status = 'Draft'
@@ -205,40 +215,50 @@ export class TimesheetsService implements OnModuleInit {
   // ── Live DB: employee lookup ────────────────────────────────────
   private async lookupEmployee(code: string): Promise<{ name: string; dept: string; designation: string }> {
     if (!code) return { name: '', dept: '', designation: '' };
-    const r = await this.livePool.request()
-      .input('code', mssql.NVarChar(50), code)
-      .query<{ firstName: string; lastname: string; departmentCode: string; designation: string }>(`
-        SELECT me.firstName, me.lastname,
-               md.departmentCode,
-               mt.taxnomyName AS designation
-        FROM   ErpMasterEmployee me
-        LEFT JOIN ErpMasterDepartment md ON md.departmentId = me.departmentId
-        LEFT JOIN ErpMasterTaxnomy    mt ON mt.taxnomyId    = me.jobTitleId
-        WHERE  me.employeeNo = @code AND me.isDeleted = 0
-      `);
-    const e = r.recordset[0];
-    if (!e) return { name: '', dept: '', designation: '' };
-    return {
-      name:        [e.firstName, e.lastname].filter(Boolean).join(' '),
-      dept:        e.departmentCode  ?? '',
-      designation: e.designation     ?? '',
-    };
+    try {
+      const r = await this.livePool.request()
+        .input('empCode', mssql.NVarChar(100), String(code).slice(0, 100))
+        .query<{ firstName: string; lastname: string; departmentCode: string; designation: string }>(`
+          SELECT me.firstName, me.lastname,
+                 md.departmentCode,
+                 mt.taxnomyName AS designation
+          FROM   ErpMasterEmployee me
+          LEFT JOIN ErpMasterDepartment md ON md.departmentId = me.departmentId
+          LEFT JOIN ErpMasterTaxnomy    mt ON mt.taxnomyId    = me.jobTitleId
+          WHERE  me.employeeNo = @empCode AND me.isDeleted = 0
+        `);
+      const e = r.recordset[0];
+      if (!e) return { name: '', dept: '', designation: '' };
+      return {
+        name:        [e.firstName, e.lastname].filter(Boolean).join(' '),
+        dept:        e.departmentCode  ?? '',
+        designation: e.designation     ?? '',
+      };
+    } catch (err) {
+      this.logger.warn(`lookupEmployee failed for code="${code}": ${(err as Error)?.message}`);
+      return { name: '', dept: '', designation: '' };
+    }
   }
 
   // ── Live DB: item lookup ────────────────────────────────────────
   private async lookupItem(code: string): Promise<{ name: string; uom: string }> {
     if (!code) return { name: '', uom: '' };
-    const r = await this.livePool.request()
-      .input('code', mssql.NVarChar(60), code)
-      .query<{ itemName: string; UOM: string }>(`
-        SELECT mi.itemName, mt.taxnomyCode AS UOM
-        FROM   ErpMasterItem    mi
-        LEFT JOIN ErpMasterTaxnomy mt ON mt.taxnomyId = mi.uomId
-        WHERE  mi.itemcode = @code AND mi.isActive = 1
-      `);
-    const item = r.recordset[0];
-    if (!item) return { name: '', uom: '' };
-    return { name: item.itemName ?? '', uom: item.UOM ?? '' };
+    try {
+      const r = await this.livePool.request()
+        .input('itemCode', mssql.NVarChar(100), String(code).slice(0, 100))
+        .query<{ itemName: string; UOM: string }>(`
+          SELECT mi.itemName, mt.taxnomyCode AS UOM
+          FROM   ErpMasterItem    mi
+          LEFT JOIN ErpMasterTaxnomy mt ON mt.taxnomyId = mi.uomId
+          WHERE  mi.itemcode = @itemCode AND mi.isActive = 1
+        `);
+      const item = r.recordset[0];
+      if (!item) return { name: '', uom: '' };
+      return { name: item.itemName ?? '', uom: item.UOM ?? '' };
+    } catch (err) {
+      this.logger.warn(`lookupItem failed for code="${code}": ${(err as Error)?.message}`);
+      return { name: '', uom: '' };
+    }
   }
 
   // ── Insert lines helper (used by create & update) ───────────────
@@ -276,8 +296,8 @@ export class TimesheetsService implements OnModuleInit {
       await tx.request()
         .input('tsId',     mssql.BigInt,        tsId)
         .input('lineNumber', mssql.Int,          i + 1)
-        .input('itemCode', mssql.NVarChar(60),  mr.itemCode || null)
-        .input('itemName', mssql.NVarChar(250), item.name || mr.description || null)
+        .input('itemCode', mssql.NVarChar(100),       mr.itemCode || null)
+        .input('itemName', mssql.NVarChar(mssql.MAX), item.name || mr.description || null)
         .input('uom',      mssql.NVarChar(30),  mr.uom ?? item.uom ?? null)
         .input('qty',      mssql.Decimal(18,3), parseFloat(mr.qty) || 0)
         .query(`
@@ -910,14 +930,18 @@ export class TimesheetsService implements OnModuleInit {
     return 'PROD';
   }
 
-  /** Check if a role has canWrite on any timesheet module — determines approver eligibility */
+  /** Check if a role is a timesheet approver.
+   *  Requires BOTH canWrite AND canReport on any of PROD/INST/PROJ:
+   *  - canWrite alone: regular worker who can edit their own drafts — not an approver
+   *  - canReport alone: QC Inspector / report viewer — not an approver
+   *  - canWrite + canReport: supervisor / manager — IS an approver */
   async isTimesheetApprover(roleCode: string): Promise<boolean> {
     if (!roleCode) return false;
     const res = await this.devPool.request()
       .input('roleCode', mssql.NVarChar(30), roleCode)
       .query<{ cnt: number }>(`
         SELECT COUNT(*) AS cnt FROM PSTsRolePermissions
-        WHERE roleCode = @roleCode AND canWrite = 1
+        WHERE roleCode = @roleCode AND canWrite = 1 AND canReport = 1
           AND module IN ('PROD','INST','PROJ')
       `);
     return (res.recordset[0]?.cnt ?? 0) > 0;

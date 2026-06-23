@@ -174,6 +174,7 @@ export class ApprovalSettingsService implements OnModuleInit {
    */
   async canUserApproveTimesheet(
     userId: string,
+    displayName: string,
     roleCode: string,
     ts: { tsType: string; department_code?: string; shiftCode?: string; projectId?: string; workOrderNo?: string },
     hasCanWrite: boolean,
@@ -223,37 +224,39 @@ export class ApprovalSettingsService implements OnModuleInit {
       .sort((a, b) => b.score - a.score);
 
     if (scored.length === 0) {
-      // Rules exist but none match — fall back to permission
-      return hasCanWrite
-        ? { allowed: true,  reason: 'No matching approval rule for this timesheet — permission-based approval.' }
-        : { allowed: false, reason: 'No matching approval rule found for this timesheet.' };
+      // Rules exist but none match the criteria — deny access.
+      // Do NOT fall back to permission: the admin configured rules intentionally.
+      return { allowed: false, reason: 'No approval rule matches this timesheet. Contact your administrator.' };
     }
 
     const best = scored[0].rule;
 
     if (best.anyApprover) {
-      // Any user with canWrite can approve
       return hasCanWrite
         ? { allowed: true,  reason: `Rule "${best.module}" allows any approver with permission.` }
-        : { allowed: false, reason: 'You do not have canWrite permission on this timesheet module.' };
+        : { allowed: false, reason: 'You do not have approver permission on this timesheet module.' };
     }
 
-    // Check if user is a named approver
+    // Check by userId first (most reliable)
     const allowedIds = this.splitTrim(best.approverUserIds);
-    if (allowedIds.includes(userId)) {
-      return { allowed: true, reason: `You are a designated approver for this rule.` };
+    if (allowedIds.length > 0) {
+      return allowedIds.includes(userId)
+        ? { allowed: true,  reason: 'You are a designated approver for this rule.' }
+        : { allowed: false, reason: `This timesheet requires approval by a designated approver. You are not listed.` };
     }
 
+    // Fall back to display name match when userId was not recorded
     const allowedNames = this.splitTrim(best.approverNames);
-    // Fallback name check (for rules saved before userId tracking)
-    if (allowedNames.length > 0 && allowedIds.length === 0 && hasCanWrite) {
-      return { allowed: true, reason: 'Approval granted via named approver rule.' };
+    if (allowedNames.length > 0) {
+      const nameMatch = allowedNames.some(
+        n => n.toLowerCase() === (displayName ?? '').toLowerCase()
+      );
+      return nameMatch
+        ? { allowed: true,  reason: 'You are a designated approver (matched by name).' }
+        : { allowed: false, reason: `This timesheet requires approval by: ${allowedNames.join(', ')}. You are not listed.` };
     }
 
-    return {
-      allowed: false,
-      reason: `This timesheet requires approval by: ${allowedNames.join(', ') || 'a designated approver'}. You are not listed.`,
-    };
+    return { allowed: false, reason: 'No approvers are configured for this rule. Contact your administrator.' };
   }
 
   async remove(id: number) {

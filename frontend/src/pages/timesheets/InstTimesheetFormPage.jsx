@@ -37,7 +37,7 @@ export default function InstTimesheetFormPage() {
   const isEdit = Boolean(docNo);
   const isView = useLocation().pathname.endsWith('/view');
   const fromApprovals = searchParams.get('from') === 'approvals';
-  const isApprover = fromApprovals || permissions.some((p) => p.module === 'Installation Timesheets' && p.canReport === true);
+  const isApprover = fromApprovals || permissions.some((p) => p.module === 'INST' && p.canWrite && p.canReport);
 
   const [header, setHeader] = useState({
     tsType: 'INST',
@@ -167,6 +167,7 @@ export default function InstTimesheetFormPage() {
       setIsDirty(false);
       queryClient.invalidateQueries({ queryKey: ['inst-timesheets'] });
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ['timesheet', docNo] });
       toast(isEdit ? 'Timesheet updated.' : 'Timesheet created.', 'success');
       navigate(fromApprovals ? '/timesheets/pending-approvals' : '/timesheets/inst');
     },

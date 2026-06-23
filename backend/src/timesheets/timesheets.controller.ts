@@ -156,7 +156,7 @@ export class TimesheetsController {
       // Check against Approval Settings rules (+ canWrite as fallback)
       const hasCanWrite = await this.isTimesheetApprover(req.currentUser?.roleCode);
       const check = await this.approvalSettingsService.canUserApproveTimesheet(
-        req.currentUser?.userId, req.currentUser?.roleCode, ts, hasCanWrite,
+        req.currentUser?.userId, req.currentUser?.displayName || '', req.currentUser?.roleCode, ts, hasCanWrite,
       );
       if (!check.allowed) throw new HttpException({ message: check.reason }, HttpStatus.FORBIDDEN);
       const byName = req.currentUser?.displayName || body?.approverName || '';
@@ -187,7 +187,7 @@ export class TimesheetsController {
       if (!ts) throw new NotFoundException(`Timesheet ${docNo} not found`);
       const hasCanWrite = await this.isTimesheetApprover(req.currentUser?.roleCode);
       const check = await this.approvalSettingsService.canUserApproveTimesheet(
-        req.currentUser?.userId, req.currentUser?.roleCode, ts, hasCanWrite,
+        req.currentUser?.userId, req.currentUser?.displayName || '', req.currentUser?.roleCode, ts, hasCanWrite,
       );
       if (!check.allowed) throw new HttpException({ message: check.reason }, HttpStatus.FORBIDDEN);
       const byName = req.currentUser?.displayName || '';

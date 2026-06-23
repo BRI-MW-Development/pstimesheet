@@ -36,7 +36,7 @@ export default function ProdTimesheetFormPage() {
   const isEdit = Boolean(docNo);
   const isView = useLocation().pathname.endsWith('/view');
   const fromApprovals = searchParams.get('from') === 'approvals';
-  const isApprover = fromApprovals || permissions.some((p) => p.module === 'Production Timesheets' && p.canReport === true);
+  const isApprover = fromApprovals || permissions.some((p) => p.module === 'PROD' && p.canWrite && p.canReport);
 
   const [header, setHeader] = useState({
     projectId: '',
@@ -135,6 +135,7 @@ export default function ProdTimesheetFormPage() {
       setIsDirty(false);
       queryClient.invalidateQueries({ queryKey: ['prod-timesheets'] });
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ['timesheet', docNo] });
       toast(isEdit ? 'Timesheet updated.' : 'Timesheet saved.', 'success');
       navigate(fromApprovals ? '/timesheets/pending-approvals' : '/timesheets/prod');
     },
