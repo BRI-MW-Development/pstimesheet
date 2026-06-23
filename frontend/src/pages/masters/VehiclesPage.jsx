@@ -166,9 +166,7 @@ export default function VehiclesPage() {
         count={filtered.length}
         search={search}
         onSearch={setSearch}
-        actions={
-          {canCreate && <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>+ Add Vehicle</button>}
-        }
+        actions={canCreate && <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>+ Add Vehicle</button>}
       />
       <Table columns={columns} data={filtered} loading={isLoading} />
 

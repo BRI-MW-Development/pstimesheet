@@ -437,9 +437,7 @@ export default function UsersPage() {
         count={filtered.length}
         search={search}
         onSearch={setSearch}
-        actions={
-          {canWrite && <button className="btn btn-primary btn-sm" onClick={() => setEditing({})}>+ Add User</button>}
-        }
+        actions={canWrite && <button className="btn btn-primary btn-sm" onClick={() => setEditing({})}>+ Add User</button>}
       />
       {isError && (
         <div style={{ margin: '12px 0', padding: '10px 14px', background: 'var(--red-bg, #fff1f1)', border: '1px solid var(--red)', borderRadius: 6, color: 'var(--red)', fontSize: 12 }}>
