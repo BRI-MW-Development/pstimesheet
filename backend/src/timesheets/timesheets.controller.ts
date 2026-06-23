@@ -91,10 +91,26 @@ export class TimesheetsController {
 
   @Get('pending-approvals')
   async getPendingApprovals(@Query('department') department?: string, @Req() req?: any) {
-    // Accessible to any role that can approve (canWrite) on at least one timesheet type
-    const isApprover = await this.timesheetsService.isTimesheetApprover(req?.currentUser?.roleCode ?? '');
+    const roleCode   = req?.currentUser?.roleCode   ?? '';
+    const userId     = req?.currentUser?.userId     ?? '';
+    const displayName = req?.currentUser?.displayName ?? '';
+
+    const isApprover = await this.timesheetsService.isTimesheetApprover(roleCode);
     if (!isApprover) throw new HttpException({ message: 'You do not have permission to view pending approvals' }, HttpStatus.FORBIDDEN);
-    return this.timesheetsService.getPendingApprovals(department);
+
+    const all = await this.timesheetsService.getPendingApprovals(department);
+
+    // Filter to only timesheets this specific user is authorised to approve
+    const allowed: typeof all = [];
+    for (const ts of all) {
+      const check = await this.approvalSettingsService.canUserApproveTimesheet(
+        userId, displayName, roleCode,
+        { tsType: ts.tsType, department_code: ts.department_code, shiftCode: ts.shiftCode, projectId: ts.projectId, workOrderNo: ts.workOrderNo },
+        true,
+      );
+      if (check.allowed) allowed.push(ts);
+    }
+    return allowed;
   }
 
   @Get('ts-employees')

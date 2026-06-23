@@ -111,7 +111,7 @@ export default function PendingApprovalsPage() {
 
   const { data: timesheets = [], isLoading } = useQuery({
     queryKey: ['pending-approvals'],
-    queryFn: () => api.get('/timesheets', { params: { status: 'Submitted' } }).then((r) => r.data.filter((t) => t.tsType !== 'PROJ')),
+    queryFn: () => api.get('/timesheets/pending-approvals').then((r) => r.data),
     refetchInterval: 60000,
   });
 
