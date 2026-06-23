@@ -96,8 +96,8 @@ function RejectModal({ docNo, onClose, onDone }) {
 
 function editUrl(row) {
   const base = row.tsType === 'INST'
-    ? `/timesheets/inst/${row.docNo}/edit`
-    : `/timesheets/prod/${row.docNo}/edit`;
+    ? `/timesheets/inst/${row.tsDocNo}/edit`
+    : `/timesheets/prod/${row.tsDocNo}/edit`;
   return `${base}?from=approvals`;
 }
 
@@ -120,7 +120,7 @@ export default function PendingApprovalsPage() {
     onMutate: (docNo) => {
       setApprovingSet((s) => new Set([...s, docNo]));
       // Optimistically remove from list immediately
-      queryClient.setQueryData(['pending-approvals'], (old = []) => old.filter((t) => t.docNo !== docNo));
+      queryClient.setQueryData(['pending-approvals'], (old = []) => old.filter((t) => t.tsDocNo !== docNo));
     },
     onSuccess: (_, docNo) => {
       queryClient.invalidateQueries({ queryKey: ['prod-timesheets'] });
@@ -140,20 +140,19 @@ export default function PendingApprovalsPage() {
   const filtered = timesheets.filter(
     (ts) =>
       !filter ||
-      ts.docNo?.toLowerCase().includes(filter.toLowerCase()) ||
+      ts.tsDocNo?.toLowerCase().includes(filter.toLowerCase()) ||
       ts.entered_by_name?.toLowerCase().includes(filter.toLowerCase()) ||
       ts.department_code?.toLowerCase().includes(filter.toLowerCase())
   );
 
   const columns = [
     { key: '#',              label: '#',          num: true,  sort: false, render: (_, i) => i + 1 },
-    { key: 'docNo',          label: 'Doc No',     sort: true, render: (r) => <span className="wip-link">{r.docNo}</span> },
+    { key: 'tsDocNo',        label: 'Doc No',     sort: true, render: (r) => <span className="wip-link">{r.tsDocNo}</span> },
     { key: 'tsType',         label: 'Type',       sort: true },
     { key: 'entryDate',      label: 'Date',       sort: true, render: (r) => formatDate(r.entryDate) },
     { key: 'entered_by_name',label: 'Employee',   sort: true },
     { key: 'department_code',label: 'Department', sort: true },
     { key: 'workOrderNo',    label: 'Work Order', sort: true },
-    { key: 'totalHours',     label: 'Hours',      sort: true, render: (r) => r.totalHours?.toFixed(2) ?? '—' },
     {
       key: 'status', label: 'Status', sort: true,
       render: (row) => <Badge variant={STATUS_VARIANT[row.status] ?? 'submitted'}>{row.status}</Badge>,
@@ -169,18 +168,18 @@ export default function PendingApprovalsPage() {
           <button
             className="wip-icon-btn wip-icon-btn-approve"
             title="Approve"
-            disabled={approvingSet.has(row.docNo)}
-            onClick={() => approve(row.docNo)}
-            style={{ opacity: approvingSet.has(row.docNo) ? 0.5 : 1 }}
+            disabled={approvingSet.has(row.tsDocNo)}
+            onClick={() => approve(row.tsDocNo)}
+            style={{ opacity: approvingSet.has(row.tsDocNo) ? 0.5 : 1 }}
           >
-            {approvingSet.has(row.docNo)
+            {approvingSet.has(row.tsDocNo)
               ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 0.8s linear infinite' }}><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
               : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             }
           </button>
           <button className="wip-icon-btn wip-icon-btn-delete" title="Reject"
-            disabled={approvingSet.has(row.docNo)}
-            onClick={() => setRejectDocNo(row.docNo)}>
+            disabled={approvingSet.has(row.tsDocNo)}
+            onClick={() => setRejectDocNo(row.tsDocNo)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
