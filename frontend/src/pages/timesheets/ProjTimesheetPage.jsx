@@ -582,6 +582,8 @@ function WeeklyForm({ onBack, onSaved }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const permissions = useAuthStore((s) => s.permissions);
+  const isAdmin = permissions.some((p) => p.module === 'USERS' && p.canWrite);
   const userEmployeeCode = user?.employeeCode ?? '';
   const entryPerson = user?.displayName ?? user?.username ?? '';
 
@@ -774,6 +776,7 @@ function WeeklyForm({ onBack, onSaved }) {
           <button type="button" className="btn btn-outline btn-sm" style={{ padding: '4px 10px' }}
             onClick={() => { const d = new Date(weekStart + 'T00:00:00'); d.setDate(d.getDate() + 7); setWeekStart(localDateStr(d)); }}>▶</button>
           <input type="date" className="form-control" style={{ width: 140, height: 32, fontSize: 13 }} value={weekStart}
+            max={todayStr}
             onChange={(e) => {
               const d = new Date(e.target.value + 'T00:00:00');
               d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // snap to Monday
@@ -783,9 +786,13 @@ function WeeklyForm({ onBack, onSaved }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
           <label style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, whiteSpace: 'nowrap' }}>Employee</label>
-          <div style={{ width: 260 }}>
-            <SearchSelect options={empOptions} value={employee} onChange={setEmployee} placeholder="Search employee…" />
-          </div>
+          {isAdmin ? (
+            <div style={{ width: 260 }}>
+              <SearchSelect options={empOptions} value={employee} onChange={setEmployee} placeholder="Search employee…" />
+            </div>
+          ) : (
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{employee || '—'}</span>
+          )}
         </div>
 
         {weekTotal > 0 && (

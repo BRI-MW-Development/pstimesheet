@@ -317,6 +317,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
                 <div className="form-group">
                   <label className="form-label">Completion Date</label>
                   <input type="date" className="form-control" required value={form.completedDate}
+                    max={new Date().toISOString().slice(0, 10)}
                     onChange={e => setForm(f => ({ ...f, completedDate: e.target.value }))} />
                 </div>
                 <div className="form-group">

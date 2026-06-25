@@ -221,12 +221,28 @@ export default function InstTimesheetFormPage() {
       }
     }
 
+    // TS-004 — start time and end time required for each filled labour row
+    for (const r of filledLabour) {
+      if (!r.startTime) { toast(`Start time is required for employee ${r.employee}.`, 'error'); return; }
+      if (!r.endTime)   { toast(`End time is required for employee ${r.employee}.`, 'error'); return; }
+    }
+
     // material qty required
     const filledMaterial = materialRows.filter((r) => r.itemCode);
     for (const r of filledMaterial) {
       if (!r.qty || Number(r.qty) <= 0) {
         toast(`Qty is required for material item ${r.itemCode}.`, 'error'); return;
       }
+    }
+
+    // TS-005 — KM required for vehicle rows, Hours required for access equipment rows
+    const filledVehicle = vehicleRows.filter((r) => r.vehicle);
+    for (const r of filledVehicle) {
+      if (!r.km && r.km !== 0) { toast(`KM is required for vehicle ${r.vehicle}.`, 'error'); return; }
+    }
+    const filledAccess = accessRows.filter((r) => r.equipment);
+    for (const r of filledAccess) {
+      if (!r.hours && r.hours !== 0) { toast(`Hours is required for equipment ${r.equipment}.`, 'error'); return; }
     }
 
     // shift time window validation

@@ -56,6 +56,7 @@ export default function DashboardPage() {
   const { data: stats = {} } = useQuery({
     queryKey: ['dashboard-stats', user?.userId],
     queryFn:  () => api.get('/auth/dashboard-stats').then(r => r.data),
+    refetchInterval: 30000,
   });
   const { data: audit = null } = useQuery({
     queryKey: ['login-audit', user?.userId],

@@ -201,11 +201,25 @@ export default function ProdTimesheetFormPage() {
       }
     }
 
+    // TS-001 — start time and end time required for each filled labour row
+    for (const r of filledLabour) {
+      if (!r.startTime) { toast(`Start time is required for employee ${r.employee}.`, 'error'); return; }
+      if (!r.endTime)   { toast(`End time is required for employee ${r.employee}.`, 'error'); return; }
+    }
+
     // material qty required
     const filledMaterial = materialRows.filter((r) => r.itemCode);
     for (const r of filledMaterial) {
       if (!r.qty || Number(r.qty) <= 0) {
         toast(`Qty is required for material item ${r.itemCode}.`, 'error'); return;
+      }
+    }
+
+    // TS-002 — minutes required for each filled machinery row
+    const filledMach = machRows.filter((r) => r.machineName);
+    for (const r of filledMach) {
+      if (!r.minutes || Number(r.minutes) <= 0) {
+        toast(`Minutes is required for machine ${r.machineName}.`, 'error'); return;
       }
     }
 
