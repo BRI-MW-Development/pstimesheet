@@ -162,15 +162,19 @@ export class ApprovalSettingsService implements OnModuleInit {
   }
 
   /**
-   * Find the best-matching approval rule for a timesheet and check whether
-   * the given userId/roleCode is authorised to approve it.
+   * Check whether userId/displayName is authorised to approve a given timesheet.
    *
-   * Logic:
-   *  1. Collect all rules where module matches (or module = 'ALL').
-   *  2. Among those, prefer rules whose criteria match the timesheet fields.
-   *  3. If the best rule has anyApprover = true → any user with canWrite can approve.
-   *  4. If anyApprover = false → only users listed in approverUserIds can approve.
-   *  5. If NO rule is found → fall back to canWrite permission check.
+   * New approach (direct):
+   *  1. Helper: does this user appear in a rule's approver list?
+   *  2. Helper: does a rule's criteria match this timesheet?
+   *     - Multiple rows for the SAME field → OR (any one must match)
+   *     - Rows for DIFFERENT fields → AND (all fields must match)
+   *     - No real criteria → matches everything (catch-all)
+   *  3. Collect rules where the user IS an approver AND the criteria match the ts.
+   *  4. Also allow rules that have anyApprover=true with no specific approvers (open rules).
+   *  5. If any such rule exists → allowed.
+   *  6. If no rules are configured at all → fall back to role-based canWrite check.
+   *  7. If rules exist but none apply to this user/timesheet → deny.
    */
   async canUserApproveTimesheet(
     userId: string,
@@ -180,28 +184,25 @@ export class ApprovalSettingsService implements OnModuleInit {
     hasCanWrite: boolean,
   ): Promise<{ allowed: boolean; reason: string }> {
     const allRules = await this.list();
-    const tsModule = ts.tsType === 'INST' ? 'INST' : ts.tsType === 'PROJ' ? 'PROJ' : 'PROD';
 
-    // Filter rules that apply to this module
-    const applicableRules = allRules.filter(r =>
-      r.module === 'ALL' || r.module === tsModule
-    );
-
-    this.logger.debug(`[canApprove] tsType=${ts.tsType} module=${tsModule} allRules=${allRules.length} applicable=${applicableRules.length} userId=${userId} displayName="${displayName}"`);
-
-    if (applicableRules.length === 0) {
-      // No rules configured — fall back to permission-based check
-      this.logger.warn(`[canApprove] No applicable rules for module=${tsModule} — falling back to canWrite (${hasCanWrite})`);
+    if (allRules.length === 0) {
       return hasCanWrite
         ? { allowed: true,  reason: 'No approval rules configured — permission-based approval allowed.' }
         : { allowed: false, reason: 'No approval rules configured and you do not have canWrite permission.' };
     }
 
-    // Score each rule by how many distinct fields match.
-    // Rules with no real criteria (catch-alls) score 0 — lowest priority.
-    // Within the same field, criteria are OR (e.g. Department=CNC OR Department=Acrylic).
-    // Across different fields, groups are AND (Department must match AND Shift must match).
-    // Returns -1 if any field group has no match.
+    const tsModule = ts.tsType === 'INST' ? 'INST' : ts.tsType === 'PROJ' ? 'PROJ' : 'PROD';
+
+    // ── Helper: does the user appear in this rule's approver list? ────────────
+    const userIsApproverFor = (rule: any): boolean => {
+      const ids   = this.splitTrim(rule.approverUserIds);
+      const names = this.splitTrim(rule.approverNames);
+      if (ids.length > 0)   return ids.includes(userId);
+      if (names.length > 0) return names.some(n => n.toLowerCase() === (displayName ?? '').toLowerCase());
+      return false; // no specific approvers saved → nobody matches
+    };
+
+    // ── Helper: does this rule's criteria match the timesheet? ────────────────
     const evalCriterion = (c: any): boolean => {
       const tsVal = (
         c.field === 'department'  ? ts.department_code :
@@ -218,70 +219,37 @@ export class ApprovalSettingsService implements OnModuleInit {
            : false;
     };
 
-    const scoreRule = (rule: any): number => {
-      const realCriteria = (rule.criteria ?? []).filter((c: any) => c.field && c.value);
-      if (!realCriteria.length) return 0; // catch-all, lowest priority
+    const criteriaMatch = (rule: any): boolean => {
+      const real = (rule.criteria ?? []).filter((c: any) => c.field && c.value);
+      if (!real.length) return true; // no real criteria = catch-all, matches everything
 
-      // Group by field name
+      // Group by field; OR within group, AND across groups
       const groups: Record<string, any[]> = {};
-      for (const c of realCriteria) {
-        (groups[c.field] ??= []).push(c);
+      for (const c of real) {
+        if (!groups[c.field]) groups[c.field] = [];
+        groups[c.field].push(c);
       }
-
-      let score = 0;
-      for (const fieldCriteria of Object.values(groups)) {
-        // OR within same field: at least one criterion must match
-        const fieldMatches = fieldCriteria.some(evalCriterion);
-        if (!fieldMatches) return -1; // AND across fields: one miss = rule fails
-        score++;
-      }
-      return score; // number of distinct fields matched (higher = more specific)
+      return Object.values(groups).every(grp => grp.some(evalCriterion));
     };
 
-    const scored = applicableRules
-      .map(r => ({ rule: r, score: scoreRule(r) }))
-      .filter(x => x.score >= 0)
-      .sort((a, b) => b.score - a.score);
+    // ── Find rules that (a) apply to this module, (b) match criteria, (c) allow this user ──
+    const matching = allRules.filter(rule => {
+      if (rule.module !== 'ALL' && rule.module !== tsModule) return false;
+      if (!criteriaMatch(rule)) return false;
+      return userIsApproverFor(rule);
+    });
 
-    if (scored.length === 0) {
-      // Rules exist but none match the criteria — deny access.
-      // Do NOT fall back to permission: the admin configured rules intentionally.
-      return { allowed: false, reason: 'No approval rule matches this timesheet. Contact your administrator.' };
+    this.logger.debug(
+      `[canApprove] user="${displayName}" (${userId}) ts=${ts.tsType} dept="${ts.department_code}" ` +
+      `allRules=${allRules.length} matching=${matching.length} ` +
+      `matchingIds=${matching.map(r => r.id).join(',')}`
+    );
+
+    if (matching.length > 0) {
+      return { allowed: true,  reason: `Matched rule(s): ${matching.map(r => `#${r.id}(${r.module})`).join(', ')}` };
     }
 
-    const best = scored[0].rule;
-    this.logger.debug(`[canApprove] best rule id=${best.id} module=${best.module} anyApprover=${best.anyApprover} approverUserIds="${best.approverUserIds}" approverNames="${best.approverNames}"`);
-
-    // Always check the designated approver list first.
-    // anyApprover = true means "one of the listed approvers is sufficient" (not "anyone can approve").
-    // We only fall back to anyApprover behaviour when the list is completely empty.
-    const allowedIds   = this.splitTrim(best.approverUserIds);
-    const allowedNames = this.splitTrim(best.approverNames);
-
-    if (allowedIds.length > 0) {
-      return allowedIds.includes(userId)
-        ? { allowed: true,  reason: 'You are a designated approver for this rule.' }
-        : { allowed: false, reason: 'This timesheet requires approval by a designated approver. You are not listed.' };
-    }
-
-    if (allowedNames.length > 0) {
-      const nameMatch = allowedNames.some(
-        n => n.toLowerCase() === (displayName ?? '').toLowerCase()
-      );
-      return nameMatch
-        ? { allowed: true,  reason: 'You are a designated approver (matched by name).' }
-        : { allowed: false, reason: `This timesheet requires approval by: ${allowedNames.join(', ')}. You are not listed.` };
-    }
-
-    // No specific approvers configured — fall back to the anyApprover flag.
-    // anyApprover = true → any role-level approver with canWrite can approve.
-    if (best.anyApprover) {
-      return hasCanWrite
-        ? { allowed: true,  reason: `Rule "${best.module}" allows any approver with permission.` }
-        : { allowed: false, reason: 'You do not have approver permission on this timesheet module.' };
-    }
-
-    return { allowed: false, reason: 'No approvers are configured for this rule. Contact your administrator.' };
+    return { allowed: false, reason: 'No approval rule authorises you to approve this timesheet.' };
   }
 
   async remove(id: number) {
