@@ -1,6 +1,6 @@
 # PS TimeSheet Pro — Technical Documentation
 
-**Version:** 3.3  
+**Version:** 3.4  
 **Last Updated:** June 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -73,9 +73,10 @@ NestJS API (port 3000)
 
 AWS S3
   └── bluerhine-erp / dev /
-        ├── qc/{qcId}/{timestamp}-{filename}        — QC inspection photos
-        ├── woc/{wocId}/{timestamp}-{filename}       — WO Complete attachments
-        ├── users/{userId}/{timestamp}-{filename}    — Profile photos
+        ├── qc/{qcId}/{timestamp}-{filename}         — QC inspection photos
+        ├── woc/{wocId}/{timestamp}-{filename}        — WO Complete attachments
+        ├── proj-ts/{tsId}/{timestamp}-{filename}     — Project Timesheet line attachments
+        ├── users/{userId}/{timestamp}-{filename}     — Profile photos
         └── employees/{employeeNo}/{timestamp}-{filename} — Employee photos
 ```
 
@@ -200,15 +201,23 @@ pm2 save
 - Only users with `PROD/INST/PROJ.canWrite` can approve/reject
 - Approval Settings rules determine which specific approver handles each timesheet
 
+**Projects Team (PROJ) — additional restrictions:**
+- **Future date guard:** Date picker is capped at today (`max` attribute). In Weekly view, the ▶ button to advance the week is disabled when already at the current week; future day tabs are dimmed, disabled, and show a tooltip. Saving a line with a future date is blocked both in the UI and backend.
+- **Line attachments:** Each timesheet line can have one file attachment. Files are stored in S3 (`proj-ts/{tsId}/…`) when S3 is configured, or as base64 in `PSTsProjLineAttachment.fileData` otherwise. Image attachments open in the `FileLightbox` preview; non-image files are downloaded directly.
+- **Dashboard count:** Users with `canCreate` (but not `canRead`) now correctly see their own timesheet counts on the dashboard.
+
 ### WO Complete
 
 Route: `/woc`
 
 **Validation chain (backend, in order):**
 1. Required fields: Work Order, Status
-2. No duplicate WO Complete for same work order
-3. All timesheets for the WO must be Approved or Rejected
-4. **Production departments only:** WO must have a Full QC inspection
+2. Completion date cannot be a future date (UI `max` attribute + backend `BadRequestException`)
+3. No duplicate WO Complete for same work order
+4. All timesheets for the WO must be Approved or Rejected
+5. **Production departments only:** WO must have a Full QC inspection
+
+**Attachments:** Files stored in S3 (`woc/{wocId}/…`). Image attachments open in the `FileLightbox` preview; non-image files are downloaded. Preview is available in both the Edit modal and the View modal.
 
 ### QC Module
 
@@ -246,7 +255,9 @@ Fields are arranged in 2-column pairs to reduce vertical scrolling:
 - Passed records cannot be downgraded
 - Failed records can only be edited by approvers
 
-**Print:** `/qc/:id/print` — opens in new tab, generates high-quality PDF via jsPDF + html2canvas
+**Attachments / Preview:** Image attachments open in the `FileLightbox` full-screen preview (click the 👁 button). Pending images (not yet saved) show a thumbnail that is also clickable. Non-image files are downloaded directly. The `FileLightbox` overlay supports Escape key, click-outside to close, and a Download button.
+
+**Print:** `/qc/:id/print` — opens in new tab, generates high-quality PDF via jsPDF + html2canvas. Photos are loaded server-side as base64 data URIs (`GET /qc/attachments/:id/download`) to avoid S3 CORS restrictions that block html2canvas `useCORS`. Missing S3 objects show "Unavailable" instead of a spinner.
 
 ### Analytics
 
@@ -277,8 +288,9 @@ Requires `REPORTS.canRead` permission.
 | `PsQcRecord` | QC inspection records |
 | `PsQcAttachment` | QC photos (s3Key + fileData for legacy) |
 | `PsQcComment` | QC comments (with authorUserId) |
+| `PsTsProjLineAttachment` | Project Timesheet line attachments (s3Key or base64 fileData) |
 | `PsWoComplete` | WO completion records |
-| `PsWoCompleteAttachment` | WO attachments (s3Key) |
+| `PsWoCompleteAttachment` | WO attachments (s3Key or base64 fileData) |
 | `PSTsUsers` | Application users (with profileImageKey) |
 | `PSTsRoles` | Role definitions (roleCode, dataScope) |
 | `PSTsRolePermissions` | Module permissions per role |
@@ -359,7 +371,8 @@ S3_FOLDER=dev
 
 ### S3Service (`backend/src/s3/s3.service.ts`)
 - `upload(subfolder, fileName, base64, mimeType)` → returns S3 key
-- `presignedUrl(key, expiresIn=3600)` → returns signed URL (default 1 hour)
+- `presignedUrl(key, expiresIn=3600)` → returns signed URL (default 1 hour) — used for profile/employee photos only
+- `getAsBase64(key, mimeType)` → fetches the S3 object server-side, returns a `data:{mimeType};base64,…` string. Used for all attachment downloads so the browser never makes a cross-origin request to S3 directly.
 - `delete(key)` → removes object
 - `isConfigured` → boolean, falls back to DB storage if false
 
@@ -367,17 +380,20 @@ S3_FOLDER=dev
 ```
 Frontend (base64 dataURL)
   → POST /api/*/attachments { fileData, mimeType, fileName, fileSize }
-  → Backend validates (image only, ≤10MB)
+  → Backend validates (≤5 MB for WOC/PROJ, image-only for QC)
   → S3Service.upload() → s3Key stored in DB, fileData = NULL
-  → S3Service.presignedUrl() returned to frontend
 ```
 
-### Download Flow
+### Download Flow (Attachments — QC, WOC, Project Timesheet)
 ```
-GET /api/*/attachments/:id/download
-  → If s3Key exists → generate presigned URL (24h for profiles, 1h for QC)
-  → Frontend uses URL directly (images) or opens in new tab (PDFs)
+GET /api/*/attachments/:id/download  (or /api/*/attachments/:id)
+  → If s3Key exists → S3Service.getAsBase64() fetches object server-side
+    → returns { fileData: "data:image/jpeg;base64,…", fileName, mimeType }
+  → Frontend renders as <img src> or opens FileLightbox (images)
+    or triggers <a download> (non-images)
 ```
+
+> **Why server-side proxy?** Browser `fetch()` to S3 presigned URLs is blocked by S3 CORS policy (no `Access-Control-Allow-Origin` header by default). html2canvas `useCORS: true` also fails for the same reason. Using `getAsBase64()` keeps the request server-to-server; the browser only ever sees a data URI.
 
 ---
 
@@ -577,6 +593,46 @@ useEffect(() => {
 }, [data]);
 ```
 
+### FileLightbox Component
+
+`frontend/src/components/ui/FileLightbox.jsx`
+
+Full-screen overlay for previewing a single file attachment.
+
+**Props:**
+- `file: { src: string, name: string, mimeType: string }` — `src` must be a data URI (`data:image/...;base64,...`)
+- `onClose` — called when the overlay, close button, or Escape key is used
+- `onDownload?` — optional; when provided, a Download button is shown in the overlay
+
+**Behaviour:**
+- Images render at up to 90vw × 78vh with `object-fit: contain`
+- Non-images show a file-icon placeholder with the filename
+- Escape key and click-outside both close the overlay
+- `zIndex: 10000` — renders above all modals
+
+**Usage pattern:**
+```jsx
+import FileLightbox from '../../components/ui/FileLightbox';
+
+const [lightbox, setLightbox] = useState(null);
+
+// Open
+setLightbox({ src: dataUri, name: fileName, mimeType });
+
+// Render
+{lightbox && (
+  <FileLightbox
+    file={lightbox}
+    onClose={() => setLightbox(null)}
+    onDownload={() => { const a = document.createElement('a'); a.href = lightbox.src; a.download = lightbox.name; a.click(); }}
+  />
+)}
+```
+
+Used in: **QCFormPage**, **ProjTimesheetPage** (`AttachCell`), **WocPage** (edit modal + view modal).
+
+---
+
 ### SearchSelect Component
 
 Used for all searchable dropdowns. Supports:
@@ -762,7 +818,7 @@ curl http://localhost:3000/api/auth/login \
 | Limitation | Notes |
 |-----------|-------|
 | No WebSocket notifications | Bell notifications poll every 2 minutes |
-| S3 presigned URLs expire | Profile images: 24h, QC attachments: 1h. Re-fetching regenerates |
+| S3 presigned URLs expire | Profile/employee images only: 24h TTL. Re-fetching regenerates. Attachment downloads use server-side `getAsBase64()` proxy — no expiry issue |
 | WOC date filter is client-side | All WOC records are loaded then filtered in browser |
 | QC date locked to today | By design — cannot backdate QC inspections |
 | Analytics runs synchronously | Large date ranges may be slow for high-volume data |
@@ -773,6 +829,43 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v3.4 (June 2026)
+Feature and bug-fix release: S3 image proxy, future date guards, attachment preview everywhere.
+
+**Dashboard**
+- **Timesheet count fix:** Dashboard now counts timesheets for users who have `canCreate` but not `canRead` (permission query changed from `canRead = 1` to `canRead = 1 OR canCreate = 1`).
+
+**S3 — Server-side proxy**
+- Added `S3Service.getAsBase64(key, mimeType)` that fetches S3 objects server-to-server and returns a `data:…;base64,…` string. All attachment download endpoints now use this instead of presigned URLs.
+- Fixes QC print page: photos were previously returned as S3 presigned URLs which the browser could not fetch cross-origin (S3 CORS blocks `fetch()`); html2canvas `useCORS: true` also failed for the same reason. Base64 data URIs are rendered natively.
+- QC print: missing/deleted S3 objects now show "Unavailable" instead of hanging on "Loading…".
+
+**Projects Team Timesheet — future date guard**
+- Date picker `max` capped at today's date.
+- Weekly form: ▶ (advance week) button disabled when already on the current week.
+- Future day tabs in the weekly view are dimmed, non-clickable, and show a tooltip ("Cannot enter timesheets for future dates").
+- Active day snaps to the last non-future day when the selected week changes.
+- Backend: saving a line with a future date returns `BadRequestException`.
+
+**Projects Team Timesheet — line attachments**
+- New table `PsTsProjLineAttachment` with `s3Key NVARCHAR(500)` column (auto-migrated via `onModuleInit()`).
+- Files upload to S3 under `proj-ts/{tsId}/…` when S3 is configured; stored as base64 in `fileData` column otherwise.
+- `S3Module` added to `TimesheetsModule` imports.
+
+**WO Complete — future date guard**
+- Completion date picker `max` capped at today (local timezone, not UTC).
+- Frontend `handleSubmit` blocks save with a toast if date > today.
+- Backend `assertWocFields()` throws `BadRequestException('Completion date cannot be a future date.')`.
+
+**Approval Settings — UserPicker dropdown**
+- Dropdown rendered via `ReactDOM.createPortal` to `document.body` so it is no longer clipped by the modal's `overflow-y: auto` container. Position computed from `getBoundingClientRect()` on open.
+
+**Attachment Preview — FileLightbox (all modules)**
+- New shared component `frontend/src/components/ui/FileLightbox.jsx`: full-screen overlay with Escape/click-outside to close, image display (`max 90vw × 78vh`), file-icon fallback for non-images, optional Download button.
+- **QC Form:** Pending image thumbnails are now clickable (zoom-in preview). Saved image attachments show a 👁 button that opens the lightbox; non-image saved attachments keep the ↓ download button.
+- **Project Timesheet (AttachCell):** New unsaved images show a 36×28 thumbnail; clicking it opens the lightbox. Saved image attachments show a 👁 button; non-images show a file icon and trigger download.
+- **WO Complete (Edit modal + View modal):** Saved image attachments show a 👁 button that opens the lightbox with a Download button; non-images show ↓ to download directly.
 
 ### v3.3 (June 2026)
 Bug-fix and security release covering Installation timesheet, QC print, and backend permission enforcement.
