@@ -132,14 +132,37 @@ export class TimesheetsService implements OnModuleInit {
         )
           ALTER TABLE PSTsLabourLine ALTER COLUMN employeeCode NVARCHAR(100) NULL;
       `);
-      const res = await this.devPool.request().query(`
-        UPDATE PSTsHeader SET status = 'Submitted' WHERE status = 'Draft'
+      // Add per-line project, task type, and comments for PROJ timesheets (split into individual queries)
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsLabourLine') AND name='projectId')
+          ALTER TABLE PSTsLabourLine ADD projectId NVARCHAR(50) NULL;
       `);
-      if (res.rowsAffected[0] > 0)
-        this.logger.log(`Migrated ${res.rowsAffected[0]} timesheet(s) from Draft → Submitted`);
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsLabourLine') AND name='taskTypeCode')
+          ALTER TABLE PSTsLabourLine ADD taskTypeCode NVARCHAR(30) NULL;
+      `);
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsLabourLine') AND name='comments')
+          ALTER TABLE PSTsLabourLine ADD comments NVARCHAR(500) NULL;
+      `);
+      // Attachment table for PROJ timesheet lines
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='PSTsProjLineAttachment' AND xtype='U')
+        CREATE TABLE PSTsProjLineAttachment (
+          id         INT IDENTITY(1,1) PRIMARY KEY,
+          tsId       BIGINT NOT NULL,
+          lineNumber INT NOT NULL,
+          fileName   NVARCHAR(260) NOT NULL,
+          mimeType   NVARCHAR(100) NULL,
+          fileSize   INT NULL,
+          fileData   NVARCHAR(MAX) NULL,
+          uploadedAt DATETIME DEFAULT GETDATE()
+        );
+      `);
     } catch (err) {
       this.logger.warn(`Schema init skipped (will retry on next request): ${(err as Error)?.message}`);
     }
+
   }
 
   // Normalize prefix: strip any trailing dash so doc format is always PREFIX-YEAR-SEQ
@@ -284,6 +307,7 @@ export class TimesheetsService implements OnModuleInit {
   // ── Insert lines helper (used by create & update) ───────────────
   private async insertLines(tx: Transaction, tsId: number, body: any): Promise<void> {
     const labourRows: any[] = body.labourRows ?? [];
+    this.logger.debug(`[insertLines] tsId=${tsId} rows=${labourRows.length}`);
     for (let i = 0; i < labourRows.length; i++) {
       const lr = labourRows[i];
       if (!lr.employee && !lr.employeeName) continue;
@@ -298,14 +322,32 @@ export class TimesheetsService implements OnModuleInit {
         .input('startTime',      mssql.NVarChar(10),  lr.startTime || null)
         .input('endTime',        mssql.NVarChar(10),  lr.endTime   || null)
         .input('durationMinutes',mssql.Int,           parseInt(lr.duration, 10) || 0)
+        .input('lineProjectId',  mssql.NVarChar(50),  lr.projectId    || null)
+        .input('taskTypeCode',   mssql.NVarChar(30),  lr.taskTypeCode || null)
+        .input('lineComments',   mssql.NVarChar(500), lr.comments     || null)
         .query(`
           INSERT INTO PSTsLabourLine
             (tsId, lineNumber, employeeCode, employeeName, departmentCode,
-             designation, startTime, endTime, durationMinutes)
+             designation, startTime, endTime, durationMinutes, projectId, taskTypeCode, comments)
           VALUES
             (@tsId, @lineNumber, @employeeCode, @employeeName, @departmentCode,
-             @designation, @startTime, @endTime, @durationMinutes)
+             @designation, @startTime, @endTime, @durationMinutes, @lineProjectId, @taskTypeCode, @lineComments)
         `);
+
+      // Save attachment for PROJ lines
+      if (lr.attachment?.fileData) {
+        await tx.request()
+          .input('tsId',       mssql.BigInt,            tsId)
+          .input('lineNumber', mssql.Int,               i + 1)
+          .input('fileName',   mssql.NVarChar(260),     lr.attachment.fileName || 'attachment')
+          .input('mimeType',   mssql.NVarChar(100),     lr.attachment.mimeType || null)
+          .input('fileSize',   mssql.Int,               lr.attachment.fileSize || 0)
+          .input('fileData',   mssql.NVarChar(mssql.MAX), lr.attachment.fileData)
+          .query(`
+            INSERT INTO PSTsProjLineAttachment (tsId, lineNumber, fileName, mimeType, fileSize, fileData)
+            VALUES (@tsId, @lineNumber, @fileName, @mimeType, @fileSize, @fileData)
+          `);
+      }
     }
 
     const materialRows: any[] = body.materialRows ?? [];
@@ -431,7 +473,7 @@ export class TimesheetsService implements OnModuleInit {
           VALUES
             (@tsDocNo, @tsType, @entryDate, @projectId, @projectName, @workOrderNo,
              @departmentCode, @shiftCode, @enteredByName, @enteredByUserId, @remarks,
-             CASE @tsType WHEN 'PROJ' THEN 'Approved' ELSE 'Draft' END)
+             'Draft')
         `);
 
       const tsId = hdr.recordset[0].tsId;
@@ -678,16 +720,38 @@ export class TimesheetsService implements OnModuleInit {
     if (!hdr) return null;
 
     const tsId = hdr.tsId;
-    const [labour, material, equipment] = await Promise.all([
+    const [labour, material, equipment, projAttachments] = await Promise.all([
       this.devPool.request().input('tsId', mssql.BigInt, tsId)
-        .query(`SELECT * FROM PSTsLabourLine   WHERE tsId = @tsId ORDER BY lineNumber`),
+        .query(`SELECT * FROM PSTsLabourLine WHERE tsId = @tsId ORDER BY lineNumber`),
       this.devPool.request().input('tsId', mssql.BigInt, tsId)
         .query(`SELECT * FROM PSTsMaterialLine  WHERE tsId = @tsId ORDER BY lineNumber`),
       this.devPool.request().input('tsId', mssql.BigInt, tsId)
         .query(`SELECT * FROM PSTsEquipmentLine WHERE tsId = @tsId ORDER BY lineNumber`),
+      hdr.tsType === 'PROJ'
+        ? this.devPool.request().input('tsId', mssql.BigInt, tsId)
+            .query(`SELECT id, lineNumber, fileName, mimeType, fileSize, uploadedAt FROM PSTsProjLineAttachment WHERE tsId = @tsId ORDER BY lineNumber, id`)
+        : Promise.resolve({ recordset: [] }),
     ]);
 
+    // Map attachments by lineNumber for PROJ timesheets
+    const attachByLine: Record<number, any[]> = {};
+    for (const a of projAttachments.recordset) {
+      if (!attachByLine[a.lineNumber]) attachByLine[a.lineNumber] = [];
+      attachByLine[a.lineNumber].push({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, fileSize: a.fileSize, uploadedAt: a.uploadedAt });
+    }
+
+    // Case-insensitive property lookup — handles DB columns that may use different casing (e.g. ProjectId vs projectId)
+    const ci = (obj: any, name: string): any => {
+      if (obj == null) return null;
+      if (name in obj) return obj[name];                     // exact match first (fastest)
+      const lower = name.toLowerCase();
+      const key = Object.keys(obj).find(k => k.toLowerCase() === lower);
+      return key !== undefined ? obj[key] : null;
+    };
+
     const allEquipment = equipment.recordset;
+    this.logger.debug(`[get ${docNo}] labour rows=${labour.recordset.length}` +
+      (labour.recordset[0] ? ` row0 keys=${Object.keys(labour.recordset[0]).join(',')}` : ''));
     return {
       ...hdr,
       entryDate: toDateStr(hdr.entryDate),
@@ -695,7 +759,17 @@ export class TimesheetsService implements OnModuleInit {
         const start = toHM(r.startTime);
         const end   = toHM(r.endTime);
         const durationMinutes = calcDurationMinutes(start, end) ?? (r.durationMinutes ?? 0);
-        return { ...r, startTime: start, endTime: end, durationMinutes, duration_hm: minutesToHm(durationMinutes) };
+        return {
+          ...r,
+          startTime: start,
+          endTime: end,
+          durationMinutes,
+          duration_hm: minutesToHm(durationMinutes),
+          projectId:    ci(r, 'projectId'),
+          taskTypeCode: ci(r, 'taskTypeCode'),
+          comments:     ci(r, 'comments'),
+          attachments:  attachByLine[r.lineNumber] ?? [],
+        };
       }),
       materialLines:  material.recordset,
       equipmentLines: allEquipment.filter(r => (r.lineType || 'MACHINERY') === 'MACHINERY'),
@@ -773,6 +847,9 @@ export class TimesheetsService implements OnModuleInit {
           WHERE tsId = @tsId
         `);
 
+      // Delete PROJ line attachments before re-inserting lines
+      await tx.request().input('tsId', mssql.BigInt, tsId)
+        .query(`DELETE FROM PSTsProjLineAttachment WHERE tsId = @tsId`);
       for (const tbl of ['PSTsLabourLine', 'PSTsMaterialLine', 'PSTsEquipmentLine']) {
         await tx.request()
           .input('tsId', mssql.BigInt, tsId)
@@ -855,28 +932,49 @@ export class TimesheetsService implements OnModuleInit {
       `);
   }
 
+  // ── Confirm (PROJ self-approve) ──────────────────────────────────
+  async confirmTimesheet(docNo: string, byName: string): Promise<void> {
+    const res = await this.devPool.request()
+      .input('docNo',  mssql.NVarChar(40),  docNo)
+      .input('byName', mssql.NVarChar(200), byName || null)
+      .query(`
+        UPDATE PSTsHeader
+        SET status = 'Approved', approvedBy = @byName, approvedAt = GETDATE(),
+            rejectionReason = NULL, updatedAt = SYSUTCDATETIME()
+        WHERE tsDocNo = @docNo AND isDeleted = 0 AND tsType = 'PROJ' AND status = 'Draft'
+      `);
+    if (res.rowsAffected[0] === 0)
+      throw new Error(`Cannot confirm: ${docNo} not found, not a PROJ timesheet, or not in Draft status`);
+  }
+
   async getTsEmployees(): Promise<any[]> {
     // Employees from the live master filtered by Production / Installation departments.
     // mainDepartment is not a column — it is the parent dept's departmentCode (self-join).
-    const masterRes = await this.livePool.request().query(`
-      SELECT
-        me.employeeNo   AS employeeCode,
-        LTRIM(RTRIM(ISNULL(me.firstName,'') + ' ' + ISNULL(me.lastname,''))) AS employeeName,
-        md.departmentCode,
-        parentDept.departmentCode AS mainDepartment
-      FROM ErpMasterEmployee me
-      LEFT JOIN ErpMasterDepartment md         ON md.departmentId         = me.departmentId
-      LEFT JOIN ErpMasterDepartment parentDept ON parentDept.departmentId = md.parentDepartmentId
-      WHERE me.isActive = 1 AND me.isDeleted = 0
-        AND me.employeeNo IS NOT NULL AND me.employeeNo <> ''
-        AND (
-          LOWER(ISNULL(parentDept.departmentCode,'')) LIKE '%production%'
-          OR LOWER(ISNULL(parentDept.departmentCode,'')) LIKE '%install%'
-        )
-      ORDER BY employeeName
-    `);
+    let masterRows: any[] = [];
+    try {
+      const masterRes = await this.livePool.request().query(`
+        SELECT
+          me.employeeNo   AS employeeCode,
+          LTRIM(RTRIM(ISNULL(me.firstName,'') + ' ' + ISNULL(me.lastname,''))) AS employeeName,
+          md.departmentCode,
+          parentDept.departmentCode AS mainDepartment
+        FROM ErpMasterEmployee me
+        LEFT JOIN ErpMasterDepartment md         ON md.departmentId         = me.departmentId
+        LEFT JOIN ErpMasterDepartment parentDept ON parentDept.departmentId = md.parentDepartmentId
+        WHERE me.isActive = 1 AND me.isDeleted = 0
+          AND me.employeeNo IS NOT NULL AND me.employeeNo <> ''
+          AND (
+            LOWER(ISNULL(parentDept.departmentCode,'')) LIKE '%production%'
+            OR LOWER(ISNULL(parentDept.departmentCode,'')) LIKE '%install%'
+          )
+        ORDER BY employeeName
+      `);
+      masterRows = masterRes.recordset;
+    } catch (err) {
+      this.logger.warn(`getTsEmployees: live DB unavailable — ${(err as Error)?.message}`);
+    }
 
-    this.logger.log(`getTsEmployees: master rows=${masterRes.recordset.length}`);
+    this.logger.log(`getTsEmployees: master rows=${masterRows.length}`);
 
     // Also pull any employees already used in PROD/INST labour lines (catches manually entered names)
     const labourRes = await this.devPool.request().query(`
@@ -890,13 +988,26 @@ export class TimesheetsService implements OnModuleInit {
     // Merge: master list takes priority; add labour-line employees not already present
     const seen = new Set<string>();
     const result: any[] = [];
-    for (const r of masterRes.recordset) {
+    for (const r of masterRows) {
       if (!seen.has(r.employeeCode)) { seen.add(r.employeeCode); result.push(r); }
     }
     for (const r of labourRes.recordset) {
       if (!seen.has(r.employeeCode)) { seen.add(r.employeeCode); result.push(r); }
     }
     return result.sort((a, b) => (a.employeeName || '').localeCompare(b.employeeName || ''));
+  }
+
+  async getProjLineAttachment(attachId: number): Promise<{ fileName: string; mimeType: string; fileData: string } | null> {
+    const res = await this.devPool.request()
+      .input('id', mssql.Int, attachId)
+      .query(`SELECT fileName, mimeType, fileData FROM PSTsProjLineAttachment WHERE id = @id`);
+    return res.recordset[0] ?? null;
+  }
+
+  async removeProjLineAttachment(attachId: number): Promise<void> {
+    await this.devPool.request()
+      .input('id', mssql.Int, attachId)
+      .query(`DELETE FROM PSTsProjLineAttachment WHERE id = @id`);
   }
 
   async getDistinctProjectCodes(): Promise<{ projectId: string; projectName: string }[]> {
@@ -908,6 +1019,82 @@ export class TimesheetsService implements OnModuleInit {
       ORDER BY projectId
     `);
     return res.recordset;
+  }
+
+  async getWeekEntries(employeeCode: string, weekStart: string, excludeDocNos?: string): Promise<Record<string, any[]>> {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+    const excludeList = (excludeDocNos ?? '').split(',').filter(Boolean);
+    const req = this.devPool.request()
+      .input('empCode',   mssql.NVarChar(50),  employeeCode)
+      .input('weekStart', mssql.NVarChar(20),  weekStart)
+      .input('weekEnd',   mssql.NVarChar(20),  weekEndStr);
+    excludeList.forEach((d, i) => req.input(`ex${i}`, mssql.NVarChar(40), d));
+    const excludeClause = excludeList.length > 0
+      ? `AND h.tsDocNo NOT IN (${excludeList.map((_, i) => `@ex${i}`).join(',')})`
+      : '';
+    const res = await req.query(`
+      SELECT h.tsDocNo, h.tsType, h.status,
+             CONVERT(VARCHAR(10), h.entryDate, 23) AS dateStr,
+             l.lineNumber, l.startTime, l.endTime, l.durationMinutes,
+             l.projectId, h.workOrderNo, h.department_code
+      FROM PSTsLabourLine l
+      JOIN PSTsHeader h ON h.tsId = l.tsId
+      WHERE h.isDeleted = 0
+        AND l.employeeCode = @empCode
+        AND CAST(h.entryDate AS DATE) >= CAST(@weekStart AS DATE)
+        AND CAST(h.entryDate AS DATE) <= CAST(@weekEnd AS DATE)
+        AND l.startTime IS NOT NULL AND l.endTime IS NOT NULL
+        ${excludeClause}
+      ORDER BY h.entryDate, l.startTime
+    `);
+    const result: Record<string, any[]> = {};
+    for (const r of res.recordset) {
+      const dateKey = (r.dateStr ?? '').slice(0, 10);
+      if (!result[dateKey]) result[dateKey] = [];
+      result[dateKey].push({
+        tsDocNo:         r.tsDocNo,
+        tsType:          r.tsType,
+        status:          r.status,
+        lineNumber:      r.lineNumber,
+        startTime:       toHM(r.startTime),
+        endTime:         toHM(r.endTime),
+        durationMinutes: r.durationMinutes,
+        label:           r.projectId || r.workOrderNo || r.department_code || '—',
+      });
+    }
+    return result;
+  }
+
+  async getDayEntries(employeeCode: string, date: string, excludeDocNo?: string): Promise<any[]> {
+    const req = this.devPool.request()
+      .input('empCode', mssql.NVarChar(50), employeeCode)
+      .input('date', mssql.NVarChar(20), date);
+    if (excludeDocNo) req.input('excludeDocNo', mssql.NVarChar(40), excludeDocNo);
+    const res = await req.query(`
+      SELECT h.tsDocNo, h.tsType, h.status,
+             l.lineNumber, l.startTime, l.endTime, l.durationMinutes,
+             l.projectId, h.workOrderNo, h.department_code
+      FROM PSTsLabourLine l
+      JOIN PSTsHeader h ON h.tsId = l.tsId
+      WHERE h.isDeleted = 0
+        AND l.employeeCode = @empCode
+        AND CAST(h.entryDate AS DATE) = CAST(@date AS DATE)
+        ${excludeDocNo ? 'AND h.tsDocNo <> @excludeDocNo' : ''}
+        AND l.startTime IS NOT NULL AND l.endTime IS NOT NULL
+      ORDER BY l.startTime
+    `);
+    return res.recordset.map(r => ({
+      tsDocNo:         r.tsDocNo,
+      tsType:          r.tsType,
+      status:          r.status,
+      lineNumber:      r.lineNumber,
+      startTime:       toHM(r.startTime),
+      endTime:         toHM(r.endTime),
+      durationMinutes: r.durationMinutes,
+      label:           r.projectId || r.workOrderNo || r.department_code || '—',
+    }));
   }
 
   async getPendingApprovals(department?: string): Promise<any[]> {

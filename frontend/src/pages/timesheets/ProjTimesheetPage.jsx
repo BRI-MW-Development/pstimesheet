@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import SearchSelect from '../../components/ui/SearchSelect';
@@ -28,7 +28,120 @@ function calcMins(start, end) {
   return String(Math.max(0, mins));
 }
 
+// ── Attachment cell component ──────────────────────────────────────────────────
+function AttachCell({ attachment, existingAttachments = [], onAdd, onRemoveNew, onRemoveExisting, readOnly }) {
+  const fileRef = useRef();
+  const [preview, setPreview] = useState(null); // { src, name } for lightbox
+
+  function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      onAdd({ fileName: file.name, mimeType: file.type, fileSize: file.size, fileData: ev.target.result.split(',')[1], dataUrl: ev.target.result });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
+  function openExisting(att) {
+    api.get(`/timesheets/proj-line-attachments/${att.id}`).then((r) => {
+      const { fileName, mimeType, fileData } = r.data;
+      const src = `data:${mimeType};base64,${fileData}`;
+      if (mimeType?.startsWith('image/')) {
+        setPreview({ src, name: fileName });
+      } else {
+        const a = document.createElement('a');
+        a.href = src; a.download = fileName; a.click();
+      }
+    });
+  }
+
+  function fileIcon(name = '') {
+    const ext = name.split('.').pop()?.toLowerCase();
+    if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return '🖼';
+    if (ext === 'pdf') return '📄';
+    if (['doc','docx'].includes(ext)) return '📝';
+    if (['xls','xlsx'].includes(ext)) return '📊';
+    return '📎';
+  }
+
+  return (
+    <>
+      {/* Lightbox */}
+      {preview && (
+        <div onClick={() => setPreview(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out', pointerEvents: 'auto' }}>
+          <img src={preview.src} alt={preview.name}
+            style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 8, boxShadow: '0 20px 60px rgba(0,0,0,.5)' }}
+            onClick={(e) => e.stopPropagation()} />
+          <button onClick={() => setPreview(null)}
+            style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', color: '#fff', fontSize: 28, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {/* Existing saved attachments */}
+        {existingAttachments.map((att) => (
+          <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <button type="button" onClick={() => openExisting(att)}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', maxWidth: 140, pointerEvents: 'auto' }}>
+              <span>{fileIcon(att.fileName)}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.fileName}</span>
+            </button>
+            {!readOnly && (
+              <button type="button" onClick={() => onRemoveExisting(att.id)}
+                style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0 2px', lineHeight: 1 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            )}
+          </div>
+        ))}
+
+        {/* New (unsaved) attachment */}
+        {attachment && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            {attachment.mimeType?.startsWith('image/') && attachment.dataUrl ? (
+              <img src={attachment.dataUrl} alt={attachment.fileName}
+                onClick={() => setPreview({ src: attachment.dataUrl, name: attachment.fileName })}
+                style={{ width: 36, height: 28, objectFit: 'cover', borderRadius: 4, cursor: 'zoom-in', border: '1px solid #e5e7eb' }} />
+            ) : (
+              <span>{fileIcon(attachment.fileName)}</span>
+            )}
+            <span style={{ fontSize: 11, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>{attachment.fileName}</span>
+            {!readOnly && (
+              <button type="button" onClick={onRemoveNew}
+                style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0 2px', lineHeight: 1 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Upload button */}
+        {!readOnly && !attachment && (
+          <>
+            <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={handleFile} />
+            <button type="button" onClick={() => fileRef.current?.click()}
+              style={{ fontSize: 11, color: '#6b7280', background: 'none', border: '1px dashed #d1d5db', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, alignSelf: 'flex-start' }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              Attach file
+            </button>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ── Daily Form ─────────────────────────────────────────────────────────────────
+let _lineKey = 0;
+const EMPTY_LINE = () => ({ _key: ++_lineKey, projectId: '', taskType: '', startTime: '', endTime: '', attachment: null, existingAttachments: [], comments: '', commentOpen: false });
+
+const _localDate = (d) => { const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
+const TODAY     = _localDate(new Date());
+const MIN_DATE  = _localDate(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
+
 function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -38,22 +151,12 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
   const userEmployeeCode = user?.employeeCode ?? '';
   const entryPerson = user?.employeeCode ?? user?.username ?? '';
 
-  const [form, setForm] = useState({
-    employee: userEmployeeCode,
-    date: new Date().toISOString().slice(0, 10),
-    projectId: '',
-    projectName: '',
-    customer: '',
-    taskType: '',
-    startTime: '',
-    endTime: '',
-    duration: '',
-    comments: '',
-  });
+  const [summary, setSummary] = useState({ employee: userEmployeeCode, date: TODAY });
+  const [lines, setLines] = useState([EMPTY_LINE()]);
 
-  const { data: employees  = [] } = useQuery({ queryKey: ['employees'],  queryFn: () => api.get('/employees').then((r) => r.data) });
-  const { data: projects   = [] } = useQuery({ queryKey: ['projects'],   queryFn: () => api.get('/projects').then((r) => r.data) });
-  const { data: taskTypes  = [] } = useQuery({ queryKey: ['task-types'], queryFn: () => api.get('/task-types').then((r) => r.data) });
+  const { data: employees = [] } = useQuery({ queryKey: ['employees'],  queryFn: () => api.get('/employees').then((r) => r.data) });
+  const { data: projects  = [] } = useQuery({ queryKey: ['projects'],   queryFn: () => api.get('/projects').then((r) => r.data) });
+  const { data: taskTypes = [] } = useQuery({ queryKey: ['task-types'], queryFn: () => api.get('/task-types').then((r) => r.data) });
 
   const { data: existing } = useQuery({
     queryKey: ['timesheet', editDocNo],
@@ -61,34 +164,48 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
     enabled: Boolean(editDocNo),
   });
 
+  const { data: dayEntries = [] } = useQuery({
+    queryKey: ['day-entries', summary.employee, summary.date, editDocNo],
+    queryFn: () => api.get('/timesheets/day-entries', { params: { employeeCode: summary.employee, date: summary.date, excludeDocNo: editDocNo } }).then((r) => r.data),
+    enabled: !!(summary.employee && summary.date),
+  });
+
   useEffect(() => {
     if (!existing) return;
-    const proj = projects.find((p) => p.projectCode === (existing.projectId ?? existing.project_code));
-    setForm((f) => ({
-      ...f,
-      employee: existing.labourLines?.[0]?.employeeCode ?? '',
-      date: existing.entryDate?.slice(0, 10) ?? '',
-      projectId: existing.projectId ?? existing.project_code ?? '',
-      projectName: proj?.projectName ?? existing.projectName ?? '',
-      customer: proj?.customerName ?? '',
-      taskType: existing.shiftCode ?? '',
-      startTime: existing.labourLines?.[0]?.startTime ?? '',
-      endTime:   existing.labourLines?.[0]?.endTime   ?? '',
-      comments: existing.remarks ?? '',
-      duration: existing.labourLines?.[0]?.durationMinutes ? String(existing.labourLines[0].durationMinutes) : '',
-    }));
-  }, [existing, projects]);
-
-  function onProjectChange(pid) {
-    const proj = projects.find((p) => p.projectCode === pid);
-    setForm((f) => ({ ...f, projectId: pid, projectName: proj?.projectName ?? '', customer: proj?.customerName ?? '' }));
-  }
-
-  function onTimeChange(field, val) {
-    setForm((f) => {
-      const updated = { ...f, [field]: val };
-      return { ...updated, duration: calcMins(updated.startTime, updated.endTime) };
+    // Debug: log what the API returned so we can verify DB values
+    console.log('[PROJ] existing labourLines from API:', JSON.stringify(
+      (existing.labourLines ?? []).map(l => ({ lineNumber: l.lineNumber, projectId: l.projectId, taskTypeCode: l.taskTypeCode, startTime: l.startTime, endTime: l.endTime, comments: l.comments }))
+    ));
+    setSummary({
+      employee: existing.labourLines?.[0]?.employeeCode ?? userEmployeeCode,
+      date: existing.entryDate?.slice(0, 10) ?? TODAY,
     });
+    setLines(existing.labourLines?.length > 0
+      ? existing.labourLines.map((l, li) => ({
+          _key: ++_lineKey,
+          projectId: l.projectId ?? (li === 0 ? existing.projectId ?? '' : ''),
+          taskType:  l.taskTypeCode ?? (li === 0 ? existing.shiftCode ?? '' : ''),
+          startTime: l.startTime ?? '',
+          endTime:   l.endTime ?? '',
+          attachment: null,
+          existingAttachments: l.attachments ?? [],
+          comments: l.comments ?? '',
+          commentOpen: Boolean(l.comments),
+        }))
+      : [EMPTY_LINE()]);
+  }, [existing]);
+
+  function setLine(idx, field, val) {
+    setLines((ls) => ls.map((l, i) => i === idx ? { ...l, [field]: val } : l));
+  }
+  function addLine()        { setLines((ls) => [...ls, EMPTY_LINE()]); }
+  function removeLine(idx)  { setLines((ls) => ls.length > 1 ? ls.filter((_, i) => i !== idx) : ls); }
+
+  function removeExistingAttachment(lineIdx, attachId) {
+    api.delete(`/timesheets/proj-line-attachments/${attachId}`)
+      .then(() => setLines((ls) => ls.map((l, i) => i === lineIdx
+        ? { ...l, existingAttachments: l.existingAttachments.filter((a) => a.id !== attachId) } : l)))
+      .catch(() => toast('Failed to remove attachment.', 'error'));
   }
 
   const { mutate: save, isPending: saving } = useMutation({
@@ -96,161 +213,359 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
       editDocNo
         ? api.put(`/timesheets/${editDocNo}`, payload).then((r) => r.data)
         : api.post('/timesheets', payload).then((r) => r.data),
-    onSuccess: () => {
-      queryClient.refetchQueries({ queryKey: ['proj-timesheets'], type: 'active' });
-      toast(editDocNo ? 'Timesheet updated.' : 'Timesheet saved.', 'success');
-      onSaved();
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['proj-timesheets'] });
+      if (editDocNo) {
+        queryClient.invalidateQueries({ queryKey: ['timesheet', editDocNo] });
+        toast('Timesheet updated.', 'success');
+        onSaved();
+      } else {
+        // New save: open the record immediately so user can verify data saved correctly
+        const savedDocNo = result?.docNo;
+        toast(`Saved as Draft${savedDocNo ? ` — ${savedDocNo}` : ''}.`, 'success');
+        onSaved(savedDocNo); // pass docNo up so parent can open the record
+      }
     },
     onError: (err) => toast(err?.response?.data?.message ?? 'Save failed.', 'error'),
   });
 
+  const { mutate: confirm, isPending: confirming } = useMutation({
+    mutationFn: () => api.post(`/timesheets/${editDocNo}/confirm`).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['proj-timesheets'] });
+      queryClient.invalidateQueries({ queryKey: ['timesheet', editDocNo] });
+      toast('Timesheet confirmed and approved.', 'success');
+      onSaved();
+    },
+    onError: (err) => toast(err?.response?.data?.message ?? 'Confirm failed.', 'error'),
+  });
+
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.projectId?.trim())  { toast('Project ID is required.',  'error'); return; }
-    if (!form.taskType?.trim())   { toast('Task Type is required.',   'error'); return; }
-    if (!form.employee?.trim() && !userEmployeeCode?.trim()) { toast('Employee is required.', 'error'); return; }
+    const emp = summary.employee || userEmployeeCode;
+    if (!emp?.trim()) { toast('Employee is required.', 'error'); return; }
+    // Lines that have ANY field filled in are "active" — all four fields are required on active lines
+    const activeLines = lines.filter((l) => l.projectId?.trim() || l.taskType?.trim() || l.startTime || l.endTime);
+    if (activeLines.length === 0) { toast('Add at least one line with data.', 'error'); return; }
+
+    for (let i = 0; i < activeLines.length; i++) {
+      const { projectId, taskType, startTime: s, endTime: e } = activeLines[i];
+      const lineLabel = `Line ${i + 1}`;
+      if (!projectId?.trim()) { toast(`${lineLabel}: Project ID is required.`, 'error'); return; }
+      if (!taskType?.trim())  { toast(`${lineLabel}: Task Type is required.`, 'error'); return; }
+      if (!s)                 { toast(`${lineLabel}: Start Time is required.`, 'error'); return; }
+      if (!e)                 { toast(`${lineLabel}: End Time is required.`, 'error'); return; }
+      const sm = Number(calcMins('00:00', s));
+      const em = Number(calcMins('00:00', e));
+      if (sm === em) { toast(`${lineLabel}: Start and end time cannot be the same.`, 'error'); return; }
+      if (em < sm)   { toast(`${lineLabel}: End time must be after start time.`, 'error'); return; }
+    }
+    const validLines = activeLines;
+    console.log('[PROJ] saving labourRows:', JSON.stringify(
+      validLines.map(l => ({ projectId: l.projectId, taskType: l.taskType, startTime: l.startTime, endTime: l.endTime }))
+    ));
     save({
       tsType: 'PROJ',
-      date: form.date,
-      projectId: form.projectId,
-      projectName: form.projectName,
-      shift: form.taskType,
+      date: summary.date,
+      projectId: validLines[0]?.projectId || '',
+      shift: validLines[0]?.taskType || '',
       entryPerson,
-      remarks: form.comments,
-      labourRows: [{
-        employee: form.employee || userEmployeeCode,
-        startTime: form.startTime || null,
-        endTime:   form.endTime   || null,
-        duration:  form.duration || '0',
-      }],
+      labourRows: validLines.map((l) => ({
+        employee: emp,
+        startTime: l.startTime || null,
+        endTime:   l.endTime   || null,
+        duration:  calcMins(l.startTime, l.endTime) || '0',
+        projectId: l.projectId || null,
+        taskTypeCode: l.taskType || null,
+        comments: l.comments || null,
+        attachment: l.attachment || null,
+      })),
     });
   }
 
   const empOptions  = employees.map((e) => ({ value: e.employeeNo, label: `${e.employeeNo} – ${[e.firstName, e.lastname].filter(Boolean).join(' ')}` }));
-  const projOptions = projects.map((p) => ({ value: p.projectCode, label: `${p.projectCode} – ${p.projectName ?? ''}` }));
+  const projOptions = projects.map((p) => ({ value: p.projectCode, label: p.projectCode }));
   const ttOptions   = taskTypes.map((t) => ({ value: t.taskTypeCode ?? t.name, label: t.taskTypeName ?? t.name }));
 
   const statusLabel = existing?.status;
-  const canEdit = isWithin24h(existing?.createdAt);
+  const isDraft = statusLabel === 'Draft';
+  const canEdit = isDraft || isWithin24h(existing?.createdAt);
+
+  function lineMins(line) {
+    const m = Number(calcMins(line.startTime, line.endTime));
+    return m > 0 ? m : 0;
+  }
+
+  const filledCount  = lines.filter((l) => l.projectId || l.taskType || l.startTime).length;
+  const totalMinutes = lines.reduce((sum, l) => sum + lineMins(l), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-      {/* ── Header bar ── */}
-      <div className="ts-modal-head" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div>
-            <div className="ts-modal-title">
-              {readOnly ? `View ${editDocNo}` : editDocNo ? `Edit ${editDocNo}` : 'New Daily Timesheet'}
-            </div>
-            <div className="ts-modal-sub">
-              {readOnly
-                ? `${statusLabel ?? ''} — read-only`
-                : editDocNo ? 'Edit timesheet details below' : 'Projects Team daily entry'}
-            </div>
-          </div>
+      {/* ── Top bar ── */}
+      <div className="ts-modal-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {editDocNo && <span className="ts-docno-pill">{editDocNo}</span>}
+          <div>
+            <div className="ts-modal-title">{readOnly ? 'View Timesheet' : editDocNo ? 'Edit Timesheet' : 'New Daily Timesheet'}</div>
+            <div className="ts-modal-sub">{readOnly ? `${statusLabel ?? ''} · read-only` : 'Projects Team · daily entry'}</div>
+          </div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
       </div>
 
       {/* ── Body ── */}
-      <form
-        id="pt-daily-form"
-        onSubmit={handleSubmit}
-        style={{ flex: 1, overflowY: 'auto', padding: '20px' }}
-      >
-        <div style={{ pointerEvents: readOnly ? 'none' : undefined }}>
-        <div className="card">
-          <div className="card-body">
-            <div className="form-grid-2">
-              <div className="form-group">
-                <label className="form-label">Entered By</label>
-                <input className="form-control" value={entryPerson} readOnly />
-              </div>
+      <div className="ts-scroll-panel" style={{ pointerEvents: readOnly ? 'none' : undefined }}>
+        <form id="pt-daily-form" onSubmit={handleSubmit}>
 
-              <div className="form-group">
-                <label className="form-label">Employee</label>
+          {/* ── Summary section ── */}
+          <div className="ts-section">
+            <div className="ts-section-head" style={{ background: 'linear-gradient(to right, #f0f7ff, #f8fafc)' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#3b82f6' }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Summary
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '220px 180px 1fr 150px' }}>
+              <div style={{ padding: '16px 20px', borderRight: '1px solid #f0f0f0' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>Doc No</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: editDocNo ? '#1d4ed8' : '#9ca3af', fontFamily: 'monospace' }}>
+                  {editDocNo ?? '— auto-generated —'}
+                </div>
+              </div>
+              <div style={{ padding: '16px 20px', borderRight: '1px solid #f0f0f0' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>Date</div>
+                <input type="date" className="form-control" value={summary.date}
+                  min={MIN_DATE} max={TODAY}
+                  style={{ maxWidth: 160, fontSize: 13 }}
+                  onChange={(e) => setSummary((s) => ({ ...s, date: e.target.value }))} />
+              </div>
+              <div style={{ padding: '16px 20px', borderRight: '1px solid #f0f0f0' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>Employee</div>
                 {isAdmin ? (
-                  <SearchSelect options={empOptions} value={form.employee}
-                    onChange={(v) => setForm((f) => ({ ...f, employee: v }))} placeholder="Search employee…" />
+                  <SearchSelect options={empOptions} value={summary.employee}
+                    onChange={(v) => setSummary((s) => ({ ...s, employee: v }))} placeholder="Search employee…" />
                 ) : (
-                  <input className="form-control" value={form.employee || userEmployeeCode} readOnly
-                    style={{ background: 'var(--bg2)', color: 'var(--text3)' }} />
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', paddingTop: 6 }}>{summary.employee || userEmployeeCode || '—'}</div>
                 )}
               </div>
-
-              <div className="form-group">
-                <label className="form-label">Date</label>
-                <input type="date" className="form-control" value={form.date}
-                  onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Project ID</label>
-                <SearchSelect options={projOptions} value={form.projectId}
-                  onChange={onProjectChange} placeholder="Type to search…" />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Project Name</label>
-                <input className="form-control" value={form.projectName} readOnly />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Customer</label>
-                <input className="form-control" value={form.customer} readOnly />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Task Type</label>
-                <select className="form-control" value={form.taskType}
-                  onChange={(e) => setForm((f) => ({ ...f, taskType: e.target.value }))}>
-                  <option value="">Select task type…</option>
-                  {ttOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Start Time</label>
-                <TimeInput value={form.startTime} onChange={(v) => onTimeChange('startTime', v)} />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">End Time</label>
-                <TimeInput value={form.endTime} onChange={(v) => onTimeChange('endTime', v)} />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Duration (mins)</label>
-                <input className="form-control" value={form.duration} readOnly />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Comments</label>
-                <input className="form-control" placeholder="—" value={form.comments}
-                  onChange={(e) => setForm((f) => ({ ...f, comments: e.target.value }))} />
+              <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 8 }}>Total Duration</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: totalMinutes > 0 ? '#2563eb' : '#d1d5db', lineHeight: 1 }}>{totalMinutes > 0 ? totalMinutes : '—'}</div>
+                {totalMinutes > 0 && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>minutes</div>}
               </div>
             </div>
           </div>
-        </div>
-        </div>{/* end pointer-events wrapper */}
-      </form>
+
+          {/* ── Timeline ── */}
+          {(() => {
+            const toMins = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+            const timedLines = lines.map((l, i) => ({ ...l, _idx: i, s: toMins(l.startTime), e: toMins(l.endTime) }))
+              .filter((l) => l.s != null && l.e != null && l.e > l.s);
+            const otherEntries = dayEntries.map((e, i) => ({ ...e, _idx: i, s: toMins(e.startTime), e: toMins(e.endTime) }))
+              .filter((e) => e.s != null && e.e != null && e.e > e.s);
+            if (timedLines.length === 0 && otherEntries.length === 0) return null;
+            const COLORS = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4'];
+            const allMins = [
+              ...timedLines.flatMap((l) => [l.s, l.e]),
+              ...otherEntries.flatMap((e) => [e.s, e.e]),
+            ];
+            const viewStart = Math.max(0,    Math.floor((Math.min(...allMins) - 30) / 60) * 60);
+            const viewEnd   = Math.min(1440, Math.ceil ((Math.max(...allMins) + 30) / 60) * 60);
+            const span = viewEnd - viewStart;
+            const pct = (m) => ((m - viewStart) / span * 100).toFixed(3) + '%';
+            const w   = (s, e) => ((e - s) / span * 100).toFixed(3) + '%';
+            const hm  = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+            const ticks = [];
+            for (let m = Math.ceil(viewStart / 60) * 60; m <= viewEnd; m += 60) ticks.push(m);
+            // Overlap detection: any current line overlaps any other entry
+            const hasOverlap = timedLines.some((l) =>
+              otherEntries.some((e) => l.s < e.e && l.e > e.s)
+            );
+            const trackStyle = { position: 'relative', height: 20, background: '#f1f5f9', borderRadius: 6 };
+            const tickLines = ticks.map((m) => (
+              <div key={m} style={{ position: 'absolute', left: pct(m), top: 0, bottom: 0, width: 1, background: '#e2e8f0' }} />
+            ));
+            return (
+              <div style={{ padding: '0 20px 16px', borderBottom: '1px solid #f0f0f0' }}>
+                {/* tick labels */}
+                <div style={{ position: 'relative', height: 16 }}>
+                  {ticks.map((m) => (
+                    <span key={m} style={{ position: 'absolute', left: pct(m), transform: 'translateX(-50%)', fontSize: 9, color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>{hm(m)}</span>
+                  ))}
+                </div>
+                {/* current timesheet track */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: '#6b7280', width: 68, flexShrink: 0, textAlign: 'right' }}>This entry</span>
+                  <div style={{ ...trackStyle, flex: 1 }}>
+                    {tickLines}
+                    {timedLines.map((l) => (
+                      <div key={l._key}
+                        title={`L${l._idx + 1} · ${l.projectId || '—'} · ${hm(l.s)}–${hm(l.e)}`}
+                        style={{ position: 'absolute', left: pct(l.s), width: w(l.s, l.e), top: 2, bottom: 2, background: COLORS[l._idx % COLORS.length], borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                        {(l.e - l.s) >= 45 && (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', padding: '0 4px' }}>L{l._idx + 1}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* other timesheets track */}
+                {otherEntries.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 9, fontWeight: 600, color: '#6b7280', width: 68, flexShrink: 0, textAlign: 'right' }}>Other</span>
+                    <div style={{ ...trackStyle, flex: 1 }}>
+                      {tickLines}
+                      {otherEntries.map((e) => (
+                        <div key={`${e.tsDocNo}-${e.lineNumber}`}
+                          title={`${e.tsDocNo} · ${e.label} · ${hm(e.s)}–${hm(e.e)} (${e.status})`}
+                          style={{ position: 'absolute', left: pct(e.s), width: w(e.s, e.e), top: 2, bottom: 2, background: '#94a3b8', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                          {(e.e - e.s) >= 45 && (
+                            <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', padding: '0 4px' }}>{e.tsType}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* overlap warning */}
+                {hasOverlap && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, padding: '4px 8px', background: '#fef3c7', borderRadius: 4, border: '1px solid #fcd34d' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span style={{ fontSize: 10, color: '#92400e', fontWeight: 600 }}>Time overlap with another timesheet entry for this employee on this date</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ── Lines section ── */}
+          <div className="ts-section">
+            <div className="ts-section-head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              Line Details
+              <span className="ts-section-badge">{filledCount || undefined}</span>
+            </div>
+
+            <table className="ts-line-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 44, textAlign: 'center' }}>#</th>
+                  <th>Project ID</th>
+                  <th>Task Type</th>
+                  <th style={{ width: 120 }}>Start Time</th>
+                  <th style={{ width: 120 }}>End Time</th>
+                  <th style={{ width: 96, textAlign: 'center' }}>Duration</th>
+                  <th style={{ width: 190 }}>Attachment</th>
+                  <th style={{ width: 48, textAlign: 'center' }}>Note</th>
+                  {!readOnly && <th style={{ width: 40 }}></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line, idx) => (
+                  <React.Fragment key={line._key}>
+                    <tr>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#f1f5f9', fontSize: 11, fontWeight: 700, color: '#64748b' }}>{idx + 1}</span>
+                      </td>
+                      <td>
+                        <SearchSelect options={projOptions} value={line.projectId}
+                          onChange={(v) => setLine(idx, 'projectId', v)} placeholder="Type to search…" />
+                      </td>
+                      <td>
+                        <select value={line.taskType} onChange={(e) => setLine(idx, 'taskType', e.target.value)}>
+                          <option value="">— select —</option>
+                          {ttOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                      </td>
+                      <td><TimeInput value={line.startTime} onChange={(v) => setLine(idx, 'startTime', v)} /></td>
+                      <td><TimeInput value={line.endTime}   onChange={(v) => setLine(idx, 'endTime',   v)} /></td>
+                      <td style={{ textAlign: 'center' }}>
+                        {lineMins(line) > 0
+                          ? <span style={{ display: 'inline-block', background: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: 12, borderRadius: 6, padding: '3px 10px' }}>{lineMins(line)} min</span>
+                          : <span style={{ color: '#e2e8f0', fontSize: 12 }}>—</span>}
+                      </td>
+                      <td>
+                        <AttachCell
+                          attachment={line.attachment}
+                          existingAttachments={line.existingAttachments}
+                          onAdd={(att) => setLine(idx, 'attachment', att)}
+                          onRemoveNew={() => setLine(idx, 'attachment', null)}
+                          onRemoveExisting={(attachId) => removeExistingAttachment(idx, attachId)}
+                          readOnly={readOnly}
+                        />
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button type="button" title={line.comments ? 'Edit comment' : 'Add comment'}
+                          onClick={() => setLine(idx, 'commentOpen', !line.commentOpen)}
+                          style={{ border: 'none', cursor: 'pointer', padding: 4, borderRadius: 4, pointerEvents: 'auto',
+                            color: line.comments ? '#2563eb' : '#d1d5db',
+                            background: line.commentOpen ? '#eff6ff' : 'transparent' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill={line.comments ? '#dbeafe' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                          </svg>
+                        </button>
+                      </td>
+                      {!readOnly && (
+                        <td style={{ textAlign: 'center' }}>
+                          {lines.length > 1 && (
+                            <button type="button" className="del-row-btn" onClick={() => removeLine(idx)} title="Remove line">
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                    {line.commentOpen && (
+                      <tr style={{ background: '#f8faff' }}>
+                        <td colSpan={readOnly ? 8 : 9} style={{ padding: '6px 16px 10px 52px' }}>
+                          <textarea
+                            value={line.comments}
+                            onChange={(e) => setLine(idx, 'comments', e.target.value)}
+                            placeholder="Add a comment for this line…"
+                            readOnly={readOnly}
+                            rows={2}
+                            style={{ width: '100%', fontSize: 12, resize: 'vertical', borderRadius: 6, border: '1px solid #e5e7eb', padding: '6px 10px', color: '#374151', background: readOnly ? '#f9fafb' : '#fff', outline: 'none', boxSizing: 'border-box' }}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+
+            {!readOnly && (
+              <div className="ts-section-footer">
+                <button type="button" className="ts-add-btn" onClick={addLine}>+ Add Line</button>
+              </div>
+            )}
+          </div>
+
+        </form>
+      </div>
 
       {/* ── Footer ── */}
       <div className="ts-modal-footer">
         {readOnly ? (
           <>
             <button type="button" className="ts-footer-cancel" onClick={onBack}>← Back to List</button>
-            {canEdit && onEdit && (
-              <button type="button" className="ts-footer-save" onClick={onEdit}>Edit</button>
+            {isDraft && onEdit && (
+              <button type="button" className="ts-footer-cancel" style={{ marginLeft: 'auto' }} onClick={onEdit}>Edit</button>
+            )}
+            {isDraft && editDocNo && (
+              <button type="button" className="ts-footer-save" disabled={confirming}
+                style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                onClick={() => {
+                  if (window.confirm('Confirm this timesheet? Once confirmed it cannot be edited.')) confirm();
+                }}>
+                {confirming ? 'Confirming…' : '✓ Confirm Timesheet'}
+              </button>
             )}
           </>
         ) : (
           <>
             <button type="button" className="ts-footer-cancel" onClick={onBack}>Cancel</button>
             <button type="submit" form="pt-daily-form" className="ts-footer-save" disabled={saving}>
-              {saving ? 'Saving…' : 'Save Timesheet'}
+              {saving ? 'Saving…' : editDocNo ? 'Update Timesheet' : 'Save as Draft'}
             </button>
           </>
         )}
@@ -260,60 +575,72 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
 }
 
 // ── Weekly Form ────────────────────────────────────────────────────────────────
+let _wLineKey = 0;
+const EMPTY_WLINE = () => ({ _key: ++_wLineKey, projectId: '', taskType: '', startTime: '', endTime: '', attachment: null, existingAttachments: [], comments: '', commentOpen: false });
+
 function WeeklyForm({ onBack, onSaved }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const entryPerson = user?.employeeCode ?? user?.username ?? '';
+  const userEmployeeCode = user?.employeeCode ?? '';
+  const entryPerson = user?.displayName ?? user?.username ?? '';
 
-  const today = new Date();
-  const mon = new Date(today);
-  mon.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-  const defaultWeekStart = mon.toISOString().slice(0, 10);
+  // Always format dates in LOCAL time to avoid UTC-offset shift (e.g. IST midnight → previous UTC day)
+  const localDateStr = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
 
-  const [employee, setEmployee] = useState('');
-  const [weekStart, setWeekStartState] = useState(defaultWeekStart);
-  const [weekEnd, setWeekEnd] = useState('');
-  const [rows, setRows] = useState([{ projectId: '', taskType: '', days: Array(7).fill({ s: '', e: '' }), comment: '' }]);
+  const todayStr = localDateStr(new Date());
+  const mon = new Date();
+  mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+  const defaultWeekStart = localDateStr(mon);
+
+  const [employee, setEmployee] = useState(userEmployeeCode);
+  const [weekStart, setWeekStart] = useState(defaultWeekStart);
+  // dayLines[0..6] = array of line objects per day
+  const [dayLines, setDayLines] = useState(() => Array(7).fill(null).map(() => [EMPTY_WLINE()]));
+  // active tab index — find today within the default week
+  const todayDi = (() => {
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(defaultWeekStart + 'T00:00:00'); d.setDate(d.getDate() + i);
+      if (localDateStr(d) === todayStr) return i;
+    }
+    return 0;
+  })();
+  const [activeDay, setActiveDay] = useState(todayDi);
 
   const { data: employees = [] } = useQuery({ queryKey: ['employees'],  queryFn: () => api.get('/employees').then((r) => r.data) });
   const { data: projects  = [] } = useQuery({ queryKey: ['projects'],   queryFn: () => api.get('/projects').then((r) => r.data) });
   const { data: taskTypes = [] } = useQuery({ queryKey: ['task-types'], queryFn: () => api.get('/task-types').then((r) => r.data) });
 
-  function onWeekStartChange(val) {
-    setWeekStartState(val);
-    if (val) {
-      const end = new Date(val);
-      end.setDate(end.getDate() + 6);
-      setWeekEnd(end.toISOString().slice(0, 10));
-    } else {
-      setWeekEnd('');
-    }
-  }
+  const { data: weekEntries = {} } = useQuery({
+    queryKey: ['week-entries', employee, weekStart],
+    queryFn: () => api.get('/timesheets/week-entries', { params: { employeeCode: employee, weekStart } }).then((r) => r.data),
+    enabled: !!(employee && weekStart),
+  });
 
-  useEffect(() => { onWeekStartChange(defaultWeekStart); }, []);
-
-  function weekDates() {
+  const dates = (() => {
     if (!weekStart) return Array(7).fill('');
-    return DAYS.map((_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      return d.toISOString().slice(0, 10);
+    return Array(7).fill(null).map((_, i) => {
+      const d = new Date(weekStart + 'T00:00:00'); d.setDate(d.getDate() + i);
+      return localDateStr(d);
     });
-  }
+  })();
 
-  function setRow(idx, field, val) {
-    setRows((rs) => rs.map((r, i) => i === idx ? { ...r, [field]: val } : r));
-  }
+  const weekEnd = dates[6] ?? '';
 
-  function setDay(rowIdx, dayIdx, field, val) {
-    setRows((rs) => rs.map((r, i) => {
-      if (i !== rowIdx) return r;
-      const days = r.days.map((d, j) => j === dayIdx ? { ...d, [field]: val } : d);
-      return { ...r, days };
-    }));
+  function setLine(di, li, field, val) {
+    setDayLines((all) => all.map((day, d) => d !== di ? day : day.map((ln, l) => l !== li ? ln : { ...ln, [field]: val })));
   }
-
+  function addLine(di) {
+    setDayLines((all) => all.map((day, d) => d !== di ? day : [...day, EMPTY_WLINE()]));
+  }
+  function removeLine(di, li) {
+    setDayLines((all) => all.map((day, d) => d !== di ? day : day.filter((_, l) => l !== li)));
+  }
   const { mutate: save, isPending: saving } = useMutation({
     mutationFn: (payload) => api.post('/timesheets/weekly', payload).then((r) => r.data),
     onSuccess: () => {
@@ -324,127 +651,365 @@ function WeeklyForm({ onBack, onSaved }) {
     onError: (err) => toast(err?.response?.data?.message ?? 'Save failed.', 'error'),
   });
 
-  const dates = weekDates();
   const empOptions  = employees.map((e) => ({ value: e.employeeNo, label: `${e.employeeNo} – ${[e.firstName, e.lastname].filter(Boolean).join(' ')}` }));
   const projOptions = projects.map((p) => ({ value: p.projectCode, label: `${p.projectCode} – ${p.projectName ?? ''}` }));
   const ttOptions   = taskTypes.map((t) => ({ value: t.taskTypeCode ?? t.name, label: t.taskTypeName ?? t.name }));
 
+  const toMins = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const hm     = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const COLORS  = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4'];
+
+  function fmtMins(mins) {
+    if (!mins) return null;
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
+  }
+
+  // Per-day totals
+  const dayTotals = dayLines.map((lines) =>
+    lines.reduce((sum, l) => sum + (parseInt(calcMins(l.startTime, l.endTime), 10) || 0), 0)
+  );
+  const weekTotal = dayTotals.reduce((a, b) => a + b, 0);
+
   function handleSubmit(e) {
     e.preventDefault();
-    save({ employee, weekStart, rows: rows.map((r) => ({ ...r, dates })) });
+    if (!employee) { toast('Select an employee.', 'error'); return; }
+
+    // Collect active lines across all days (any field touched)
+    const activeEntries = [];
+    dayLines.forEach((lines, di) => {
+      lines.forEach((ln, li) => {
+        if (ln.projectId?.trim() || ln.taskType?.trim() || ln.startTime || ln.endTime) {
+          activeEntries.push({ ln, di, li });
+        }
+      });
+    });
+
+    if (activeEntries.length === 0) { toast('Add at least one line with data.', 'error'); return; }
+
+    for (const { ln, di, li } of activeEntries) {
+      const label = `${DAYS[di]} Line ${li + 1}`;
+      if (!ln.projectId?.trim()) { toast(`${label}: Project is required.`, 'error'); return; }
+      if (!ln.taskType?.trim())  { toast(`${label}: Task Type is required.`, 'error'); return; }
+      if (!ln.startTime)         { toast(`${label}: Start Time is required.`, 'error'); return; }
+      if (!ln.endTime)           { toast(`${label}: End Time is required.`, 'error'); return; }
+      const sm = Number(calcMins('00:00', ln.startTime));
+      const em = Number(calcMins('00:00', ln.endTime));
+      if (sm === em) { toast(`${label}: Start and end time cannot be the same.`, 'error'); return; }
+      if (em < sm)   { toast(`${label}: End time must be after start time.`, 'error'); return; }
+    }
+
+    // Build rows for backend
+    const rows = [];
+    dayLines.forEach((lines, di) => {
+      lines.forEach((ln) => {
+        if (!ln.startTime && !ln.endTime) return;
+        rows.push({
+          projectId:  ln.projectId,
+          taskType:   ln.taskType,
+          comment:    ln.comments,
+          attachment: ln.attachment,
+          days:  Array(7).fill(null).map((_, i) => ({ s: i === di ? ln.startTime : '', e: i === di ? ln.endTime : '' })),
+          dates,
+        });
+      });
+    });
+    save({ employee, weekStart, rows });
   }
+
+  // Derived per-day data (computed once, used in tab bar and panel)
+  const dayData = dates.map((date, di) => {
+    const lines      = dayLines[di];
+    const isToday    = date === todayStr;
+    const dayMins    = dayTotals[di];
+    const otherSegs  = (weekEntries[date] ?? [])
+      .map((e) => ({ ...e, s: toMins(e.startTime), e: toMins(e.endTime) }))
+      .filter((e) => e.s != null && e.e != null && e.e > e.s);
+    const currentSegs = lines
+      .map((l, li) => ({ li, s: toMins(l.startTime), e: toMins(l.endTime), projectId: l.projectId }))
+      .filter((seg) => seg.s != null && seg.e != null && seg.e > seg.s);
+    const hasOverlap = currentSegs.some((c) => otherSegs.some((o) => c.s < o.e && c.e > o.s));
+    const allMins = [...currentSegs.flatMap((s) => [s.s, s.e]), ...otherSegs.flatMap((s) => [s.s, s.e])];
+    const tl = allMins.length > 0 ? (() => {
+      const vs = Math.max(0,    Math.floor((Math.min(...allMins) - 30) / 60) * 60);
+      const ve = Math.min(1440, Math.ceil ((Math.max(...allMins) + 30) / 60) * 60);
+      const sp = ve - vs;
+      const p  = (m) => ((m - vs) / sp * 100).toFixed(3) + '%';
+      const ww = (s, e) => ((e - s) / sp * 100).toFixed(3) + '%';
+      const tks = [];
+      for (let m = Math.ceil(vs / 60) * 60; m <= ve; m += 60) tks.push(m);
+      return { p, ww, tks };
+    })() : null;
+    return { date, lines, isToday, dayMins, otherSegs, currentSegs, hasOverlap, tl };
+  });
+
+  const ad = dayData[activeDay]; // active day data
 
   return (
     <div className="page-content">
+      {/* ── Page header ── */}
       <div className="page-header">
         <div>
-          <div className="page-title">Weekly Timesheet Entry</div>
-          <div className="page-sub">Each filled day is saved as an individual daily timesheet</div>
+          <div className="page-title">Weekly Timesheet</div>
+          <div className="page-sub">Projects Team · each filled day is saved as its own daily timesheet</div>
         </div>
         <div className="btn-row">
-          <button className="btn btn-outline btn-sm" onClick={onBack}>← Back</button>
-          <button className="btn btn-primary btn-sm" form="pt-weekly-form" type="submit" disabled={saving}>
-            {saving ? 'Saving…' : '💾 Save Weekly Entry'}
+          <button className="btn btn-outline btn-sm" type="button" onClick={onBack}>← Back</button>
+          <button className="btn btn-primary btn-sm" type="button" disabled={saving} onClick={handleSubmit}>
+            {saving ? 'Saving…' : '💾 Save Week'}
           </button>
         </div>
       </div>
 
-      <form id="pt-weekly-form" onSubmit={handleSubmit}>
-        <div className="card">
-          <div className="card-head"><div className="card-title">Header</div></div>
-          <div className="card-body">
-            <div className="form-grid-2">
-              <div className="form-group">
-                <label className="form-label">Entered By</label>
-                <input className="form-control" value={entryPerson} readOnly />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Employee</label>
-                <SearchSelect options={empOptions} value={employee} onChange={setEmployee} placeholder="Search employee…" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Week Start (Mon)</label>
-                <input type="date" className="form-control" value={weekStart}
-                  onChange={(e) => onWeekStartChange(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Week End (Sun)</label>
-                <input className="form-control" value={weekEnd} readOnly />
-              </div>
-            </div>
+      {/* ── Header strip: week nav + employee ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0 14px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button type="button" className="btn btn-outline btn-sm" style={{ padding: '4px 10px' }}
+            onClick={() => { const d = new Date(weekStart + 'T00:00:00'); d.setDate(d.getDate() - 7); setWeekStart(localDateStr(d)); }}>◀</button>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', minWidth: 148, textAlign: 'center' }}>
+            {weekStart && weekEnd
+              ? `${new Date(weekStart + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${new Date(weekEnd + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+              : '—'}
+          </span>
+          <button type="button" className="btn btn-outline btn-sm" style={{ padding: '4px 10px' }}
+            onClick={() => { const d = new Date(weekStart + 'T00:00:00'); d.setDate(d.getDate() + 7); setWeekStart(localDateStr(d)); }}>▶</button>
+          <input type="date" className="form-control" style={{ width: 140, height: 32, fontSize: 13 }} value={weekStart}
+            onChange={(e) => {
+              const d = new Date(e.target.value + 'T00:00:00');
+              d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // snap to Monday
+              setWeekStart(localDateStr(d));
+            }} />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          <label style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, whiteSpace: 'nowrap' }}>Employee</label>
+          <div style={{ width: 260 }}>
+            <SearchSelect options={empOptions} value={employee} onChange={setEmployee} placeholder="Search employee…" />
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-head"><div className="card-title">Daily Entries</div></div>
-          <div className="card-body">
-            <div style={{ overflowX: 'auto' }}>
-              <table className="line-table" style={{ minWidth: 1400 }}>
-                <thead>
-                  <tr>
-                    <th style={{ minWidth: 140 }}>Project</th>
-                    <th style={{ minWidth: 130 }}>Task Type</th>
-                    {DAYS.map((day, i) => (
-                      <th key={day} style={{ minWidth: 130 }}>
-                        {day}
-                        {dates[i] && <div style={{ fontSize: 10, fontWeight: 400, color: 'var(--text3)' }}>
-                          {new Date(dates[i]).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                        </div>}
-                      </th>
+        {weekTotal > 0 && (
+          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '4px 14px', fontSize: 13, fontWeight: 700, color: '#1d4ed8', whiteSpace: 'nowrap' }}>
+            {fmtMins(weekTotal)} this week
+          </div>
+        )}
+      </div>
+
+      {/* ── Day tab bar ── */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e5e7eb', marginBottom: 0, overflowX: 'auto' }}>
+        {dayData.map(({ date, isToday, dayMins, hasOverlap }, di) => {
+          const isActive = di === activeDay;
+          return (
+            <button key={di} type="button" onClick={() => setActiveDay(di)} style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              padding: '8px 10px 10px',
+              border: 'none',
+              borderBottom: isActive ? '2px solid #2563eb' : '2px solid transparent',
+              marginBottom: -2,
+              background: isActive ? '#eff6ff' : isToday ? '#f0fdf4' : 'transparent',
+              borderRadius: '6px 6px 0 0',
+              cursor: 'pointer',
+              minWidth: 80, flex: '1 1 80px',
+              transition: 'background .12s',
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? '#1d4ed8' : isToday ? '#15803d' : '#374151' }}>
+                {DAYS[di]}
+              </span>
+              <span style={{ fontSize: 10, color: isActive ? '#3b82f6' : '#9ca3af', marginTop: 1 }}>
+                {date ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+              </span>
+              <div style={{ display: 'flex', gap: 3, marginTop: 4, alignItems: 'center', minHeight: 14 }}>
+                {dayMins > 0 && (
+                  <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? '#1d4ed8' : '#374151', background: isActive ? '#dbeafe' : '#f1f5f9', borderRadius: 4, padding: '1px 5px' }}>
+                    {fmtMins(dayMins)}
+                  </span>
+                )}
+                {hasOverlap && <span style={{ fontSize: 9, color: '#ef4444' }} title="Time overlap">⚠</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Active day panel ── */}
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
+        {/* Day sub-header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px 12px', borderBottom: '1px solid #f0f0f0' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: ad.isToday ? '#1d4ed8' : '#111827' }}>
+            {DAYS[activeDay]}
+          </span>
+          <span style={{ fontSize: 12, color: '#6b7280' }}>
+            {ad.date ? new Date(ad.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+          </span>
+          {ad.isToday && <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 4, padding: '1px 7px' }}>Today</span>}
+          {ad.dayMins > 0 && (
+            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#2563eb', background: '#eff6ff', borderRadius: 6, padding: '2px 10px' }}>
+              {fmtMins(ad.dayMins)}
+            </span>
+          )}
+        </div>
+
+        {/* ── Timeline ── */}
+        {(() => {
+          const { currentSegs, otherSegs, hasOverlap } = ad;
+          if (currentSegs.length === 0 && otherSegs.length === 0) return null;
+          const allMins = [...currentSegs.flatMap((s) => [s.s, s.e]), ...otherSegs.flatMap((s) => [s.s, s.e])];
+          const vs = Math.max(0,    Math.floor((Math.min(...allMins) - 30) / 60) * 60);
+          const ve = Math.min(1440, Math.ceil ((Math.max(...allMins) + 30) / 60) * 60);
+          const sp = ve - vs;
+          const pct = (m) => ((m - vs) / sp * 100).toFixed(3) + '%';
+          const ww  = (s, e) => ((e - s) / sp * 100).toFixed(3) + '%';
+          const tks = [];
+          for (let m = Math.ceil(vs / 60) * 60; m <= ve; m += 60) tks.push(m);
+          const trackStyle = { position: 'relative', height: 20, background: '#f1f5f9', borderRadius: 6, flex: 1 };
+          const tickLines = tks.map((m) => (
+            <div key={m} style={{ position: 'absolute', left: pct(m), top: 0, bottom: 0, width: 1, background: '#e2e8f0' }} />
+          ));
+          return (
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
+              {/* tick labels */}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span style={{ width: 68, flexShrink: 0 }} />
+                <div style={{ position: 'relative', flex: 1, height: 14, marginBottom: 4 }}>
+                  {tks.map((m) => (
+                    <span key={m} style={{ position: 'absolute', left: pct(m), transform: 'translateX(-50%)', fontSize: 9, color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>{hm(m)}</span>
+                  ))}
+                </div>
+              </div>
+              {/* This entry track */}
+              {currentSegs.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: '#6b7280', width: 68, flexShrink: 0, textAlign: 'right' }}>This entry</span>
+                  <div style={trackStyle}>
+                    {tickLines}
+                    {currentSegs.map((seg, si) => (
+                      <div key={si} title={`L${seg.li + 1} · ${seg.projectId || '—'} · ${hm(seg.s)}–${hm(seg.e)}`}
+                        style={{ position: 'absolute', left: pct(seg.s), width: ww(seg.s, seg.e), top: 2, bottom: 2, background: COLORS[si % COLORS.length], borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                        {(seg.e - seg.s) >= 45 && <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', padding: '0 4px' }}>L{seg.li + 1}</span>}
+                      </div>
                     ))}
-                    <th style={{ minWidth: 140 }}>Comment</th>
-                    <th style={{ width: 36 }}></th>
+                  </div>
+                </div>
+              )}
+              {/* Other timesheets track */}
+              {otherSegs.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: '#6b7280', width: 68, flexShrink: 0, textAlign: 'right' }}>Other</span>
+                  <div style={trackStyle}>
+                    {tickLines}
+                    {otherSegs.map((seg, si) => (
+                      <div key={si} title={`${seg.tsDocNo} · ${seg.label} · ${hm(seg.s)}–${hm(seg.e)} (${seg.status})`}
+                        style={{ position: 'absolute', left: pct(seg.s), width: ww(seg.s, seg.e), top: 2, bottom: 2, background: '#94a3b8', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                        {(seg.e - seg.s) >= 45 && <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', padding: '0 4px' }}>{seg.tsType}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {hasOverlap && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '4px 8px', background: '#fef3c7', borderRadius: 4, border: '1px solid #fcd34d' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <span style={{ fontSize: 10, color: '#92400e', fontWeight: 600 }}>Time overlap with another timesheet entry for this employee on this date</span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Line table */}
+        <div style={{ padding: '16px' }}>
+        <table className="ts-line-table" style={{ marginBottom: 8 }}>
+          <thead>
+            <tr>
+              <th style={{ width: 32, textAlign: 'center' }}>#</th>
+              <th>Project</th>
+              <th style={{ width: 160 }}>Task Type</th>
+              <th style={{ width: 110 }}>Start</th>
+              <th style={{ width: 110 }}>End</th>
+              <th style={{ width: 84, textAlign: 'center' }}>Duration</th>
+              <th style={{ width: 190 }}>Attachment</th>
+              <th style={{ width: 44, textAlign: 'center' }}>Note</th>
+              <th style={{ width: 32 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {ad.lines.map((line, li) => {
+              const mins = parseInt(calcMins(line.startTime, line.endTime), 10) || 0;
+              return (
+                <React.Fragment key={line._key}>
+                  <tr>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: COLORS[li % COLORS.length], fontSize: 10, fontWeight: 700, color: '#fff' }}>{li + 1}</span>
+                    </td>
+                    <td>
+                      <SearchSelect options={projOptions} value={line.projectId}
+                        onChange={(v) => setLine(activeDay, li, 'projectId', v)} placeholder="Search project…" />
+                    </td>
+                    <td>
+                      <select style={{ width: '100%' }} value={line.taskType}
+                        onChange={(e) => setLine(activeDay, li, 'taskType', e.target.value)}>
+                        <option value="">— select —</option>
+                        {ttOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </td>
+                    <td><TimeInput value={line.startTime} onChange={(v) => setLine(activeDay, li, 'startTime', v)} /></td>
+                    <td><TimeInput value={line.endTime}   onChange={(v) => setLine(activeDay, li, 'endTime',   v)} /></td>
+                    <td style={{ textAlign: 'center' }}>
+                      {mins > 0
+                        ? <span style={{ background: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: 11, borderRadius: 5, padding: '2px 8px' }}>{fmtMins(mins)}</span>
+                        : <span style={{ color: '#e2e8f0' }}>—</span>}
+                    </td>
+                    <td>
+                      <AttachCell
+                        attachment={line.attachment}
+                        existingAttachments={line.existingAttachments}
+                        onAdd={(att) => setLine(activeDay, li, 'attachment', att)}
+                        onRemoveNew={() => setLine(activeDay, li, 'attachment', null)}
+                        onRemoveExisting={() => {}}
+                        readOnly={false}
+                      />
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button type="button" title={line.comments ? 'Edit note' : 'Add note'}
+                        onClick={() => setLine(activeDay, li, 'commentOpen', !line.commentOpen)}
+                        style={{ border: 'none', cursor: 'pointer', padding: 4, borderRadius: 4,
+                          color: line.comments ? '#2563eb' : '#d1d5db',
+                          background: line.commentOpen ? '#eff6ff' : 'transparent' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill={line.comments ? '#dbeafe' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                      </button>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {ad.lines.length > 1 && (
+                        <button type="button" className="del-row-btn" onClick={() => removeLine(activeDay, li)} title="Remove">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, ri) => (
-                    <tr key={ri}>
-                      <td>
-                        <SearchSelect options={projOptions} value={row.projectId}
-                          onChange={(v) => setRow(ri, 'projectId', v)} placeholder="Project…" />
-                      </td>
-                      <td>
-                        <select className="line-input" value={row.taskType}
-                          onChange={(e) => setRow(ri, 'taskType', e.target.value)}>
-                          <option value="">Task type…</option>
-                          {ttOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                        </select>
-                      </td>
-                      {DAYS.map((_, di) => (
-                        <td key={di}>
-                          <TimeInput value={row.days[di].s} onChange={(v) => setDay(ri, di, 's', v)}
-                            className="line-input" />
-                          <TimeInput value={row.days[di].e} onChange={(v) => setDay(ri, di, 'e', v)}
-                            className="line-input" style={{ marginTop: 2 }} />
-                        </td>
-                      ))}
-                      <td>
-                        <input className="line-input" placeholder="Comment…" value={row.comment}
-                          onChange={(e) => setRow(ri, 'comment', e.target.value)} />
-                      </td>
-                      <td>
-                        {rows.length > 1 && (
-                          <button type="button" className="del-row-btn"
-                            onClick={() => setRows((rs) => rs.filter((_, j) => j !== ri))} title="Remove">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                          </button>
-                        )}
+                  {line.commentOpen && (
+                    <tr style={{ background: '#f8faff' }}>
+                      <td colSpan={9} style={{ padding: '6px 16px 10px 52px' }}>
+                        <textarea
+                          value={line.comments}
+                          onChange={(e) => setLine(activeDay, li, 'comments', e.target.value)}
+                          placeholder="Add a note for this line…"
+                          rows={2}
+                          style={{ width: '100%', fontSize: 12, resize: 'vertical', borderRadius: 6, border: '1px solid #e5e7eb', padding: '6px 10px', color: '#374151', background: '#fff', outline: 'none', boxSizing: 'border-box' }}
+                        />
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 10 }}
-              onClick={() => setRows((rs) => [...rs, { projectId: '', taskType: '', days: Array(7).fill({ s: '', e: '' }), comment: '' }])}>
-              + Add Row
-            </button>
-            <p style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)' }}>
-              Enter start and end times per day (e.g. <strong>8:30 AM</strong> / <strong>5:00 PM</strong>). Leave blank to skip that day.
-            </p>
-          </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+
+        <button type="button" className="ts-add-btn" onClick={() => addLine(activeDay)}>+ Add Line</button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
@@ -569,10 +1134,7 @@ export default function ProjTimesheetPage() {
     { key: 'docNo',          label: 'Document No',  sort: true, render: (r) => <span className="wip-link">{r.docNo}</span> },
     { key: 'entryDate',      label: 'Date',         sort: true, render: (r) => formatDate(r.entryDate) },
     { key: 'entered_by_name',label: 'Employee',     sort: true },
-    { key: 'projectId',      label: 'Project ID',   sort: true },
-    { key: 'projectName',    label: 'Project Name', sort: true },
-    { key: 'shiftCode',      label: 'Task Type',    sort: true },
-    { key: 'totalHours',     label: 'Duration',     sort: true, render: (r) => r.totalHours ? `${r.totalHours.toFixed(2)}h` : '—' },
+    { key: 'status', label: 'Status', sort: true, render: (r) => <Badge variant={STATUS_VARIANT[r.status] ?? 'draft'}>{r.status ?? '—'}</Badge> },
     {
       key: 'actions', label: '', sort: false,
       render: (row) => (
@@ -581,7 +1143,7 @@ export default function ProjTimesheetPage() {
             onClick={() => { setEditDocNo(row.docNo); setIsReadonly(true); setView('daily'); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
-          {canWrite && isWithin24h(row.createdAt) && (
+          {canWrite && isWithin24h(row.createdAt) && row.status !== 'Approved' && (
             <button className="wip-icon-btn wip-icon-btn-edit" title="Edit"
               onClick={() => { setEditDocNo(row.docNo); setIsReadonly(false); setView('daily'); }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -600,7 +1162,16 @@ export default function ProjTimesheetPage() {
 
   if (view === 'daily') {
     const goBack = () => { setView('list'); setEditDocNo(null); setIsReadonly(false); };
-    return <DailyForm editDocNo={editDocNo} readOnly={isReadonly} onBack={goBack} onSaved={goBack} onEdit={() => setIsReadonly(false)} />;
+    const handleSaved = (savedDocNo) => {
+      if (savedDocNo && !editDocNo) {
+        // New save: immediately open the record in read-only mode to verify data
+        setEditDocNo(savedDocNo);
+        setIsReadonly(true);
+      } else {
+        goBack();
+      }
+    };
+    return <DailyForm editDocNo={editDocNo} readOnly={isReadonly} onBack={goBack} onSaved={handleSaved} onEdit={() => setIsReadonly(false)} />;
   }
   if (view === 'weekly') {
     return <WeeklyForm onBack={() => setView('list')} onSaved={() => setView('list')} />;

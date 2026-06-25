@@ -138,6 +138,51 @@ export class TimesheetsController {
     return this.timesheetsService.getDistinctProjectCodes();
   }
 
+  @Get('week-entries')
+  async getWeekEntries(
+    @Query('employeeCode') employeeCode: string,
+    @Query('weekStart') weekStart: string,
+    @Query('excludeDocNos') excludeDocNos?: string,
+  ) {
+    if (!employeeCode || !weekStart) return {};
+    return this.timesheetsService.getWeekEntries(employeeCode, weekStart, excludeDocNos);
+  }
+
+  @Get('day-entries')
+  async getDayEntries(
+    @Query('employeeCode') employeeCode: string,
+    @Query('date') date: string,
+    @Query('excludeDocNo') excludeDocNo?: string,
+  ) {
+    if (!employeeCode || !date) return [];
+    return this.timesheetsService.getDayEntries(employeeCode, date, excludeDocNo);
+  }
+
+  @Get('proj-line-attachments/:attachId')
+  async downloadProjLineAttachment(@Param('attachId') attachId: string) {
+    const file = await this.timesheetsService.getProjLineAttachment(Number(attachId));
+    if (!file) throw new NotFoundException('Attachment not found');
+    return file;
+  }
+
+  @Delete('proj-line-attachments/:attachId')
+  async removeProjLineAttachment(@Param('attachId') attachId: string) {
+    await this.timesheetsService.removeProjLineAttachment(Number(attachId));
+    return { ok: true };
+  }
+
+  @Post(':docNo/confirm')
+  async confirmTimesheet(@Param('docNo') docNo: string, @Req() req: any) {
+    try {
+      const byName = req.currentUser?.displayName || req.currentUser?.userId || 'User';
+      await this.timesheetsService.confirmTimesheet(docNo, byName);
+      this.auditService.log({ docType: 'TIMESHEET-PROJ', docRef: docNo, action: 'CONFIRM', performedBy: req.currentUser?.userId, performedByName: byName, details: 'Confirmed by creator' });
+      return { ok: true };
+    } catch (err) {
+      throw new HttpException((err as Error).message ?? 'Confirm failed', HttpStatus.BAD_REQUEST);
+    }
+  }
+
   @Post(':docNo/submit')
   async submitForApproval(@Param('docNo') docNo: string, @Req() req: any) {
     try {
@@ -354,41 +399,47 @@ export class TimesheetsController {
     try {
       await this.timesheetsService.assertPermission(req.currentUser?.roleCode ?? '', 'PROJ', 'canCreate');
       const entryPerson = req.currentUser?.displayName || '';
-      const records: any[] = [];
 
+      // Group all rows by date — one timesheet per date, multiple labour lines per timesheet
+      const byDate = new Map<string, any[]>();
       for (const row of body.rows ?? []) {
         for (let i = 0; i < (row.dates?.length ?? 0); i++) {
           const startTime = (row.days?.[i]?.s ?? '').trim();
           const endTime   = (row.days?.[i]?.e ?? '').trim();
           if (!startTime && !endTime) continue;
-
           let duration = 0;
           if (startTime && endTime) {
             const [sh, sm] = startTime.split(':').map(Number);
             const [eh, em] = endTime.split(':').map(Number);
-            duration = (eh * 60 + em) - (sh * 60 + sm);
-            if (duration < 0) duration += 1440;
+            duration = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
           }
-
-          records.push({
-            tsType: 'PROJ',
-            date: row.dates[i],
-            projectId: row.projectId,
-            shift: row.taskType,
-            entryPerson,
-            remarks: row.comment || '',
-            labourRows: [{
-              employee: body.employee,
-              startTime: startTime || null,
-              endTime:   endTime   || null,
-              duration:  String(Math.max(0, duration)),
-            }],
+          const date = row.dates[i];
+          if (!byDate.has(date)) byDate.set(date, []);
+          byDate.get(date)!.push({
+            employee:     body.employee,
+            startTime:    startTime || null,
+            endTime:      endTime   || null,
+            duration:     String(duration),
+            projectId:    row.projectId   || null,
+            taskTypeCode: row.taskType    || null,
+            comments:     row.comment     || null,
           });
         }
       }
 
-      if (records.length === 0) {
+      if (byDate.size === 0) {
         throw new HttpException({ message: 'No filled days found. Enter at least one time range.' }, HttpStatus.BAD_REQUEST);
+      }
+
+      const records: any[] = [];
+      for (const [date, labourRows] of byDate) {
+        records.push({
+          tsType:          'PROJ',
+          date,
+          entryPerson,
+          enteredByUserId: req.currentUser?.userId,
+          labourRows,
+        });
       }
 
       const results = await this.timesheetsService.batchCreate(records);

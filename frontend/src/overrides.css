@@ -142,6 +142,72 @@ html, body { height: 100%; overflow: hidden; }
 }
 .lines-table td input:focus { box-shadow: 0 0 0 2px var(--accent-glow); border-color: var(--accent); }
 
+/* Timesheet line table (React daily/weekly forms) */
+.ts-line-table { width: 100%; border-collapse: collapse; }
+.ts-line-table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 10px;
+  color: var(--text3);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+  background: var(--surface2);
+  font-family: var(--font-mono);
+}
+.ts-line-table td {
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.ts-line-table tr:last-child td { border-bottom: none; }
+.ts-line-table tr:hover td { background: rgba(196,125,40,0.03); }
+.ts-line-table td input,
+.ts-line-table td select {
+  padding: 5px 8px;
+  font-size: 12.5px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  width: 100%;
+  outline: none;
+}
+.ts-line-table td input:focus,
+.ts-line-table td select:focus { box-shadow: 0 0 0 2px var(--accent-glow); border-color: var(--accent); }
+
+/* Delete-row button inside line tables */
+.del-row-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  transition: color .15s, background .15s, border-color .15s;
+}
+.del-row-btn:hover { color: #ef4444; background: #fef2f2; border-color: #fecaca; }
+
+/* Add-line button below line tables */
+.ts-add-btn {
+  margin-top: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .15s;
+}
+.ts-add-btn:hover { background: rgba(196,125,40,0.06); }
+
 /* Search Select (portal-based dropdown component) */
 .search-select-trigger {
   display: flex; align-items: center; justify-content: space-between;

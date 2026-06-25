@@ -13,7 +13,7 @@ export default function SearchSelect({ options = [], value, onChange, placeholde
   const dropdownRef = useRef(null);
 
   const selected    = options.find((o) => o.value === value);
-  const triggerText = selected ? (selected.triggerLabel ?? selected.label) : placeholder;
+  const triggerText = selected ? (selected.triggerLabel ?? selected.label) : (value || placeholder);
 
   /* ── Calculate where to place the dropdown ── */
   function calcPos() {
