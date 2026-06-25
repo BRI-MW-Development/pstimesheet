@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, On
 import type { ConnectionPool, Transaction } from 'mssql';
 import * as mssql from 'mssql';
 import { DEV_SQL_POOL, SQL_POOL } from '../database/database.constants';
+import { S3Service } from '../s3/s3.service';
 
 const n = (v: any) => (v === '' || v === undefined ? null : v ?? null);
 
@@ -59,6 +60,7 @@ export class TimesheetsService implements OnModuleInit {
   constructor(
     @Inject(DEV_SQL_POOL) private readonly devPool: ConnectionPool,
     @Inject(SQL_POOL)     private readonly livePool: ConnectionPool,
+    private readonly s3: S3Service,
   ) {}
 
   async onModuleInit() {
@@ -156,8 +158,11 @@ export class TimesheetsService implements OnModuleInit {
           mimeType   NVARCHAR(100) NULL,
           fileSize   INT NULL,
           fileData   NVARCHAR(MAX) NULL,
+          s3Key      NVARCHAR(500) NULL,
           uploadedAt DATETIME DEFAULT GETDATE()
         );
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsProjLineAttachment') AND name='s3Key')
+          ALTER TABLE PSTsProjLineAttachment ADD s3Key NVARCHAR(500) NULL;
       `);
     } catch (err) {
       this.logger.warn(`Schema init skipped (will retry on next request): ${(err as Error)?.message}`);
@@ -334,18 +339,31 @@ export class TimesheetsService implements OnModuleInit {
              @designation, @startTime, @endTime, @durationMinutes, @lineProjectId, @taskTypeCode, @lineComments)
         `);
 
-      // Save attachment for PROJ lines
+      // Save attachment for PROJ lines — upload to S3 if available, otherwise store in DB
       if (lr.attachment?.fileData) {
+        let s3Key: string | null = null;
+        let dbFileData: string | null = null;
+        if (this.s3.isConfigured) {
+          s3Key = await this.s3.upload(
+            `proj-ts/${tsId}`,
+            lr.attachment.fileName || 'attachment',
+            lr.attachment.fileData,
+            lr.attachment.mimeType || 'application/octet-stream',
+          );
+        } else {
+          dbFileData = lr.attachment.fileData;
+        }
         await tx.request()
-          .input('tsId',       mssql.BigInt,            tsId)
-          .input('lineNumber', mssql.Int,               i + 1)
-          .input('fileName',   mssql.NVarChar(260),     lr.attachment.fileName || 'attachment')
-          .input('mimeType',   mssql.NVarChar(100),     lr.attachment.mimeType || null)
-          .input('fileSize',   mssql.Int,               lr.attachment.fileSize || 0)
-          .input('fileData',   mssql.NVarChar(mssql.MAX), lr.attachment.fileData)
+          .input('tsId',       mssql.BigInt,              tsId)
+          .input('lineNumber', mssql.Int,                 i + 1)
+          .input('fileName',   mssql.NVarChar(260),       lr.attachment.fileName || 'attachment')
+          .input('mimeType',   mssql.NVarChar(100),       lr.attachment.mimeType || null)
+          .input('fileSize',   mssql.Int,                 lr.attachment.fileSize || 0)
+          .input('fileData',   mssql.NVarChar(mssql.MAX), dbFileData)
+          .input('s3Key',      mssql.NVarChar(500),       s3Key)
           .query(`
-            INSERT INTO PSTsProjLineAttachment (tsId, lineNumber, fileName, mimeType, fileSize, fileData)
-            VALUES (@tsId, @lineNumber, @fileName, @mimeType, @fileSize, @fileData)
+            INSERT INTO PSTsProjLineAttachment (tsId, lineNumber, fileName, mimeType, fileSize, fileData, s3Key)
+            VALUES (@tsId, @lineNumber, @fileName, @mimeType, @fileSize, @fileData, @s3Key)
           `);
       }
     }
@@ -1000,11 +1018,26 @@ export class TimesheetsService implements OnModuleInit {
   async getProjLineAttachment(attachId: number): Promise<{ fileName: string; mimeType: string; fileData: string } | null> {
     const res = await this.devPool.request()
       .input('id', mssql.Int, attachId)
-      .query(`SELECT fileName, mimeType, fileData FROM PSTsProjLineAttachment WHERE id = @id`);
-    return res.recordset[0] ?? null;
+      .query(`SELECT fileName, mimeType, fileData, s3Key FROM PSTsProjLineAttachment WHERE id = @id`);
+    const row = res.recordset[0];
+    if (!row) return null;
+    if (row.s3Key) {
+      try {
+        const base64 = await this.s3.getAsBase64(row.s3Key, row.mimeType || 'application/octet-stream');
+        return { fileName: row.fileName, mimeType: row.mimeType, fileData: base64 };
+      } catch {
+        return null;
+      }
+    }
+    return row;
   }
 
   async removeProjLineAttachment(attachId: number): Promise<void> {
+    const res = await this.devPool.request()
+      .input('id', mssql.Int, attachId)
+      .query(`SELECT s3Key FROM PSTsProjLineAttachment WHERE id = @id`);
+    const s3Key = res.recordset[0]?.s3Key;
+    if (s3Key) await this.s3.delete(s3Key);
     await this.devPool.request()
       .input('id', mssql.Int, attachId)
       .query(`DELETE FROM PSTsProjLineAttachment WHERE id = @id`);

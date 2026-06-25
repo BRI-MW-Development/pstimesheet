@@ -352,7 +352,7 @@ export default function QCPrintPage() {
                       <div key={a.id} style={{ border: `1px solid ${BORDER}`, borderRadius: 3, overflow: 'hidden', background: '#f8fafc' }}>
                         {imgs[a.id]
                           ? <img src={imgs[a.id]} alt={`Photo ${i+1}`} style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }} />
-                          : <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: MUTED }}>Loading…</div>
+                          : <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: MUTED }}>{ready ? 'Unavailable' : 'Loading…'}</div>
                         }
                         <div style={{ padding: '2px 4px', fontSize: 7, color: MUTED, textAlign: 'center', background: '#f1f5f9' }}>Photo {i+1}</div>
                       </div>

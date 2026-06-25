@@ -66,6 +66,22 @@ export class S3Service {
   }
 
   /**
+   * Fetch an S3 object and return it as a base64 data-URI string.
+   * Used to proxy image content to the frontend without exposing CORS-restricted presigned URLs.
+   */
+  async getAsBase64(key: string, mimeType = 'application/octet-stream'): Promise<string> {
+    const cmd = new GetObjectCommand({ Bucket: this.bucket, Key: key });
+    const res = await this.client.send(cmd);
+    // AWS SDK v3 Body in Node.js is AsyncIterable<Uint8Array>
+    const chunks: Buffer[] = [];
+    for await (const chunk of res.Body as AsyncIterable<Uint8Array>) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const raw = Buffer.concat(chunks).toString('base64');
+    return `data:${mimeType};base64,${raw}`;
+  }
+
+  /**
    * Delete an object from S3.
    */
   async delete(key: string): Promise<void> {

@@ -6,6 +6,7 @@ import SearchSelect from '../../components/ui/SearchSelect';
 import CameraCapture from '../../components/ui/CameraCapture';
 import { useToast } from '../../context/ToastContext';
 import { useAuthStore } from '../../store/authStore';
+import FileLightbox from '../../components/ui/FileLightbox';
 
 /* ── Colour tokens ─────────────────────────────────── */
 const C = {
@@ -224,6 +225,7 @@ export default function QCFormPage() {
   const [activeTab,     setActiveTab]     = useState('history');
   const [pendingFiles,  setPendingFiles]  = useState([]);  // files queued on create form
   const [converting,   setConverting]    = useState(0);   // count of in-progress FileReader ops
+  const [qcLightbox,   setQcLightbox]    = useState(null); // { src, name, mimeType }
 
   /* ── Queries ───────────────────────────────────── */
   const { data: projects    = [] } = useQuery({ queryKey: ['projects'],     queryFn: () => api.get('/projects').then(r => r.data) });
@@ -373,13 +375,14 @@ export default function QCFormPage() {
   async function handleDownload(a) {
     try {
       const res = await api.get(`/qc/attachments/${a.id}/download`);
-      const { fileData, fileName, isS3 } = res.data;
-      if (isS3) {
-        // S3 presigned URL — open directly in new tab for download
-        window.open(fileData, '_blank');
+      const { fileData, fileName, mimeType } = res.data;
+      const src = fileData.startsWith('data:') ? fileData : `data:${mimeType};base64,${fileData}`;
+      const isImg = mimeType?.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(fileName);
+      if (isImg) {
+        setQcLightbox({ src, name: fileName, mimeType });
       } else {
         const el = document.createElement('a');
-        el.href = fileData; el.download = fileName; el.click();
+        el.href = src; el.download = fileName; el.click();
       }
     } catch { toast('Download failed.', 'error'); }
   }
@@ -462,6 +465,14 @@ export default function QCFormPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
+
+      {qcLightbox && (
+        <FileLightbox
+          file={qcLightbox}
+          onClose={() => setQcLightbox(null)}
+          onDownload={() => { const a = document.createElement('a'); a.href = qcLightbox.src; a.download = qcLightbox.name; a.click(); }}
+        />
+      )}
 
       {/* ── Top bar ── */}
       <div style={{ background: `linear-gradient(135deg,${C.teal} 0%,${C.tealMid} 100%)`, padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
@@ -725,7 +736,8 @@ export default function QCFormPage() {
                     {pendingFiles.map((pf, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 4px', borderBottom: '1px solid var(--border)' }}>
                         {pf.mimeType?.startsWith('image/') ? (
-                          <img src={pf.preview} alt="" style={{ width: 30, height: 30, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                          <img src={pf.preview} alt="" onClick={() => setQcLightbox({ src: pf.preview, name: pf.name, mimeType: pf.mimeType })}
+                            style={{ width: 30, height: 30, borderRadius: 6, objectFit: 'cover', flexShrink: 0, cursor: 'zoom-in' }} />
                         ) : (
                           <div style={{ width: 30, height: 30, borderRadius: 6, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -757,7 +769,11 @@ export default function QCFormPage() {
                       <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.fileName}</div>
                       <div style={{ fontSize: 10, color: 'var(--text3)' }}>{a.fileSize ? `${Math.round(a.fileSize / 1024)} KB` : ''}</div>
                     </div>
-                    <button type="button" onClick={() => handleDownload(a)} style={{ background: C.tealLight, border: 'none', color: C.teal, cursor: 'pointer', padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 700 }}>↓</button>
+                    {(a.mimeType?.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(a.fileName)) ? (
+                      <button type="button" onClick={() => handleDownload(a)} title="Preview" style={{ background: C.tealLight, border: 'none', color: C.teal, cursor: 'pointer', padding: '3px 8px', borderRadius: 5, fontSize: 13 }}>👁</button>
+                    ) : (
+                      <button type="button" onClick={() => handleDownload(a)} title="Download" style={{ background: C.tealLight, border: 'none', color: C.teal, cursor: 'pointer', padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 700 }}>↓</button>
+                    )}
                     {isEdit && !isView && <button type="button" onClick={() => { if (confirm('Remove?')) deleteAttach(a.id); }} style={{ background: '#fee2e2', border: 'none', color: C.fail, cursor: 'pointer', padding: '3px 8px', borderRadius: 5, fontSize: 11 }}>✕</button>}
                   </div>
                 ))}

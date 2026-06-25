@@ -390,7 +390,7 @@ export class AuthService implements OnModuleInit {
         .input('rc', mssql.NVarChar(30), roleCode)
         .query<{ module: string }>(`
           SELECT module FROM PSTsRolePermissions
-          WHERE roleCode = @rc AND canRead = 1
+          WHERE roleCode = @rc AND (canRead = 1 OR canCreate = 1)
             AND module IN ('PROD','INST','PROJ','WO_COMPLETE','QC')
         `).catch(() => ({ recordset: [] })),
     ]);

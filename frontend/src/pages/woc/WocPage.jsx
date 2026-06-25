@@ -9,6 +9,7 @@ import { useToast } from '../../context/ToastContext';
 import { useAuthStore } from '../../store/authStore';
 import { usePermission } from '../../hooks/usePermission';
 import { formatDate } from '../../utils/format';
+import FileLightbox from '../../components/ui/FileLightbox';
 
 const STATUS_VARIANT = { 'WO Completed': 'approved', 'Data Entry Completed': 'submitted', Draft: 'draft' };
 const WOC_STATUSES   = ['WO Completed', 'Data Entry Completed'];
@@ -68,6 +69,8 @@ function FilterPanel({ filters, setFilters, onClear }) {
 }
 
 // ── WOC Form Modal ────────────────────────────────────────────────────────────
+const _todayWoc = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
+
 function WocFormModal({ initial, onClose, onSaved }) {
   const toast        = useToast();
   const queryClient  = useQueryClient();
@@ -82,7 +85,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
     workOrderStatus: '',
     sourceType:   '',
     status:       '',
-    completedDate: new Date().toISOString().slice(0, 10),
+    completedDate: _todayWoc,
     enteredBy:    user?.displayName ?? user?.username ?? '',
     remarks:      '',
   };
@@ -93,6 +96,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
   const [savedFiles, setSavedFiles] = useState([]);
   const [dragging, setDragging]     = useState(false);
   const [tsRows, setTsRows]         = useState(null); // null = not loaded
+  const [wocLightbox, setWocLightbox] = useState(null); // { src, name, mimeType }
   const fileRef                     = useRef();
 
   // Doc No preview
@@ -244,6 +248,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
     e.preventDefault();
     if (!form.workOrderNumber) { toast('Please select a work order.', 'error'); return; }
     if (!form.status)          { toast('Please select a status.', 'error'); return; }
+    if (form.completedDate > _todayWoc) { toast('Completion date cannot be a future date.', 'error'); return; }
     save(form);
   }
 
@@ -251,6 +256,13 @@ function WocFormModal({ initial, onClose, onSaved }) {
 
   return (
     <Modal title="" onClose={onClose} size="lg">
+      {wocLightbox && (
+        <FileLightbox
+          file={wocLightbox}
+          onClose={() => setWocLightbox(null)}
+          onDownload={() => { const a = document.createElement('a'); a.href = wocLightbox.src; a.download = wocLightbox.name; a.click(); }}
+        />
+      )}
       <div className="woc-modal-layout">
         {/* Header */}
         <div className="woc-modal-header">
@@ -317,7 +329,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
                 <div className="form-group">
                   <label className="form-label">Completion Date</label>
                   <input type="date" className="form-control" required value={form.completedDate}
-                    max={new Date().toISOString().slice(0, 10)}
+                    max={_todayWoc}
                     onChange={e => setForm(f => ({ ...f, completedDate: e.target.value }))} />
                 </div>
                 <div className="form-group">
@@ -403,15 +415,32 @@ function WocFormModal({ initial, onClose, onSaved }) {
               {savedFiles.length > 0 && (
                 <div className="woc-file-section">
                   <div className="woc-file-section-label">Saved attachments ({savedFiles.length})</div>
-                  {savedFiles.map(f => (
-                    <div key={f.id} className="woc-file-item">
-                      <span style={{ fontSize: 18 }}>{fileIcon(f.mimeType, f.fileName)}</span>
-                      <span className="woc-file-item-name">{f.fileName}</span>
-                      <span className="woc-file-item-size">{fmt(f.fileSize)}</span>
-                      <button type="button" className="woc-file-item-del"
-                        onClick={() => { if (confirm('Remove this attachment?')) deleteSaved(f.id); }}>✕</button>
-                    </div>
-                  ))}
+                  {savedFiles.map(f => {
+                    const isImg = f.mimeType?.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(f.fileName);
+                    return (
+                      <div key={f.id} className="woc-file-item">
+                        <span style={{ fontSize: 18 }}>{fileIcon(f.mimeType, f.fileName)}</span>
+                        <span className="woc-file-item-name">{f.fileName}</span>
+                        <span className="woc-file-item-size">{fmt(f.fileSize)}</span>
+                        <button type="button" className="btn btn-ghost btn-sm" style={{ padding: '2px 8px', fontSize: isImg ? 13 : 11 }}
+                          title={isImg ? 'Preview' : 'Download'}
+                          onClick={() => {
+                            api.get(`/wo-complete/attachments/${f.id}`).then(r => {
+                              const { fileData, fileName, mimeType } = r.data;
+                              const src = fileData.startsWith('data:') ? fileData : `data:${mimeType};base64,${fileData}`;
+                              if (isImg) {
+                                setWocLightbox({ src, name: fileName, mimeType });
+                              } else {
+                                const a = document.createElement('a');
+                                a.href = src; a.download = fileName; a.click();
+                              }
+                            }).catch(() => toast('Download failed.', 'error'));
+                          }}>{isImg ? '👁' : '↓'}</button>
+                        <button type="button" className="woc-file-item-del"
+                          onClick={() => { if (confirm('Remove this attachment?')) deleteSaved(f.id); }}>✕</button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -439,6 +468,7 @@ function WocViewModal({ record, onClose }) {
   const toast       = useToast();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState('details');
+  const [viewLightbox, setViewLightbox] = useState(null); // { src, name, mimeType }
 
   const { data: attachments = [], isLoading: loadingAttach } = useQuery({
     queryKey: ['woc-attachments', record.id],
@@ -460,6 +490,13 @@ function WocViewModal({ record, onClose }) {
 
   return (
     <Modal title={`${record.docNo} — ${record.workOrderNumber ?? ''}`} onClose={onClose} size="lg">
+      {viewLightbox && (
+        <FileLightbox
+          file={viewLightbox}
+          onClose={() => setViewLightbox(null)}
+          onDownload={() => { const a = document.createElement('a'); a.href = viewLightbox.src; a.download = viewLightbox.name; a.click(); }}
+        />
+      )}
       <div className="woc-modal-tabs" style={{ padding: '0 0 12px' }}>
         {[['details','Details'],['timesheets','Timesheets'],['attachments','Attachments']].map(([k, label]) => (
           <button key={k} className={`woc-modal-tab${tab === k ? ' active' : ''}`} onClick={() => setTab(k)}>
@@ -520,15 +557,32 @@ function WocViewModal({ record, onClose }) {
         loadingAttach ? <p className="woc-ts-empty">Loading…</p> :
         attachments.length === 0 ? <p className="woc-ts-empty">No attachments.</p> : (
           <div className="woc-file-section">
-            {attachments.map(f => (
-              <div key={f.id} className="woc-file-item">
-                <span style={{ fontSize: 18 }}>{fileIcon(f.mimeType, f.fileName)}</span>
-                <span className="woc-file-item-name">{f.fileName}</span>
-                <span className="woc-file-item-size">{fmt(f.fileSize)}</span>
-                <button type="button" className="woc-file-item-del"
-                  onClick={() => { if (confirm('Remove?')) deleteAttach(f.id); }}>✕</button>
-              </div>
-            ))}
+            {attachments.map(f => {
+              const isImg = f.mimeType?.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(f.fileName);
+              return (
+                <div key={f.id} className="woc-file-item">
+                  <span style={{ fontSize: 18 }}>{fileIcon(f.mimeType, f.fileName)}</span>
+                  <span className="woc-file-item-name">{f.fileName}</span>
+                  <span className="woc-file-item-size">{fmt(f.fileSize)}</span>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ padding: '2px 8px', fontSize: isImg ? 13 : 11 }}
+                    title={isImg ? 'Preview' : 'Download'}
+                    onClick={() => {
+                      api.get(`/wo-complete/attachments/${f.id}`).then(r => {
+                        const { fileData, fileName, mimeType } = r.data;
+                        const src = fileData.startsWith('data:') ? fileData : `data:${mimeType};base64,${fileData}`;
+                        if (isImg) {
+                          setViewLightbox({ src, name: fileName, mimeType });
+                        } else {
+                          const a = document.createElement('a');
+                          a.href = src; a.download = fileName; a.click();
+                        }
+                      }).catch(() => toast('Download failed.', 'error'));
+                    }}>{isImg ? '👁' : '↓'}</button>
+                  <button type="button" className="woc-file-item-del"
+                    onClick={() => { if (confirm('Remove?')) deleteAttach(f.id); }}>✕</button>
+                </div>
+              );
+            })}
           </div>
         )
       )}

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import SearchSelect from '../../components/ui/SearchSelect';
 import Badge from '../../components/ui/Badge';
+import FileLightbox from '../../components/ui/FileLightbox';
 import Modal from '../../components/ui/Modal';
 import Table, { WipListHeader } from '../../components/ui/Table';
 import TimeInput from '../../components/ui/TimeInput';
@@ -31,7 +32,7 @@ function calcMins(start, end) {
 // ── Attachment cell component ──────────────────────────────────────────────────
 function AttachCell({ attachment, existingAttachments = [], onAdd, onRemoveNew, onRemoveExisting, readOnly }) {
   const fileRef = useRef();
-  const [preview, setPreview] = useState(null); // { src, name } for lightbox
+  const [lightbox, setLightbox] = useState(null); // { src, name, mimeType }
 
   function handleFile(e) {
     const file = e.target.files?.[0];
@@ -47,13 +48,8 @@ function AttachCell({ attachment, existingAttachments = [], onAdd, onRemoveNew, 
   function openExisting(att) {
     api.get(`/timesheets/proj-line-attachments/${att.id}`).then((r) => {
       const { fileName, mimeType, fileData } = r.data;
-      const src = `data:${mimeType};base64,${fileData}`;
-      if (mimeType?.startsWith('image/')) {
-        setPreview({ src, name: fileName });
-      } else {
-        const a = document.createElement('a');
-        a.href = src; a.download = fileName; a.click();
-      }
+      const src = fileData.startsWith('data:') ? fileData : `data:${mimeType};base64,${fileData}`;
+      setLightbox({ src, name: fileName, mimeType });
     });
   }
 
@@ -66,44 +62,45 @@ function AttachCell({ attachment, existingAttachments = [], onAdd, onRemoveNew, 
     return '📎';
   }
 
+  function downloadLightbox() {
+    if (!lightbox) return;
+    const a = document.createElement('a'); a.href = lightbox.src; a.download = lightbox.name; a.click();
+  }
+
   return (
     <>
-      {/* Lightbox */}
-      {preview && (
-        <div onClick={() => setPreview(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out', pointerEvents: 'auto' }}>
-          <img src={preview.src} alt={preview.name}
-            style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 8, boxShadow: '0 20px 60px rgba(0,0,0,.5)' }}
-            onClick={(e) => e.stopPropagation()} />
-          <button onClick={() => setPreview(null)}
-            style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', color: '#fff', fontSize: 28, cursor: 'pointer', lineHeight: 1 }}>×</button>
-        </div>
+      {lightbox && (
+        <FileLightbox file={lightbox} onClose={() => setLightbox(null)} onDownload={downloadLightbox} />
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {/* Existing saved attachments */}
-        {existingAttachments.map((att) => (
-          <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <button type="button" onClick={() => openExisting(att)}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', maxWidth: 140, pointerEvents: 'auto' }}>
-              <span>{fileIcon(att.fileName)}</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.fileName}</span>
-            </button>
-            {!readOnly && (
-              <button type="button" onClick={() => onRemoveExisting(att.id)}
-                style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0 2px', lineHeight: 1 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        {existingAttachments.map((att) => {
+          const isImg = att.mimeType?.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(att.fileName);
+          return (
+            <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <button type="button" onClick={() => openExisting(att)}
+                title={isImg ? 'Click to preview' : 'Click to download'}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', maxWidth: 140, pointerEvents: 'auto' }}>
+                <span style={{ fontSize: isImg ? 13 : undefined }}>{isImg ? '👁' : fileIcon(att.fileName)}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.fileName}</span>
               </button>
-            )}
-          </div>
-        ))}
+              {!readOnly && (
+                <button type="button" onClick={() => onRemoveExisting(att.id)}
+                  style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0 2px', lineHeight: 1 }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              )}
+            </div>
+          );
+        })}
 
         {/* New (unsaved) attachment */}
         {attachment && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             {attachment.mimeType?.startsWith('image/') && attachment.dataUrl ? (
               <img src={attachment.dataUrl} alt={attachment.fileName}
-                onClick={() => setPreview({ src: attachment.dataUrl, name: attachment.fileName })}
+                onClick={() => setLightbox({ src: attachment.dataUrl, name: attachment.fileName, mimeType: attachment.mimeType })}
                 style={{ width: 36, height: 28, objectFit: 'cover', borderRadius: 4, cursor: 'zoom-in', border: '1px solid #e5e7eb' }} />
             ) : (
               <span>{fileIcon(attachment.fileName)}</span>
@@ -634,6 +631,15 @@ function WeeklyForm({ onBack, onSaved }) {
 
   const weekEnd = dates[6] ?? '';
 
+  // When the week changes, snap activeDay to the last non-future day so we never
+  // land on a future tab (e.g. navigating forward then back leaves Friday selected)
+  useEffect(() => {
+    if (!dates[activeDay] || dates[activeDay] > todayStr) {
+      const lastValid = dates.reduce((best, d, i) => (d && d <= todayStr ? i : best), 0);
+      setActiveDay(lastValid);
+    }
+  }, [weekStart]);
+
   function setLine(di, li, field, val) {
     setDayLines((all) => all.map((day, d) => d !== di ? day : day.map((ln, l) => l !== li ? ln : { ...ln, [field]: val })));
   }
@@ -689,6 +695,10 @@ function WeeklyForm({ onBack, onSaved }) {
 
     if (activeEntries.length === 0) { toast('Add at least one line with data.', 'error'); return; }
 
+    // Block entries on future dates (second line of defence after UI)
+    const futureEntry = activeEntries.find(({ di }) => dates[di] > todayStr);
+    if (futureEntry) { toast(`${DAYS[futureEntry.di]}: Cannot save entries for future dates.`, 'error'); return; }
+
     for (const { ln, di, li } of activeEntries) {
       const label = `${DAYS[di]} Line ${li + 1}`;
       if (!ln.projectId?.trim()) { toast(`${label}: Project is required.`, 'error'); return; }
@@ -723,6 +733,7 @@ function WeeklyForm({ onBack, onSaved }) {
   const dayData = dates.map((date, di) => {
     const lines      = dayLines[di];
     const isToday    = date === todayStr;
+    const isFuture   = date > todayStr;
     const dayMins    = dayTotals[di];
     const otherSegs  = (weekEntries[date] ?? [])
       .map((e) => ({ ...e, s: toMins(e.startTime), e: toMins(e.endTime) }))
@@ -774,9 +785,10 @@ function WeeklyForm({ onBack, onSaved }) {
               : '—'}
           </span>
           <button type="button" className="btn btn-outline btn-sm" style={{ padding: '4px 10px' }}
+            disabled={weekStart >= defaultWeekStart}
             onClick={() => { const d = new Date(weekStart + 'T00:00:00'); d.setDate(d.getDate() + 7); setWeekStart(localDateStr(d)); }}>▶</button>
           <input type="date" className="form-control" style={{ width: 140, height: 32, fontSize: 13 }} value={weekStart}
-            max={todayStr}
+            max={defaultWeekStart}
             onChange={(e) => {
               const d = new Date(e.target.value + 'T00:00:00');
               d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // snap to Monday
@@ -804,22 +816,27 @@ function WeeklyForm({ onBack, onSaved }) {
 
       {/* ── Day tab bar ── */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e5e7eb', marginBottom: 0, overflowX: 'auto' }}>
-        {dayData.map(({ date, isToday, dayMins, hasOverlap }, di) => {
+        {dayData.map(({ date, isToday, isFuture, dayMins, hasOverlap }, di) => {
           const isActive = di === activeDay;
           return (
-            <button key={di} type="button" onClick={() => setActiveDay(di)} style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center',
-              padding: '8px 10px 10px',
-              border: 'none',
-              borderBottom: isActive ? '2px solid #2563eb' : '2px solid transparent',
-              marginBottom: -2,
-              background: isActive ? '#eff6ff' : isToday ? '#f0fdf4' : 'transparent',
-              borderRadius: '6px 6px 0 0',
-              cursor: 'pointer',
-              minWidth: 80, flex: '1 1 80px',
-              transition: 'background .12s',
-            }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? '#1d4ed8' : isToday ? '#15803d' : '#374151' }}>
+            <button key={di} type="button"
+              onClick={() => !isFuture && setActiveDay(di)}
+              disabled={isFuture}
+              title={isFuture ? 'Cannot enter timesheets for future dates' : undefined}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                padding: '8px 10px 10px',
+                border: 'none',
+                borderBottom: isActive ? '2px solid #2563eb' : '2px solid transparent',
+                marginBottom: -2,
+                background: isFuture ? '#f9fafb' : isActive ? '#eff6ff' : isToday ? '#f0fdf4' : 'transparent',
+                borderRadius: '6px 6px 0 0',
+                cursor: isFuture ? 'not-allowed' : 'pointer',
+                minWidth: 80, flex: '1 1 80px',
+                opacity: isFuture ? 0.45 : 1,
+                transition: 'background .12s',
+              }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: isFuture ? '#9ca3af' : isActive ? '#1d4ed8' : isToday ? '#15803d' : '#374151' }}>
                 {DAYS[di]}
               </span>
               <span style={{ fontSize: 10, color: isActive ? '#3b82f6' : '#9ca3af', marginTop: 1 }}>

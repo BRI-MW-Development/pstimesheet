@@ -405,10 +405,16 @@ export class QcService implements OnModuleInit {
       .query(`SELECT id, fileName, mimeType, fileSize, fileData, s3Key FROM PsQcAttachment WHERE id = @id`);
     const row = res.recordset[0];
     if (!row) return null;
-    // Return S3 presigned URL or raw base64
+    // For S3-stored attachments, proxy the content as base64 so the frontend
+    // doesn't need to make a cross-origin request to the presigned URL.
     if (row.s3Key) {
-      const url = await this.s3.presignedUrl(row.s3Key);
-      return { ...row, fileData: url, isS3: true };
+      try {
+        const base64 = await this.s3.getAsBase64(row.s3Key, row.mimeType || 'application/octet-stream');
+        return { ...row, fileData: base64 };
+      } catch {
+        // S3 object missing or inaccessible — return null so controller sends 404
+        return null;
+      }
     }
     return row;
   }

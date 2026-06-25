@@ -203,6 +203,12 @@ export class WoCompleteService implements OnModuleInit {
       throw new BadRequestException('Work Order Number is required.');
     if (!body.status?.toString().trim())
       throw new BadRequestException('Status is required.');
+    if (body.completedDate) {
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+      if (body.completedDate > todayStr)
+        throw new BadRequestException('Completion date cannot be a future date.');
+    }
   }
 
   async create(body: any): Promise<{ docNo: string; id: number }> {
@@ -307,8 +313,12 @@ export class WoCompleteService implements OnModuleInit {
     const row = res.recordset[0];
     if (!row) return null;
     if (row.s3Key) {
-      const url = await this.s3.presignedUrl(row.s3Key);
-      return { ...row, fileData: url, isS3: true };
+      try {
+        const base64 = await this.s3.getAsBase64(row.s3Key, row.mimeType || 'application/octet-stream');
+        return { ...row, fileData: base64 };
+      } catch {
+        return null;
+      }
     }
     return row;
   }

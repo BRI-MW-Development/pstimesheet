@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import api from '../../api/client';
 import Table, { WipListHeader } from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
@@ -211,7 +212,9 @@ function CriteriaBuilder({ criteria, onChange, filterLogic, onFilterLogicChange,
 function UserPicker({ selected, onChange, users }) {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const [dropRect, setDropRect] = useState(null);
   const ref = useRef(null);
+  const inputRef = useRef(null);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -219,6 +222,14 @@ function UserPicker({ selected, onChange, users }) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Recompute input position whenever the dropdown opens so we can portal it
+  useEffect(() => {
+    if (open && inputRef.current) {
+      const r = inputRef.current.getBoundingClientRect();
+      setDropRect({ top: r.bottom + window.scrollY + 2, left: r.left + window.scrollX, width: r.width });
+    }
+  }, [open]);
 
   const selectedIds = new Set(selected.map((u) => u.userId));
   const filtered = (users || []).filter((u) => {
@@ -238,6 +249,36 @@ function UserPicker({ selected, onChange, users }) {
   function removeUser(userId) {
     onChange(selected.filter((u) => u.userId !== userId));
   }
+
+  const dropdown = open && (search || filtered.length > 0) && dropRect
+    ? ReactDOM.createPortal(
+        <div style={{
+          position: 'absolute',
+          top: dropRect.top, left: dropRect.left, width: dropRect.width,
+          zIndex: 9999,
+          background: 'var(--bg1, #fff)', border: '1px solid var(--border)',
+          borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+          maxHeight: 240, overflowY: 'auto',
+        }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text3)' }}>
+              {search ? 'No users found' : 'All users already selected'}
+            </div>
+          ) : filtered.map((u) => (
+            <div key={u.userId}
+              onMouseDown={(e) => { e.preventDefault(); addUser(u); setOpen(false); }}
+              style={{ padding: '8px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg2)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{u.displayName}</div>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{u.email || u.username}</div>
+            </div>
+          ))}
+        </div>,
+        document.body
+      )
+    : null;
 
   return (
     <div ref={ref}>
@@ -262,9 +303,10 @@ function UserPicker({ selected, onChange, users }) {
         </div>
       )}
 
-      {/* Search input */}
+      {/* Search input — dropdown is portalled to document.body to escape modal overflow clipping */}
       <div style={{ position: 'relative' }}>
         <input
+          ref={inputRef}
           className="form-control"
           type="text"
           value={search}
@@ -273,30 +315,7 @@ function UserPicker({ selected, onChange, users }) {
           onFocus={() => setOpen(true)}
           autoComplete="off"
         />
-        {open && (search || filtered.length > 0) && (
-          <div style={{
-            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
-            background: 'var(--bg1)', border: '1px solid var(--border)',
-            borderRadius: 6, marginTop: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-            maxHeight: 240, overflowY: 'auto',
-          }}>
-            {filtered.length === 0 ? (
-              <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text3)' }}>
-                {search ? 'No users found' : 'All users already selected'}
-              </div>
-            ) : filtered.map((u) => (
-              <div key={u.userId}
-                onMouseDown={(e) => { e.preventDefault(); addUser(u); setOpen(false); }}
-                style={{ padding: '8px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg2)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{u.displayName}</div>
-                <div style={{ fontSize: 11, color: 'var(--text3)' }}>{u.email || u.username}</div>
-              </div>
-            ))}
-          </div>
-        )}
+        {dropdown}
       </div>
     </div>
   );
