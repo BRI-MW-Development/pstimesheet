@@ -27,6 +27,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { QcModule } from './qc/qc.module';
 import { S3Module } from './s3/s3.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { SearchModule } from './search/search.module';
 
 // Resolve frontend dist relative to the compiled backend output (dist/src → dist/dist)
 const FRONTEND_DIST = join(__dirname, '..', '..', 'frontend', 'dist');
@@ -43,7 +44,7 @@ const FRONTEND_DIST = join(__dirname, '..', '..', 'frontend', 'dist');
     VehiclesModule, WorkOrdersModule, WoCompleteModule, ProjectsModule,
     DepartmentsModule, MachineryModule, AccessEquipmentModule, TaskTypesModule,
     ItemsModule, EmployeesModule, TimesheetsModule, UsersModule, RolesModule,
-    ApprovalSettingsModule, EmailSettingsModule, NotificationsModule, QcModule, S3Module, AnalyticsModule,
+    ApprovalSettingsModule, EmailSettingsModule, NotificationsModule, QcModule, S3Module, AnalyticsModule, SearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],

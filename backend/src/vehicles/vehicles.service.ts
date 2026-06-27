@@ -70,12 +70,24 @@ export class VehiclesService implements OnModuleInit {
     return `VEH-${String(next).padStart(4, '0')}`;
   }
 
+  private async assertUniquePlate(plateNo: string, excludeVehicleId?: string): Promise<void> {
+    const req = this.pool.request().input('plateNo', mssql.NVarChar(30), plateNo.trim().toUpperCase());
+    if (excludeVehicleId) req.input('excludeId', mssql.NVarChar(30), excludeVehicleId);
+    const res = await req.query<{ cnt: number }>(`
+      SELECT COUNT(*) AS cnt FROM PSTsVehicles
+      WHERE plateNo = @plateNo ${excludeVehicleId ? 'AND vehicleId <> @excludeId' : ''}
+    `);
+    if ((res.recordset[0]?.cnt ?? 0) > 0)
+      throw new BadRequestException(`Plate number '${plateNo}' already exists. Each vehicle must have a unique plate number.`);
+  }
+
   async create(body: {
     plateNo: string; vehicleType: string; make?: string; model?: string;
     yearModel?: number; status?: string; remarks?: string;
   }): Promise<Vehicle> {
     if (!body.plateNo?.trim())     throw new BadRequestException('plateNo is required');
     if (!body.vehicleType?.trim()) throw new BadRequestException('vehicleType is required');
+    await this.assertUniquePlate(body.plateNo);
 
     const vehicleId = await this.nextVehicleId();
     try {
@@ -106,6 +118,9 @@ export class VehiclesService implements OnModuleInit {
   }): Promise<Vehicle> {
     const existing = await this.findOne(vehicleId);
     const newPlateNo = body.plateNo?.trim().toUpperCase() ?? existing.plateNo;
+    if (body.plateNo && newPlateNo !== existing.plateNo) {
+      await this.assertUniquePlate(newPlateNo, vehicleId);
+    }
     try {
       await this.pool.request()
         .input('vehicleId',   mssql.NVarChar(30),  existing.vehicleId)
