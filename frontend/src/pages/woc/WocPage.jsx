@@ -362,9 +362,9 @@ function WocFormModal({ initial, onClose, onSaved }) {
                   </tr></thead>
                   <tbody>
                     {tsRows.map((r, i) => (
-                      <tr key={r.tsDocNo ?? i}>
+                      <tr key={r.docNo ?? i}>
                         <td>{i + 1}</td>
-                        <td><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.tsDocNo}</span></td>
+                        <td><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.docNo}</span></td>
                         <td>{formatDate(r.entryDate)}</td>
                         <td style={{ color: '#6b7280' }}>{r.department_code || '—'}</td>
                         <td>{r.entered_by_name || '—'}</td>
@@ -539,9 +539,9 @@ function WocViewModal({ record, onClose }) {
             <thead><tr><th>#</th><th>Doc No</th><th>Date</th><th>Department</th><th>Entered By</th><th>Status</th></tr></thead>
             <tbody>
               {tsRows.map((r, i) => (
-                <tr key={r.tsDocNo ?? i}>
+                <tr key={r.docNo ?? i}>
                   <td>{i + 1}</td>
-                  <td><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.tsDocNo}</span></td>
+                  <td><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.docNo}</span></td>
                   <td>{formatDate(r.entryDate)}</td>
                   <td style={{ color: '#6b7280' }}>{r.department_code || '—'}</td>
                   <td>{r.entered_by_name || '—'}</td>
