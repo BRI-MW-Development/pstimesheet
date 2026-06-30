@@ -137,7 +137,7 @@ const EMPTY_LINE = () => ({ _key: ++_lineKey, projectId: '', taskType: '', start
 
 const _localDate = (d) => { const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
 const TODAY     = _localDate(new Date());
-const MIN_DATE  = _localDate(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
+const MIN_DATE  = _localDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
 function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
   const toast = useToast();
@@ -593,6 +593,7 @@ function WeeklyForm({ onBack, onSaved }) {
   };
 
   const todayStr = localDateStr(new Date());
+  const minEntryDate = localDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
   const mon = new Date();
   mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
   const defaultWeekStart = localDateStr(mon);
@@ -620,6 +621,44 @@ function WeeklyForm({ onBack, onSaved }) {
     queryFn: () => api.get('/timesheets/week-entries', { params: { employeeCode: employee, weekStart } }).then((r) => r.data),
     enabled: !!(employee && weekStart),
   });
+
+  // Full PROJ timesheet data for the week (pre-populate + lock confirmed days)
+  const { data: weekProjData = {}, isPending: projPending } = useQuery({
+    queryKey: ['week-proj-data', employee, weekStart],
+    queryFn: () => api.get('/timesheets/week-proj-data', { params: { employeeCode: employee, weekStart } }).then((r) => r.data),
+    enabled: !!(employee && weekStart),
+    staleTime: 30000,
+  });
+
+  // Reset lines when week or employee changes
+  useEffect(() => {
+    setDayLines(Array(7).fill(null).map(() => [EMPTY_WLINE()]));
+  }, [employee, weekStart]);
+
+  // Once PROJ data loads, populate dayLines for days that have saved timesheets
+  useEffect(() => {
+    if (projPending) return;
+    setDayLines(Array(7).fill(null).map((_, di) => {
+      const date = dates[di];
+      const dp = date ? weekProjData[date] : null;
+      if (dp?.lines?.length > 0) {
+        return dp.lines.map((l) => ({
+          _key: ++_wLineKey,
+          _isExisting: true,
+          _savedStatus: dp.status,
+          projectId: l.projectId ?? '',
+          taskType:  l.taskTypeCode ?? '',
+          startTime: l.startTime ?? '',
+          endTime:   l.endTime ?? '',
+          attachment: null,
+          existingAttachments: [],
+          comments: l.comments ?? '',
+          commentOpen: Boolean(l.comments),
+        }));
+      }
+      return [EMPTY_WLINE()];
+    }));
+  }, [weekProjData, projPending]);
 
   const dates = (() => {
     if (!weekStart) return Array(7).fill('');
@@ -679,21 +718,37 @@ function WeeklyForm({ onBack, onSaved }) {
   );
   const weekTotal = dayTotals.reduce((a, b) => a + b, 0);
 
+  // Per-day lock status from saved PROJ data
+  const dayLocked = dates.map((date) => {
+    const dp = date ? weekProjData[date] : null;
+    return dp ? ['Approved', 'Submitted'].includes(dp.status) : false;
+  });
+  const dayDocNo = dates.map((date) => {
+    const dp = date ? weekProjData[date] : null;
+    return dp?.docNo ?? null;
+  });
+  const dayStatus = dates.map((date) => {
+    const dp = date ? weekProjData[date] : null;
+    return dp?.status ?? null;
+  });
+
   function handleSubmit(e) {
     e.preventDefault();
     if (!employee) { toast('Select an employee.', 'error'); return; }
 
-    // Collect active lines across all days (any field touched)
+    // Collect only new (non-existing) active lines; skip too-old days
     const activeEntries = [];
     dayLines.forEach((lines, di) => {
+      if (!dates[di] || dates[di] < minEntryDate) return; // too old
       lines.forEach((ln, li) => {
+        if (ln._isExisting) return; // approved/saved line — cannot re-save
         if (ln.projectId?.trim() || ln.taskType?.trim() || ln.startTime || ln.endTime) {
           activeEntries.push({ ln, di, li });
         }
       });
     });
 
-    if (activeEntries.length === 0) { toast('Add at least one line with data.', 'error'); return; }
+    if (activeEntries.length === 0) { toast('Add at least one new line with data (within the past 7 days).', 'error'); return; }
 
     // Block entries on future dates (second line of defence after UI)
     const futureEntry = activeEntries.find(({ di }) => dates[di] > todayStr);
@@ -734,6 +789,11 @@ function WeeklyForm({ onBack, onSaved }) {
     const lines      = dayLines[di];
     const isToday    = date === todayStr;
     const isFuture   = date > todayStr;
+    const isTooOld   = date < minEntryDate;
+    const canAddNew  = !isFuture && !isTooOld;
+    const isLocked   = dayLocked[di];
+    const docNo      = dayDocNo[di];
+    const status     = dayStatus[di];
     const dayMins    = dayTotals[di];
     const otherSegs  = (weekEntries[date] ?? [])
       .map((e) => ({ ...e, s: toMins(e.startTime), e: toMins(e.endTime) }))
@@ -741,7 +801,7 @@ function WeeklyForm({ onBack, onSaved }) {
     const currentSegs = lines
       .map((l, li) => ({ li, s: toMins(l.startTime), e: toMins(l.endTime), projectId: l.projectId }))
       .filter((seg) => seg.s != null && seg.e != null && seg.e > seg.s);
-    const hasOverlap = currentSegs.some((c) => otherSegs.some((o) => c.s < o.e && c.e > o.s));
+    const hasOverlap = canAddNew && currentSegs.filter((c) => !c._isExisting).some((c) => otherSegs.some((o) => c.s < o.e && c.e > o.s));
     const allMins = [...currentSegs.flatMap((s) => [s.s, s.e]), ...otherSegs.flatMap((s) => [s.s, s.e])];
     const tl = allMins.length > 0 ? (() => {
       const vs = Math.max(0,    Math.floor((Math.min(...allMins) - 30) / 60) * 60);
@@ -753,7 +813,7 @@ function WeeklyForm({ onBack, onSaved }) {
       for (let m = Math.ceil(vs / 60) * 60; m <= ve; m += 60) tks.push(m);
       return { p, ww, tks };
     })() : null;
-    return { date, lines, isToday, dayMins, otherSegs, currentSegs, hasOverlap, tl };
+    return { date, lines, isToday, isFuture, isTooOld, canAddNew, isLocked, docNo, status, dayMins, otherSegs, currentSegs, hasOverlap, tl };
   });
 
   const ad = dayData[activeDay]; // active day data
@@ -816,27 +876,29 @@ function WeeklyForm({ onBack, onSaved }) {
 
       {/* ── Day tab bar ── */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e5e7eb', marginBottom: 0, overflowX: 'auto' }}>
-        {dayData.map(({ date, isToday, isFuture, dayMins, hasOverlap }, di) => {
+        {dayData.map(({ date, isToday, isFuture, isTooOld, isLocked, status, dayMins, hasOverlap }, di) => {
           const isActive = di === activeDay;
+          const hasDraft = status === 'Draft';
+          const notEditable = isFuture || isTooOld;
           return (
             <button key={di} type="button"
               onClick={() => !isFuture && setActiveDay(di)}
               disabled={isFuture}
-              title={isFuture ? 'Cannot enter timesheets for future dates' : undefined}
+              title={isFuture ? 'Future date' : isTooOld ? 'Too old — view only (> 7 days)' : isLocked ? `${status} — existing lines read-only` : undefined}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                 padding: '8px 10px 10px',
                 border: 'none',
                 borderBottom: isActive ? '2px solid #2563eb' : '2px solid transparent',
                 marginBottom: -2,
-                background: isFuture ? '#f9fafb' : isActive ? '#eff6ff' : isToday ? '#f0fdf4' : 'transparent',
+                background: isFuture ? '#f9fafb' : isTooOld ? (isActive ? '#fafafa' : 'transparent') : isLocked ? (isActive ? '#f0fdf4' : '#f9fafb') : isActive ? '#eff6ff' : isToday ? '#f0fdf4' : 'transparent',
                 borderRadius: '6px 6px 0 0',
                 cursor: isFuture ? 'not-allowed' : 'pointer',
                 minWidth: 80, flex: '1 1 80px',
-                opacity: isFuture ? 0.45 : 1,
+                opacity: notEditable ? 0.55 : 1,
                 transition: 'background .12s',
               }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: isFuture ? '#9ca3af' : isActive ? '#1d4ed8' : isToday ? '#15803d' : '#374151' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: isFuture ? '#9ca3af' : isTooOld ? '#9ca3af' : isLocked ? '#15803d' : isActive ? '#1d4ed8' : isToday ? '#15803d' : '#374151' }}>
                 {DAYS[di]}
               </span>
               <span style={{ fontSize: 10, color: isActive ? '#3b82f6' : '#9ca3af', marginTop: 1 }}>
@@ -848,6 +910,8 @@ function WeeklyForm({ onBack, onSaved }) {
                     {fmtMins(dayMins)}
                   </span>
                 )}
+                {isLocked && <span style={{ fontSize: 9, color: '#15803d' }} title="Approved — existing lines locked">✓</span>}
+                {hasDraft && <span style={{ fontSize: 9, color: '#f59e0b' }} title="Draft — editable">●</span>}
                 {hasOverlap && <span style={{ fontSize: 9, color: '#ef4444' }} title="Time overlap">⚠</span>}
               </div>
             </button>
@@ -866,6 +930,22 @@ function WeeklyForm({ onBack, onSaved }) {
             {ad.date ? new Date(ad.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''}
           </span>
           {ad.isToday && <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 4, padding: '1px 7px' }}>Today</span>}
+          {ad.isLocked && (
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 4, padding: '1px 7px', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              {ad.status} · {ad.docNo} · existing lines locked
+            </span>
+          )}
+          {ad.status === 'Draft' && (
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', borderRadius: 4, padding: '1px 7px' }}>
+              Draft · {ad.docNo}
+            </span>
+          )}
+          {ad.isTooOld && !ad.status && (
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af', background: '#f3f4f6', borderRadius: 4, padding: '1px 7px' }}>
+              View only — older than 7 days
+            </span>
+          )}
           {ad.dayMins > 0 && (
             <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#2563eb', background: '#eff6ff', borderRadius: 6, padding: '2px 10px' }}>
               {fmtMins(ad.dayMins)}
@@ -959,28 +1039,45 @@ function WeeklyForm({ onBack, onSaved }) {
           <tbody>
             {ad.lines.map((line, li) => {
               const mins = parseInt(calcMins(line.startTime, line.endTime), 10) || 0;
+              const lineRO = line._isExisting || !ad.canAddNew; // read-only if saved or too old
               return (
                 <React.Fragment key={line._key}>
-                  <tr>
+                  <tr style={{ background: line._isExisting ? '#f9fafb' : undefined }}>
                     <td style={{ textAlign: 'center' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: COLORS[li % COLORS.length], fontSize: 10, fontWeight: 700, color: '#fff' }}>{li + 1}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: line._isExisting ? '#94a3b8' : COLORS[li % COLORS.length], fontSize: 10, fontWeight: 700, color: '#fff' }}>{li + 1}</span>
                     </td>
                     <td>
-                      <SearchSelect options={projOptions} value={line.projectId}
-                        onChange={(v) => setLine(activeDay, li, 'projectId', v)} placeholder="Search project…" />
+                      {lineRO
+                        ? <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', padding: '0 4px' }}>{line.projectId || '—'}</span>
+                        : <SearchSelect options={projOptions} value={line.projectId}
+                            onChange={(v) => setLine(activeDay, li, 'projectId', v)} placeholder="Search project…" />
+                      }
                     </td>
                     <td>
-                      <select style={{ width: '100%' }} value={line.taskType}
-                        onChange={(e) => setLine(activeDay, li, 'taskType', e.target.value)}>
-                        <option value="">— select —</option>
-                        {ttOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
+                      {lineRO
+                        ? <span style={{ fontSize: 13, color: '#374151', padding: '0 4px' }}>{ttOptions.find((t) => t.value === line.taskType)?.label || line.taskType || '—'}</span>
+                        : <select style={{ width: '100%' }} value={line.taskType}
+                            onChange={(e) => setLine(activeDay, li, 'taskType', e.target.value)}>
+                            <option value="">— select —</option>
+                            {ttOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                      }
                     </td>
-                    <td><TimeInput value={line.startTime} onChange={(v) => setLine(activeDay, li, 'startTime', v)} /></td>
-                    <td><TimeInput value={line.endTime}   onChange={(v) => setLine(activeDay, li, 'endTime',   v)} /></td>
+                    <td>
+                      {lineRO
+                        ? <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', padding: '0 4px', fontFamily: 'monospace' }}>{line.startTime || '—'}</span>
+                        : <TimeInput value={line.startTime} onChange={(v) => setLine(activeDay, li, 'startTime', v)} />
+                      }
+                    </td>
+                    <td>
+                      {lineRO
+                        ? <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', padding: '0 4px', fontFamily: 'monospace' }}>{line.endTime || '—'}</span>
+                        : <TimeInput value={line.endTime} onChange={(v) => setLine(activeDay, li, 'endTime', v)} />
+                      }
+                    </td>
                     <td style={{ textAlign: 'center' }}>
                       {mins > 0
-                        ? <span style={{ background: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: 11, borderRadius: 5, padding: '2px 8px' }}>{fmtMins(mins)}</span>
+                        ? <span style={{ background: line._isExisting ? '#f0fdf4' : '#eff6ff', color: line._isExisting ? '#15803d' : '#2563eb', fontWeight: 700, fontSize: 11, borderRadius: 5, padding: '2px 8px' }}>{fmtMins(mins)}</span>
                         : <span style={{ color: '#e2e8f0' }}>—</span>}
                     </td>
                     <td>
@@ -990,22 +1087,26 @@ function WeeklyForm({ onBack, onSaved }) {
                         onAdd={(att) => setLine(activeDay, li, 'attachment', att)}
                         onRemoveNew={() => setLine(activeDay, li, 'attachment', null)}
                         onRemoveExisting={() => {}}
-                        readOnly={false}
+                        readOnly={lineRO}
                       />
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button type="button" title={line.comments ? 'Edit note' : 'Add note'}
-                        onClick={() => setLine(activeDay, li, 'commentOpen', !line.commentOpen)}
-                        style={{ border: 'none', cursor: 'pointer', padding: 4, borderRadius: 4,
-                          color: line.comments ? '#2563eb' : '#d1d5db',
-                          background: line.commentOpen ? '#eff6ff' : 'transparent' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill={line.comments ? '#dbeafe' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                        </svg>
-                      </button>
+                      {line.comments ? (
+                        <button type="button" title={lineRO ? 'View note' : 'Edit note'}
+                          onClick={() => setLine(activeDay, li, 'commentOpen', !line.commentOpen)}
+                          style={{ border: 'none', cursor: 'pointer', padding: 4, borderRadius: 4, color: '#2563eb', background: line.commentOpen ? '#eff6ff' : 'transparent' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="#dbeafe" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        </button>
+                      ) : !lineRO ? (
+                        <button type="button" title="Add note"
+                          onClick={() => setLine(activeDay, li, 'commentOpen', !line.commentOpen)}
+                          style={{ border: 'none', cursor: 'pointer', padding: 4, borderRadius: 4, color: '#d1d5db', background: 'transparent' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        </button>
+                      ) : null}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      {ad.lines.length > 1 && (
+                      {!line._isExisting && ad.lines.filter((l) => !l._isExisting).length > 1 && (
                         <button type="button" className="del-row-btn" onClick={() => removeLine(activeDay, li)} title="Remove">
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
@@ -1017,10 +1118,11 @@ function WeeklyForm({ onBack, onSaved }) {
                       <td colSpan={9} style={{ padding: '6px 16px 10px 52px' }}>
                         <textarea
                           value={line.comments}
-                          onChange={(e) => setLine(activeDay, li, 'comments', e.target.value)}
+                          readOnly={lineRO}
+                          onChange={(e) => !lineRO && setLine(activeDay, li, 'comments', e.target.value)}
                           placeholder="Add a note for this line…"
                           rows={2}
-                          style={{ width: '100%', fontSize: 12, resize: 'vertical', borderRadius: 6, border: '1px solid #e5e7eb', padding: '6px 10px', color: '#374151', background: '#fff', outline: 'none', boxSizing: 'border-box' }}
+                          style={{ width: '100%', fontSize: 12, resize: 'vertical', borderRadius: 6, border: '1px solid #e5e7eb', padding: '6px 10px', color: '#374151', background: lineRO ? '#f9fafb' : '#fff', outline: 'none', boxSizing: 'border-box' }}
                         />
                       </td>
                     </tr>
@@ -1031,7 +1133,14 @@ function WeeklyForm({ onBack, onSaved }) {
           </tbody>
         </table>
 
-        <button type="button" className="ts-add-btn" onClick={() => addLine(activeDay)}>+ Add Line</button>
+        {ad.canAddNew && (
+          <button type="button" className="ts-add-btn" onClick={() => addLine(activeDay)}>+ Add Line</button>
+        )}
+        {!ad.canAddNew && ad.isTooOld && (
+          <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic', padding: '4px 0' }}>
+            This day is older than 7 days — new entries cannot be added.
+          </div>
+        )}
         </div>
       </div>
     </div>

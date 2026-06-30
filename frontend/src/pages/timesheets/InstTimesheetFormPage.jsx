@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
@@ -26,6 +26,8 @@ function minsToHm(mins) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
+const QUICK_REASONS = ['Incorrect work order','Missing labour details','Duplicate entry','Wrong date / shift','Incomplete information'];
+
 export default function InstTimesheetFormPage() {
   const { id: docNo } = useParams();
   const navigate = useNavigate();
@@ -38,6 +40,8 @@ export default function InstTimesheetFormPage() {
   const isView = useLocation().pathname.endsWith('/view');
   const fromApprovals = searchParams.get('from') === 'approvals';
   const isApprover = fromApprovals || permissions.some((p) => p.module === 'INST' && p.canWrite && p.canReport);
+  const [showReject, setShowReject] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
   const [header, setHeader] = useState({
     tsType: 'INST',
@@ -57,15 +61,16 @@ export default function InstTimesheetFormPage() {
 
   const entryPerson = user?.employeeCode ?? user?.username ?? '';
 
-  const { data: employees        = [] } = useQuery({ queryKey: ['employees', 'inst'],      queryFn: () => api.get('/employees', { params: { deptFilter: 'inst' } }).then((r) => r.data) });
-  const { data: departments      = [] } = useQuery({ queryKey: ['departments'],      queryFn: () => api.get('/departments').then((r) => r.data) });
-  const { data: allWorkOrders    = [] } = useQuery({ queryKey: ['work-orders', 'inst'], queryFn: () => api.get('/work-orders', { params: { subsidiaryIds: '1,3', statuses: 'In Process,Released' } }).then((r) => r.data) });
-  const { data: vehicles         = [] } = useQuery({ queryKey: ['vehicles'],         queryFn: () => api.get('/vehicles').then((r) => r.data) });
-  const { data: accessEquipment  = [] } = useQuery({ queryKey: ['access-equipment'], queryFn: () => api.get('/access-equipment').then((r) => r.data) });
-  const { data: shifts           = [] } = useQuery({ queryKey: ['shifts'],           queryFn: () => api.get('/system-settings/shifts').then((r) => r.data) });
-  const { data: projects         = [] } = useQuery({ queryKey: ['projects'],         queryFn: () => api.get('/projects').then((r) => r.data) });
-  const { data: items            = [] } = useQuery({ queryKey: ['items'],            queryFn: () => api.get('/items').then((r) => r.data) });
-  const { data: completedWos     = [] } = useQuery({ queryKey: ['wo-complete-list'], queryFn: () => api.get('/wo-complete').then((r) => r.data.map((w) => w.workOrderNumber)) });
+  const STALE_5M = 5 * 60 * 1000;
+  const { data: employees        = [] } = useQuery({ queryKey: ['employees', 'inst'],      queryFn: () => api.get('/employees', { params: { deptFilter: 'inst' } }).then((r) => r.data), staleTime: STALE_5M });
+  const { data: departments      = [] } = useQuery({ queryKey: ['departments'],      queryFn: () => api.get('/departments').then((r) => r.data), staleTime: STALE_5M });
+  const { data: allWorkOrders    = [] } = useQuery({ queryKey: ['work-orders', 'inst'], queryFn: () => api.get('/work-orders', { params: { subsidiaryIds: '1,3', statuses: 'In Process,Released' } }).then((r) => r.data), staleTime: STALE_5M });
+  const { data: vehicles         = [] } = useQuery({ queryKey: ['vehicles'],         queryFn: () => api.get('/vehicles').then((r) => r.data), staleTime: STALE_5M });
+  const { data: accessEquipment  = [] } = useQuery({ queryKey: ['access-equipment'], queryFn: () => api.get('/access-equipment').then((r) => r.data), staleTime: STALE_5M });
+  const { data: shifts           = [] } = useQuery({ queryKey: ['shifts'],           queryFn: () => api.get('/system-settings/shifts').then((r) => r.data), staleTime: STALE_5M });
+  const { data: projects         = [] } = useQuery({ queryKey: ['projects'],         queryFn: () => api.get('/projects').then((r) => r.data), staleTime: STALE_5M });
+  const { data: items            = [] } = useQuery({ queryKey: ['items'],            queryFn: () => api.get('/items').then((r) => r.data), staleTime: STALE_5M });
+  const { data: completedWos     = [] } = useQuery({ queryKey: ['wo-complete-list'], queryFn: () => api.get('/wo-complete').then((r) => r.data.map((w) => w.workOrderNumber)), staleTime: STALE_5M });
 
   const completedSet = new Set(completedWos);
 
@@ -172,6 +177,28 @@ export default function InstTimesheetFormPage() {
       navigate(fromApprovals ? '/timesheets/pending-approvals' : '/timesheets/inst');
     },
     onError: (err) => toast(err?.response?.data?.message ?? 'Save failed.', 'error'),
+  });
+
+  const { mutate: approve, isPending: approving } = useMutation({
+    mutationFn: () => api.post(`/timesheets/${docNo}/approve`).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['inst-timesheets'] });
+      toast('Timesheet approved.', 'success');
+      navigate('/timesheets/pending-approvals');
+    },
+    onError: (err) => toast(err?.response?.data?.message ?? 'Approve failed.', 'error'),
+  });
+
+  const { mutate: reject, isPending: rejecting } = useMutation({
+    mutationFn: (reason) => api.post(`/timesheets/${docNo}/reject`, { reason }).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['inst-timesheets'] });
+      toast('Timesheet rejected.', 'success');
+      navigate('/timesheets/pending-approvals');
+    },
+    onError: (err) => toast(err?.response?.data?.message ?? 'Reject failed.', 'error'),
   });
 
   function handleSubmit(e) {
@@ -297,30 +324,30 @@ export default function InstTimesheetFormPage() {
       : r));
   }
 
-  const projOptions  = projects.map((p) => ({ value: p.projectCode, label: p.projectCode, search: `${p.projectCode} ${p.projectName ?? ''}` }));
-  const woOptions    = filteredWOs.map((w) => ({ value: w.workOrderNumber, label: w.workOrderNumber, search: `${w.workOrderNumber} ${w.projectName ?? ''}` }));
-  const deptOptions  = departments
+  const projOptions  = useMemo(() => projects.map((p) => ({ value: p.projectCode, label: p.projectCode, search: `${p.projectCode} ${p.projectName ?? ''}` })), [projects]);
+  const woOptions    = useMemo(() => filteredWOs.map((w) => ({ value: w.workOrderNumber, label: w.workOrderNumber, search: `${w.workOrderNumber} ${w.projectName ?? ''}` })), [filteredWOs]);
+  const deptOptions  = useMemo(() => departments
     .filter((d) => {
       if (d.isActive === false || d.isActive === 0) return false;
       const md = (d.mainDepartment ?? '').toLowerCase();
       const dc = (d.departmentCode ?? '').toLowerCase();
       return md.includes('install') || dc.includes('install');
     })
-    .map((d) => ({ value: d.departmentCode ?? String(d.departmentId), label: d.departmentCode ?? String(d.departmentId) }));
-  const shiftOptions = shifts
+    .map((d) => ({ value: d.departmentCode ?? String(d.departmentId), label: d.departmentCode ?? String(d.departmentId) })), [departments]);
+  const shiftOptions = useMemo(() => shifts
     .filter((s) => s.status === 'Active')
-    .map((s) => ({ value: s.shiftCode, label: `${s.shiftCode} — ${s.shiftName ?? ''}` }));
+    .map((s) => ({ value: s.shiftCode, label: `${s.shiftCode} — ${s.shiftName ?? ''}` })), [shifts]);
   const instDepts  = ['production', 'installation', 'digital'];
-  const empOptions = employees
+  const empOptions = useMemo(() => employees
     .filter((e) => instDepts.includes((e.departmentCode ?? '').toLowerCase()))
-    .map((e) => ({ value: e.employeeNo, label: `${e.employeeNo} – ${[e.firstName, e.lastname].filter(Boolean).join(' ')}` }));
-  const itemOptions  = items.map((it, idx) => ({
+    .map((e) => ({ value: e.employeeNo, label: `${e.employeeNo} – ${[e.firstName, e.lastname].filter(Boolean).join(' ')}` })), [employees]);
+  const itemOptions  = useMemo(() => items.map((it, idx) => ({
     value:        it.itemcode ?? `~${idx}`,
     label:        `${it.itemcode ? it.itemcode + ' – ' : ''}${it.itemName ?? it.description ?? it.itemcode ?? ''}`,
-    triggerLabel: it.itemcode ?? it.itemName ?? '',   // short code shown in the trigger cell
-  }));
-  const vehOptions   = vehicles.map((v) => ({ value: v.vehicleId ?? v.plateNo, label: `${v.plateNo} – ${v.vehicleType ?? ''}` }));
-  const accOptions   = accessEquipment.map((a) => ({ value: a.equipmentName ?? a.name, label: a.equipmentName ?? a.name }));
+    triggerLabel: it.itemcode ?? it.itemName ?? '',
+  })), [items]);
+  const vehOptions   = useMemo(() => vehicles.map((v) => ({ value: v.vehicleId ?? v.plateNo, label: `${v.plateNo} – ${v.vehicleType ?? ''}` })), [vehicles]);
+  const accOptions   = useMemo(() => accessEquipment.map((a) => ({ value: a.equipmentName ?? a.name, label: a.equipmentName ?? a.name })), [accessEquipment]);
 
   const tsStatus = existing?.status ?? null;
   const isReadonly = isView || tsStatus === 'Approved' || tsStatus === 'Rejected' || (tsStatus === 'Submitted' && !isApprover);
@@ -335,7 +362,7 @@ export default function InstTimesheetFormPage() {
               <div className="ts-modal-sub">{isReadonly ? (tsStatus === 'Approved' ? 'Approved — read-only' : tsStatus === 'Rejected' ? 'Rejected — read-only' : tsStatus === 'Submitted' ? 'Submitted — read-only' : 'Read-only view') : 'Fill in the details below and save'}</div>
             </div>
           </div>
-          <button type="button" className="btn btn-ghost" onClick={() => confirmLeave('/timesheets/inst')}>← Back</button>
+          <button type="button" className="btn btn-ghost" onClick={() => confirmLeave(fromApprovals ? '/timesheets/pending-approvals' : '/timesheets/inst')}>← Back</button>
         </div>
 
         <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden' }}>
@@ -627,7 +654,30 @@ export default function InstTimesheetFormPage() {
 
         <div className="ts-modal-footer">
           {isReadonly ? (
-            <button type="button" className="ts-footer-cancel" onClick={() => navigate('/timesheets/inst')}>← Back to List</button>
+            <>
+              <button type="button" className="ts-footer-cancel" onClick={() => navigate(fromApprovals ? '/timesheets/pending-approvals' : '/timesheets/inst')}>← Back</button>
+              {fromApprovals && (
+                <>
+                  <button type="button" className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => navigate(`/timesheets/inst/${docNo}/edit?from=approvals`)}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    Edit
+                  </button>
+                  <button type="button" disabled={approving || rejecting}
+                    onClick={() => { setRejectReason(''); setShowReject(true); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 6, border: '1px solid #fca5a5', background: '#fff1f1', color: '#dc2626', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    Reject
+                  </button>
+                  <button type="button" disabled={approving || rejecting}
+                    onClick={() => approve()}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 6, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: approving ? 0.6 : 1 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    {approving ? 'Approving…' : 'Approve'}
+                  </button>
+                </>
+              )}
+            </>
           ) : (
             <>
               <button type="button" className="ts-footer-cancel" onClick={() => confirmLeave('/timesheets/inst')}>Cancel</button>
@@ -638,6 +688,53 @@ export default function InstTimesheetFormPage() {
           )}
         </div>
       </form>
+
+      {/* Inline reject modal */}
+      {showReject && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 10, padding: 24, width: 420, maxWidth: '90vw', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>Reject Timesheet</div>
+                <div style={{ color: '#6b7280', fontSize: 12 }}>{docNo}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Quick reasons</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {QUICK_REASONS.map((r) => (
+                <button key={r} type="button"
+                  onClick={() => setRejectReason(rejectReason === r ? '' : r)}
+                  style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: rejectReason === r ? '1.5px solid #dc2626' : '1px solid #e5e7eb', background: rejectReason === r ? '#fee2e2' : '#f9fafb', color: rejectReason === r ? '#dc2626' : '#374151' }}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              Or write a custom reason <span style={{ color: '#9ca3af', fontWeight: 400 }}>(required)</span>
+            </div>
+            <textarea rows={4} maxLength={300} value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Describe the issue clearly so the employee can correct and resubmit…"
+              autoFocus
+              style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 10px', fontSize: 13, resize: 'vertical' }}
+            />
+            <div style={{ fontSize: 12, color: 300 - rejectReason.length < 30 ? '#ef4444' : '#9ca3af', textAlign: 'right', marginBottom: 16 }}>
+              {300 - rejectReason.length} characters remaining
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setShowReject(false)} disabled={rejecting}>Cancel</button>
+              <button type="button" disabled={rejecting || rejectReason.trim().length < 5}
+                onClick={() => reject(rejectReason)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: rejecting || rejectReason.trim().length < 5 ? 0.5 : 1 }}>
+                {rejecting ? 'Rejecting…' : 'Reject Timesheet'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

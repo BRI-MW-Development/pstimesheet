@@ -195,8 +195,8 @@ function SummaryReport({ onBack }) {
 }
 
 // ── Detail Report View ─────────────────────────────────────────────────────────
-const LINE_VARIANT = { LABOUR: 'submitted', MATERIAL: 'warning', EQUIPMENT: 'info' };
-const LINE_LABEL   = { LABOUR: 'Labour', MATERIAL: 'Material', EQUIPMENT: 'Equipment' };
+const LINE_VARIANT = { LABOUR: 'submitted', MATERIAL: 'warning', EQUIPMENT: 'info', MACHINERY: 'info', VEHICLE: 'draft', ACCESS: 'draft' };
+const LINE_LABEL   = { LABOUR: 'Labour', MATERIAL: 'Material', EQUIPMENT: 'Equipment', MACHINERY: 'Machinery', VEHICLE: 'Vehicle', ACCESS: 'Access Equip' };
 
 function DetailReport({ tsType, onBack }) {
   const typeLabels = { PROD: 'Production', INST: 'Installation', PROJ: 'Project' };
@@ -211,16 +211,18 @@ function DetailReport({ tsType, onBack }) {
   });
 
   function lineDesc(r) {
-    if (r.lineType === 'LABOUR')    return r.employeeName ?? r.employeeCode ?? '—';
-    if (r.lineType === 'MATERIAL')  return [r.itemCode, r.itemName].filter(Boolean).join(' – ') || '—';
-    if (r.lineType === 'EQUIPMENT') return r.equipmentName ?? '—';
+    if (r.lineType === 'LABOUR')                            return r.employeeName ?? r.employeeCode ?? '—';
+    if (r.lineType === 'MATERIAL')                          return [r.itemCode, r.itemName].filter(Boolean).join(' – ') || '—';
+    if (['MACHINERY','VEHICLE','ACCESS','EQUIPMENT'].includes(r.lineType)) return r.equipmentName ?? '—';
     return '—';
   }
 
   function lineQty(r) {
     if (r.lineType === 'LABOUR')    return r.qty != null ? `${(r.qty / 60).toFixed(2)}h` : '—';
     if (r.lineType === 'MATERIAL')  return r.qty != null ? `${r.qty} ${r.uom ?? ''}`.trim() : '—';
-    if (r.lineType === 'EQUIPMENT') return r.hoursUsed != null ? `${r.hoursUsed}h` : '—';
+    if (r.lineType === 'MACHINERY') return r.qty != null ? `${r.qty} min` : '—';
+    if (r.lineType === 'VEHICLE')   return r.qty != null ? `${r.qty} km`  : '—';
+    if (['ACCESS','EQUIPMENT'].includes(r.lineType)) return r.qty != null ? `${r.qty}h` : '—';
     return '—';
   }
 
@@ -254,7 +256,7 @@ function DetailReport({ tsType, onBack }) {
             { label: 'Total Lines',     value: rows.length },
             { label: 'Labour Lines',    value: rows.filter((r) => r.lineType === 'LABOUR').length },
             { label: 'Material Lines',  value: rows.filter((r) => r.lineType === 'MATERIAL').length },
-            { label: 'Equipment Lines', value: rows.filter((r) => r.lineType === 'EQUIPMENT').length },
+            { label: 'Equipment Lines', value: rows.filter((r) => ['MACHINERY','VEHICLE','ACCESS','EQUIPMENT'].includes(r.lineType)).length },
             { label: 'Total Duration',  value: `${(rows.filter((r) => r.lineType === 'LABOUR').reduce((s, r) => s + (r.qty ?? 0), 0) / 60).toFixed(1)}h` },
           ].map((k) => (
             <div key={k.label} className="card" style={{ marginBottom: 0, flex: 1, minWidth: 110 }}>

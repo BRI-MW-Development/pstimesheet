@@ -51,9 +51,10 @@ const RolesPage              = lazy(() => import('./pages/admin/RolesPage'));
 const ShiftsPage             = lazy(() => import('./pages/admin/ShiftsPage'));
 const DocNumberingPage       = lazy(() => import('./pages/admin/DocNumberingPage'));
 const LoginHistoryPage       = lazy(() => import('./pages/admin/LoginHistoryPage'));
-const ApprovalSettingsPage   = lazy(() => import('./pages/settings/ApprovalSettingsPage'));
-const EmailSettingsPage      = lazy(() => import('./pages/settings/EmailSettingsPage'));
-const ChangePasswordPage     = lazy(() => import('./pages/settings/ChangePasswordPage'));
+const ApprovalSettingsPage        = lazy(() => import('./pages/settings/ApprovalSettingsPage'));
+const EmailSettingsPage           = lazy(() => import('./pages/settings/EmailSettingsPage'));
+const ChangePasswordPage          = lazy(() => import('./pages/settings/ChangePasswordPage'));
+const NotificationSettingsPage    = lazy(() => import('./pages/settings/NotificationSettingsPage'));
 const ProfilePage            = lazy(() => import('./pages/ProfilePage'));
 const NotificationsPage      = lazy(() => import('./pages/NotificationsPage'));
 const NotFoundPage           = lazy(() => import('./pages/NotFoundPage'));
@@ -131,6 +132,8 @@ export default function App() {
                   <Route path="settings/approvals"       element={<ApprovalSettingsPage />} />
                   <Route path="settings/email"           element={<EmailSettingsPage />} />
                   <Route path="settings/change-password" element={<ChangePasswordPage />} />
+                  <Route path="settings/sessions"        element={<LoginHistoryPage />} />
+                  <Route path="settings/notifications"   element={<NotificationSettingsPage />} />
 
                   {/* Profile + Notifications */}
                   <Route path="profile"       element={<ProfilePage />} />

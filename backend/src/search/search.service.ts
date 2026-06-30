@@ -15,19 +15,34 @@ export class SearchService {
     workOrders: any[];
     projects: any[];
     employees: any[];
+    qcRecords: any[];
+    wocRecords: any[];
   }> {
     const term = `%${q.trim()}%`;
 
-    const [timesheets, workOrders, projects, employees] = await Promise.all([
-      // Timesheets — DEV DB
+    const [timesheets, workOrders, projects, employees, qcRecords, wocRecords] = await Promise.all([
+      // Timesheets (PROD + INST only — PROJ uses a weekly form with no direct edit URL)
       this.devPool.request()
         .input('q', mssql.NVarChar(200), term)
         .query<any>(`
-          SELECT TOP 8 docNo, tsType AS type, workOrderNo, projectName, status, department
-          FROM PSTsHeader
-          WHERE isDeleted = 0
-            AND (docNo LIKE @q OR workOrderNo LIKE @q OR projectName LIKE @q)
-          ORDER BY createdAt DESC
+          SELECT TOP 8
+            h.tsDocNo         AS docNo,
+            h.tsType          AS type,
+            h.workOrderNo,
+            h.projectId,
+            h.projectName,
+            h.status,
+            h.department_code AS department
+          FROM PSTsHeader h
+          WHERE h.isDeleted = 0
+            AND h.tsType IN ('PROD','INST')
+            AND (
+              h.tsDocNo     LIKE @q
+              OR h.workOrderNo LIKE @q
+              OR h.projectId   LIKE @q
+              OR h.projectName LIKE @q
+            )
+          ORDER BY h.createdAt DESC
         `).then(r => r.recordset).catch(() => []),
 
       // Work Orders — Live ERP
@@ -79,8 +94,51 @@ export class SearchService {
             )
           ORDER BY me.firstName
         `).then(r => r.recordset).catch(() => []),
+
+      // QC Records — DEV DB
+      this.devPool.request()
+        .input('q', mssql.NVarChar(200), term)
+        .query<any>(`
+          SELECT TOP 5
+            docNo,
+            workOrderNo,
+            projectCode,
+            projectName,
+            status,
+            partialFull
+          FROM PsQcRecord
+          WHERE isDeleted = 0
+            AND (
+              docNo        LIKE @q
+              OR workOrderNo  LIKE @q
+              OR projectCode  LIKE @q
+              OR projectName  LIKE @q
+            )
+          ORDER BY createdAt DESC
+        `).then(r => r.recordset).catch(() => []),
+
+      // WO Complete Records — DEV DB
+      this.devPool.request()
+        .input('q', mssql.NVarChar(200), term)
+        .query<any>(`
+          SELECT TOP 5
+            docNo,
+            workOrderNumber AS workOrderNo,
+            projectId,
+            projectName,
+            status
+          FROM PsWoComplete
+          WHERE isDeleted = 0
+            AND (
+              docNo           LIKE @q
+              OR workOrderNumber LIKE @q
+              OR projectId       LIKE @q
+              OR projectName     LIKE @q
+            )
+          ORDER BY createdAt DESC
+        `).then(r => r.recordset).catch(() => []),
     ]);
 
-    return { timesheets, workOrders, projects, employees };
+    return { timesheets, workOrders, projects, employees, qcRecords, wocRecords };
   }
 }

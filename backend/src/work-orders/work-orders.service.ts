@@ -121,6 +121,21 @@ export class WorkOrdersService {
     return result.recordset;
   }
 
+  // Lightweight endpoint: return only WO numbers for dropdown population (W-9)
+  async listNumbers(): Promise<string[]> {
+    const res = await this.pool.request().query<{ workOrderNumber: string }>(`
+      SELECT workorderNumber AS workOrderNumber
+      FROM   ErpOperationWorkOrder
+      WHERE  UPPER(LTRIM(RTRIM(netsuiteStatus))) IN ('IN PROCESS', 'RELEASED')
+      UNION
+      SELECT WorkOrderNumber AS workOrderNumber
+      FROM   erpinstallationworkorder
+      WHERE  UPPER(LTRIM(RTRIM(netsuiteStatus))) IN ('IN PROCESS', 'RELEASED')
+      ORDER  BY workOrderNumber
+    `);
+    return res.recordset.map(r => r.workOrderNumber);
+  }
+
   private parseSubsidiaryIds(raw?: string): number[] {
     const defaults = [1];
     if (!raw) return defaults;

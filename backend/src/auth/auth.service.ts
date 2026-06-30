@@ -151,8 +151,8 @@ export class AuthService implements OnModuleInit {
   async validateSession(token: string): Promise<{ userId: string; username: string; displayName: string; roleCode: string; employeeCode: string | null; departmentCode: string | null }> {
     const res = await this.pool.request()
       .input('token', mssql.NVarChar(64), token)
-      .query<{ userId: string; username: string; displayName: string; roleCode: string; employeeCode: string | null; departmentCode: string | null; expiresAt: Date; isActive: boolean }>(`
-        SELECT s.userId, u.username, u.displayName, u.roleCode, u.employeeCode, u.departmentCode, s.expiresAt, s.isActive
+      .query<{ userId: string; username: string; displayName: string; roleCode: string; employeeCode: string | null; departmentCode: string | null; expiresAt: Date; isActive: boolean; lastActiveAt: Date | null }>(`
+        SELECT s.userId, u.username, u.displayName, u.roleCode, u.employeeCode, u.departmentCode, s.expiresAt, s.isActive, s.lastActiveAt
         FROM   PSTsSessions s
         JOIN   PSTsUsers    u ON u.userId = s.userId
         WHERE  s.sessionToken = @token
@@ -161,10 +161,14 @@ export class AuthService implements OnModuleInit {
     if (!session || !session.isActive || new Date(session.expiresAt) < new Date()) {
       throw new UnauthorizedException('Session expired or invalid. Please log in again.');
     }
-    // bump lastActiveAt
-    await this.pool.request()
-      .input('token', mssql.NVarChar(64), token)
-      .query(`UPDATE PSTsSessions SET lastActiveAt=GETDATE() WHERE sessionToken=@token`);
+    // Only write lastActiveAt if it hasn't been updated in the last 5 minutes — avoids
+    // a hot-row UPDATE storm under concurrent users with the 60-second poll active.
+    const lastActive = session.lastActiveAt ? new Date(session.lastActiveAt).getTime() : 0;
+    if (Date.now() - lastActive > 5 * 60 * 1000) {
+      await this.pool.request()
+        .input('token', mssql.NVarChar(64), token)
+        .query(`UPDATE PSTsSessions SET lastActiveAt=GETDATE() WHERE sessionToken=@token`);
+    }
 
     return { userId: session.userId, username: session.username, displayName: session.displayName, roleCode: session.roleCode, employeeCode: session.employeeCode ?? null, departmentCode: session.departmentCode ?? null };
   }
@@ -419,7 +423,7 @@ export class AuthService implements OnModuleInit {
     // 'OwnDept' → filter to records in the user's assigned department.
     // 'All'     → no additional filter.
     const ownSql = dataScope === 'Own'
-      ? `AND enteredByUserId = @uid`
+      ? `AND entered_by_user_id = @uid`
       : dataScope === 'OwnDept' && departmentCode
         ? `AND department_code = @deptCode`
         : '';
@@ -442,7 +446,9 @@ export class AuthService implements OnModuleInit {
           SUM(CASE WHEN status='Draft'     THEN 1 ELSE 0 END) AS draft,
           SUM(CASE WHEN status='Submitted' THEN 1 ELSE 0 END) AS submitted,
           SUM(CASE WHEN status='Approved'  THEN 1 ELSE 0 END) AS approved,
-          SUM(CASE WHEN YEAR(entryDate)=YEAR(GETDATE()) AND MONTH(entryDate)=MONTH(GETDATE()) THEN 1 ELSE 0 END) AS thisMonth,
+          SUM(CASE WHEN entryDate >= DATEADD(DAY, 1-DAY(GETDATE()), CAST(GETDATE() AS DATE))
+                        AND entryDate <  DATEADD(MONTH, 1, DATEADD(DAY, 1-DAY(GETDATE()), CAST(GETDATE() AS DATE)))
+                   THEN 1 ELSE 0 END) AS thisMonth,
           SUM(CASE WHEN tsType='PROD' THEN 1 ELSE 0 END) AS prodCount,
           SUM(CASE WHEN tsType='INST' THEN 1 ELSE 0 END) AS instCount,
           SUM(CASE WHEN tsType='PROJ' THEN 1 ELSE 0 END) AS projCount
@@ -452,8 +458,10 @@ export class AuthService implements OnModuleInit {
       hasWoc
         ? this.pool.request().query<{ total: number; thisMonth: number }>(`
             SELECT COUNT(*) AS total,
-              SUM(CASE WHEN YEAR(completedDate)=YEAR(GETDATE()) AND MONTH(completedDate)=MONTH(GETDATE()) THEN 1 ELSE 0 END) AS thisMonth
-            FROM PsWoComplete
+              SUM(CASE WHEN TRY_CAST(completedDate AS DATE) >= DATEADD(DAY, 1-DAY(GETDATE()), CAST(GETDATE() AS DATE))
+                            AND TRY_CAST(completedDate AS DATE) <  DATEADD(MONTH, 1, DATEADD(DAY, 1-DAY(GETDATE()), CAST(GETDATE() AS DATE)))
+                       THEN 1 ELSE 0 END) AS thisMonth
+            FROM PsWoComplete WHERE isDeleted = 0
           `).catch(() => ({ recordset: [{ total:0, thisMonth:0 }] }))
         : Promise.resolve({ recordset: [{ total:0, thisMonth:0 }] }),
 
@@ -464,7 +472,9 @@ export class AuthService implements OnModuleInit {
               SUM(CASE WHEN status='Passed'      THEN 1 ELSE 0 END) AS passed,
               SUM(CASE WHEN status='Failed'      THEN 1 ELSE 0 END) AS failed,
               SUM(CASE WHEN status='In Progress' THEN 1 ELSE 0 END) AS inProgress,
-              SUM(CASE WHEN YEAR(qcDate)=YEAR(GETDATE()) AND MONTH(qcDate)=MONTH(GETDATE()) THEN 1 ELSE 0 END) AS thisMonth
+              SUM(CASE WHEN TRY_CAST(qcDate AS DATE) >= DATEADD(DAY, 1-DAY(GETDATE()), CAST(GETDATE() AS DATE))
+                            AND TRY_CAST(qcDate AS DATE) <  DATEADD(MONTH, 1, DATEADD(DAY, 1-DAY(GETDATE()), CAST(GETDATE() AS DATE)))
+                       THEN 1 ELSE 0 END) AS thisMonth
             FROM PsQcRecord WHERE isDeleted = 0
           `).catch(() => ({ recordset: [{ total:0, passed:0, failed:0, inProgress:0, thisMonth:0 }] }))
         : Promise.resolve({ recordset: [{ total:0, passed:0, failed:0, inProgress:0, thisMonth:0 }] }),

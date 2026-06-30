@@ -14,4 +14,11 @@ export class WorkOrdersController {
   async list(@Query() query: ListWorkOrdersQueryDto) {
     return this.workOrdersService.list(query);
   }
+
+  @UseGuards(PermissionGuard)
+  @RequirePermission('WORK_ORDERS', 'canRead')
+  @Get('numbers')
+  async listNumbers() {
+    return this.workOrdersService.listNumbers();
+  }
 }

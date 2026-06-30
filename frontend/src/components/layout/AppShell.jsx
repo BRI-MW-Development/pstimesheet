@@ -67,6 +67,8 @@ const NAV_GROUPS = [
       { label: 'Doc Numbering',     to: '/admin/doc-numbering',perm: { module: 'DOC_NUMBERING', action: 'canRead' } },
       { label: 'Approval Settings', to: '/settings/approvals', perm: { module: 'SETTINGS',     action: 'canRead' } },
       { label: 'Email Settings',    to: '/settings/email',     perm: { module: 'SETTINGS',     action: 'canRead' } },
+      { label: 'Sessions',          to: '/settings/sessions',  perm: { module: 'USERS',         action: 'canRead' } },
+      { label: 'Notifications',     to: '/settings/notifications', perm: null },
     ],
   },
 ];
@@ -111,10 +113,12 @@ function GlobalSearch({ onClose }) {
 
   const groups = results
     ? [
-        { label: 'Timesheets',  items: results.timesheets  ?? [], icon: '📋', path: (r) => `/timesheets/${r.type?.toLowerCase() ?? 'prod'}/${r.docNo}/edit`, display: (r) => r.docNo, sub: (r) => r.projectName ?? '' },
-        { label: 'Work Orders', items: results.workOrders  ?? [], icon: '🔧', path: (r) => '/masters/workorders',                                           display: (r) => r.workOrderNumber, sub: (r) => r.projectName ?? '' },
-        { label: 'Projects',    items: results.projects    ?? [], icon: '🏗️', path: (r) => '/masters/projects',                                              display: (r) => r.projectCode,    sub: (r) => r.projectName ?? '' },
-        { label: 'Employees',   items: results.employees   ?? [], icon: '👷', path: (r) => '/masters/employees',                                             display: (r) => r.employeeNo,     sub: (r) => [r.firstName, r.lastname].filter(Boolean).join(' ') },
+        { label: 'Timesheets',   items: results.timesheets  ?? [], icon: '📋', path: (r) => `/timesheets/${r.type?.toLowerCase() ?? 'prod'}/${r.docNo}/edit`, display: (r) => r.docNo,          sub: (r) => [r.projectId, r.workOrderNo, r.status].filter(Boolean).join(' · ') },
+        { label: 'QC Records',   items: results.qcRecords   ?? [], icon: '✅', path: (r) => `/qc/${r.docNo}/view`,                                            display: (r) => r.docNo,          sub: (r) => [r.workOrderNo, r.projectCode, r.partialFull].filter(Boolean).join(' · ') },
+        { label: 'WO Complete',  items: results.wocRecords  ?? [], icon: '🏁', path: () => '/woc',                                                          display: (r) => r.docNo,          sub: (r) => [r.workOrderNo, r.projectId].filter(Boolean).join(' · ') },
+        { label: 'Work Orders',  items: results.workOrders  ?? [], icon: '🔧', path: (r) => '/masters/workorders',                                            display: (r) => r.workOrderNumber, sub: (r) => r.projectName ?? '' },
+        { label: 'Projects',     items: results.projects    ?? [], icon: '🏗️', path: (r) => '/masters/projects',                                              display: (r) => r.projectCode,    sub: (r) => r.projectName ?? '' },
+        { label: 'Employees',    items: results.employees   ?? [], icon: '👷', path: (r) => '/masters/employees',                                             display: (r) => r.employeeNo,     sub: (r) => [r.firstName, r.lastname].filter(Boolean).join(' ') },
       ].filter((g) => g.items.length > 0)
     : [];
 
@@ -187,18 +191,25 @@ function NotifPanel({ onClose }) {
   const unreadCount = notifs.filter(n => !n.isRead).length;
 
   async function handleClick(n) {
-    // Mark as read
     if (!n.isRead) {
-      await api.patch(`/notifications/${encodeURIComponent(n.notifKey)}/read`).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      try {
+        await api.patch(`/notifications/${encodeURIComponent(n.notifKey)}/read`);
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      } catch {
+        // If mark-read fails, don't invalidate — keeps the unread dot accurate
+      }
     }
     if (n.link) navigate(n.link);
     onClose();
   }
 
   async function markAllRead() {
-    await api.patch('/notifications/read-all').catch(() => {});
-    queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    try {
+      await api.patch('/notifications/read-all');
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    } catch {
+      // silent — panel will still show unread state if request failed
+    }
   }
 
   return (

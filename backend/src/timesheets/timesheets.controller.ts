@@ -148,6 +148,15 @@ export class TimesheetsController {
     return this.timesheetsService.getWeekEntries(employeeCode, weekStart, excludeDocNos);
   }
 
+  @Get('week-proj-data')
+  async getWeekProjData(
+    @Query('employeeCode') employeeCode: string,
+    @Query('weekStart') weekStart: string,
+  ) {
+    if (!employeeCode || !weekStart) return {};
+    return this.timesheetsService.getWeekProjData(employeeCode, weekStart);
+  }
+
   @Get('day-entries')
   async getDayEntries(
     @Query('employeeCode') employeeCode: string,

@@ -260,63 +260,80 @@ export class TimesheetsService implements OnModuleInit {
     }
   }
 
-  // ── Live DB: employee lookup ────────────────────────────────────
-  private async lookupEmployee(code: string): Promise<{ name: string; dept: string; designation: string }> {
-    if (!code) return { name: '', dept: '', designation: '' };
+  // ── Live DB: batch employee lookup ─────────────────────────────
+  private async batchLookupEmployees(codes: string[]): Promise<Map<string, { name: string; dept: string; designation: string }>> {
+    const unique = [...new Set(codes.filter(Boolean).map(c => String(c).slice(0, 100)))];
+    const empty = { name: '', dept: '', designation: '' };
+    const map = new Map<string, typeof empty>();
+    if (!unique.length) return map;
     try {
+      const list = unique.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
       const r = await this.livePool.request()
-        .input('empCode', mssql.NVarChar(100), String(code).slice(0, 100))
-        .query<{ firstName: string; lastname: string; departmentCode: string; designation: string }>(`
-          SELECT me.firstName, me.lastname,
+        .query<{ employeeNo: string; firstName: string; lastname: string; departmentCode: string; designation: string }>(`
+          SELECT me.employeeNo,
+                 me.firstName, me.lastname,
                  md.departmentCode,
                  mt.taxnomyName AS designation
           FROM   ErpMasterEmployee me
           LEFT JOIN ErpMasterDepartment md ON md.departmentId = me.departmentId
           LEFT JOIN ErpMasterTaxnomy    mt ON mt.taxnomyId    = me.jobTitleId
-          WHERE  me.employeeNo = @empCode AND me.isDeleted = 0
+          WHERE  me.employeeNo IN (${list}) AND me.isDeleted = 0
         `);
-      const e = r.recordset[0];
-      if (!e) return { name: '', dept: '', designation: '' };
-      return {
-        name:        [e.firstName, e.lastname].filter(Boolean).join(' '),
-        dept:        e.departmentCode  ?? '',
-        designation: e.designation     ?? '',
-      };
+      for (const e of r.recordset) {
+        map.set(e.employeeNo, {
+          name:        [e.firstName, e.lastname].filter(Boolean).join(' '),
+          dept:        e.departmentCode  ?? '',
+          designation: e.designation     ?? '',
+        });
+      }
     } catch (err) {
-      this.logger.warn(`lookupEmployee failed for code="${code}": ${(err as Error)?.message}`);
-      return { name: '', dept: '', designation: '' };
+      this.logger.warn(`batchLookupEmployees failed: ${(err as Error)?.message}`);
     }
+    return map;
   }
 
-  // ── Live DB: item lookup ────────────────────────────────────────
-  private async lookupItem(code: string): Promise<{ name: string; uom: string }> {
-    if (!code) return { name: '', uom: '' };
+  // ── Live DB: batch item lookup ──────────────────────────────────
+  private async batchLookupItems(codes: string[]): Promise<Map<string, { name: string; uom: string }>> {
+    const unique = [...new Set(codes.filter(Boolean).map(c => String(c).slice(0, 100)))];
+    const map = new Map<string, { name: string; uom: string }>();
+    if (!unique.length) return map;
     try {
+      const list = unique.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
       const r = await this.livePool.request()
-        .input('itemCode', mssql.NVarChar(100), String(code).slice(0, 100))
-        .query<{ itemName: string; UOM: string }>(`
-          SELECT mi.itemName, mt.taxnomyCode AS UOM
+        .query<{ itemcode: string; itemName: string; UOM: string }>(`
+          SELECT mi.itemcode, mi.itemName, mt.taxnomyCode AS UOM
           FROM   ErpMasterItem    mi
           LEFT JOIN ErpMasterTaxnomy mt ON mt.taxnomyId = mi.uomId
-          WHERE  mi.itemcode = @itemCode AND mi.isActive = 1
+          WHERE  mi.itemcode IN (${list}) AND mi.isActive = 1
         `);
-      const item = r.recordset[0];
-      if (!item) return { name: '', uom: '' };
-      return { name: item.itemName ?? '', uom: item.UOM ?? '' };
+      for (const item of r.recordset) {
+        map.set(item.itemcode, { name: item.itemName ?? '', uom: item.UOM ?? '' });
+      }
     } catch (err) {
-      this.logger.warn(`lookupItem failed for code="${code}": ${(err as Error)?.message}`);
-      return { name: '', uom: '' };
+      this.logger.warn(`batchLookupItems failed: ${(err as Error)?.message}`);
     }
+    return map;
   }
 
   // ── Insert lines helper (used by create & update) ───────────────
   private async insertLines(tx: Transaction, tsId: number, body: any): Promise<void> {
     const labourRows: any[] = body.labourRows ?? [];
+    const materialRows: any[] = body.materialRows ?? [];
     this.logger.debug(`[insertLines] tsId=${tsId} rows=${labourRows.length}`);
+
+    // Batch-fetch all employee and item data in one query each (C-1)
+    const empCodes  = labourRows.map(r => r.employee).filter(Boolean);
+    const itemCodes = materialRows.map(r => r.itemCode).filter(Boolean);
+    const [empMap, itemMap] = await Promise.all([
+      this.batchLookupEmployees(empCodes),
+      this.batchLookupItems(itemCodes),
+    ]);
+    const empty = { name: '', dept: '', designation: '' };
+
     for (let i = 0; i < labourRows.length; i++) {
       const lr = labourRows[i];
       if (!lr.employee && !lr.employeeName) continue;
-      const emp = lr.employee ? await this.lookupEmployee(lr.employee) : { name: '', dept: '', designation: '' };
+      const emp = lr.employee ? (empMap.get(lr.employee) ?? empty) : empty;
       await tx.request()
         .input('tsId',           mssql.BigInt,        tsId)
         .input('lineNumber',     mssql.Int,           i + 1)
@@ -326,7 +343,7 @@ export class TimesheetsService implements OnModuleInit {
         .input('designation',    mssql.NVarChar(100), emp.designation || null)
         .input('startTime',      mssql.NVarChar(10),  lr.startTime || null)
         .input('endTime',        mssql.NVarChar(10),  lr.endTime   || null)
-        .input('durationMinutes',mssql.Int,           parseInt(lr.duration, 10) || 0)
+        .input('durationMinutes',mssql.Int,           parseInt(lr.durationMinutes ?? lr.duration, 10) || 0)
         .input('lineProjectId',  mssql.NVarChar(50),  lr.projectId    || null)
         .input('taskTypeCode',   mssql.NVarChar(30),  lr.taskTypeCode || null)
         .input('lineComments',   mssql.NVarChar(500), lr.comments     || null)
@@ -368,11 +385,10 @@ export class TimesheetsService implements OnModuleInit {
       }
     }
 
-    const materialRows: any[] = body.materialRows ?? [];
     for (let i = 0; i < materialRows.length; i++) {
       const mr = materialRows[i];
       if (!mr.itemCode && !mr.description) continue;
-      const item = mr.itemCode ? await this.lookupItem(mr.itemCode) : { name: '', uom: '' };
+      const item = mr.itemCode ? (itemMap.get(mr.itemCode) ?? { name: '', uom: '' }) : { name: '', uom: '' };
       await tx.request()
         .input('tsId',     mssql.BigInt,        tsId)
         .input('lineNumber', mssql.Int,          i + 1)
@@ -640,7 +656,18 @@ export class TimesheetsService implements OnModuleInit {
         'LABOUR' AS lineType,
         l.lineNumber, l.employeeCode, l.employeeName,
         l.departmentCode AS lineDept, l.designation,
-        l.startTime, l.endTime, l.durationMinutes AS qty,
+        l.startTime, l.endTime,
+        ISNULL(
+          NULLIF(l.durationMinutes, 0),
+          CASE
+            WHEN l.startTime IS NOT NULL AND l.startTime <> ''
+             AND l.endTime   IS NOT NULL AND l.endTime   <> ''
+            THEN DATEDIFF(MINUTE,
+                   TRY_CAST(l.startTime AS TIME),
+                   TRY_CAST(l.endTime   AS TIME))
+            ELSE 0
+          END
+        ) AS qty,
         NULL AS itemCode, NULL AS itemName, NULL AS uom,
         NULL AS equipmentName, NULL AS hoursUsed
       FROM PSTsHeader h
@@ -717,7 +744,12 @@ export class TimesheetsService implements OnModuleInit {
         h.entered_by_name,
         h.status,
         ISNULL((SELECT COUNT(*) FROM PSTsLabourLine l WHERE l.tsId = h.tsId), 0) AS labourCount,
-        ISNULL((SELECT SUM(CAST(l.durationMinutes AS FLOAT)) / 60.0 FROM PSTsLabourLine l WHERE l.tsId = h.tsId), 0) AS totalHours,
+        ISNULL((SELECT SUM(CAST(
+          ISNULL(NULLIF(l.durationMinutes, 0),
+            CASE WHEN l.startTime IS NOT NULL AND l.startTime <> '' AND l.endTime IS NOT NULL AND l.endTime <> ''
+            THEN DATEDIFF(MINUTE, TRY_CAST(l.startTime AS TIME), TRY_CAST(l.endTime AS TIME))
+            ELSE 0 END)
+        AS FLOAT)) / 60.0 FROM PSTsLabourLine l WHERE l.tsId = h.tsId), 0) AS totalHours,
         ISNULL((SELECT COUNT(*) FROM PSTsMaterialLine m WHERE m.tsId = h.tsId), 0) AS materialCount,
         ISNULL((SELECT COUNT(*) FROM PSTsEquipmentLine e WHERE e.tsId = h.tsId), 0) AS equipmentCount
       FROM PSTsHeader h
@@ -1075,9 +1107,10 @@ export class TimesheetsService implements OnModuleInit {
       FROM PSTsLabourLine l
       JOIN PSTsHeader h ON h.tsId = l.tsId
       WHERE h.isDeleted = 0
+        AND h.tsType <> 'PROJ'
         AND l.employeeCode = @empCode
-        AND CAST(h.entryDate AS DATE) >= CAST(@weekStart AS DATE)
-        AND CAST(h.entryDate AS DATE) <= CAST(@weekEnd AS DATE)
+        AND h.entryDate >= CAST(@weekStart AS DATE)
+        AND h.entryDate <  DATEADD(DAY, 1, CAST(@weekEnd AS DATE))
         AND l.startTime IS NOT NULL AND l.endTime IS NOT NULL
         ${excludeClause}
       ORDER BY h.entryDate, l.startTime
@@ -1095,6 +1128,44 @@ export class TimesheetsService implements OnModuleInit {
         endTime:         toHM(r.endTime),
         durationMinutes: r.durationMinutes,
         label:           r.projectId || r.workOrderNo || r.department_code || '—',
+      });
+    }
+    return result;
+  }
+
+  async getWeekProjData(employeeCode: string, weekStart: string): Promise<Record<string, any>> {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+    const res = await this.devPool.request()
+      .input('empCode',   mssql.NVarChar(50), employeeCode)
+      .input('weekStart', mssql.NVarChar(20), weekStart)
+      .input('weekEnd',   mssql.NVarChar(20), weekEndStr)
+      .query(`
+        SELECT h.tsDocNo, h.status,
+               CONVERT(VARCHAR(10), h.entryDate, 23) AS dateStr,
+               l.lineNumber, l.projectId, l.taskTypeCode, l.startTime, l.endTime,
+               l.durationMinutes, l.comments
+        FROM PSTsLabourLine l
+        JOIN PSTsHeader h ON h.tsId = l.tsId
+        WHERE h.isDeleted = 0
+          AND h.tsType = 'PROJ'
+          AND l.employeeCode = @empCode
+          AND CAST(h.entryDate AS DATE) >= CAST(@weekStart AS DATE)
+          AND CAST(h.entryDate AS DATE) <= CAST(@weekEnd AS DATE)
+        ORDER BY h.entryDate, l.lineNumber
+      `);
+    const result: Record<string, any> = {};
+    for (const r of res.recordset) {
+      const dateKey = (r.dateStr ?? '').slice(0, 10);
+      if (!result[dateKey]) result[dateKey] = { docNo: r.tsDocNo, status: r.status, lines: [] };
+      result[dateKey].lines.push({
+        lineNumber:   r.lineNumber,
+        projectId:    r.projectId ?? '',
+        taskTypeCode: r.taskTypeCode ?? '',
+        startTime:    toHM(r.startTime),
+        endTime:      toHM(r.endTime),
+        comments:     r.comments ?? '',
       });
     }
     return result;

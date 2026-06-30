@@ -3,7 +3,6 @@ import { useAuthStore } from '../store/authStore';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  headers: { 'Cache-Control': 'no-store' },
 });
 
 // Read token directly from the Zustand store in-memory state — no redundant localStorage parse.
