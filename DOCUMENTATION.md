@@ -1,6 +1,6 @@
 # PS TimeSheet Pro — Technical Documentation
 
-**Version:** 3.4  
+**Version:** 3.5  
 **Last Updated:** June 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -36,7 +36,7 @@ PS TimeSheet Pro is a full-stack web application for managing:
 - **Analytics** (performance reports per module)
 - **Master Data** (employees, departments, items, machinery, vehicles, projects, work orders)
 - **Access Control** (users, roles, permissions)
-- **Settings** (approval workflows, email notifications, shifts, document numbering)
+- **Settings** (approval workflows, email notifications, shifts, document numbering, sessions, notification preferences)
 
 ---
 
@@ -259,6 +259,16 @@ Fields are arranged in 2-column pairs to reduce vertical scrolling:
 
 **Print:** `/qc/:id/print` — opens in new tab, generates high-quality PDF via jsPDF + html2canvas. Photos are loaded server-side as base64 data URIs (`GET /qc/attachments/:id/download`) to avoid S3 CORS restrictions that block html2canvas `useCORS`. Missing S3 objects show "Unavailable" instead of a spinner.
 
+### Settings
+
+| Route | Description |
+|-------|-------------|
+| `/settings/approvals` | Approval routing rules by department |
+| `/settings/email` | SMTP/Graph config, notification rules, email log |
+| `/settings/change-password` | Self-service password change |
+| `/settings/sessions` | Active sessions viewer + force-logout (USERS.canRead) |
+| `/settings/notifications` | Per-user notification type toggles (all users) |
+
 ### Analytics
 
 Route: `/reports/analytics`
@@ -280,11 +290,9 @@ Requires `REPORTS.canRead` permission.
 | Table | Purpose |
 |-------|---------|
 | `PSTsHeader` | Timesheet header records |
-| `PSTsLabourLines` | Labour entries per timesheet |
-| `PSTsMaterialLines` | Consumed materials |
-| `PSTsEquipmentLines` | Machinery usage |
-| `PSTsVehicleLines` | Vehicle usage (INST) |
-| `PSTsAccessLines` | Access equipment (INST) |
+| `PSTsLabourLine` | Labour entries per timesheet |
+| `PSTsMaterialLine` | Consumed materials |
+| `PSTsEquipmentLine` | Machinery / vehicle / access equipment lines (lineType: MACHINERY, VEHICLE, ACCESS) |
 | `PsQcRecord` | QC inspection records |
 | `PsQcAttachment` | QC photos (s3Key + fileData for legacy) |
 | `PsQcComment` | QC comments (with authorUserId) |
@@ -304,7 +312,8 @@ Requires `REPORTS.canRead` permission.
 | `PSTsEmployeeProfile` | Employee overrides (email, category, imageS3Key) |
 | `PSDepartmentProfile` | Department overrides (mainDepartment, isActive) |
 | `psTsDocSequence` | Auto-incrementing doc numbers |
-| `PsNotifSeen` | Notification read state |
+| `PsNotifSeen` | Notification read state (userId, notifKey) |
+| `PsNotifPreferences` | Per-user notification type preferences (userId, notifType, enabled) |
 
 ### Key Column: `PSTsHeader.entered_by_user_id`
 Added in v3.2. Stores the creator's user ID for data scoping. Auto-migrated via `onModuleInit()` (`ALTER TABLE ... ADD ... NULL`). Existing records have NULL and are visible to all users until re-saved.
@@ -755,8 +764,17 @@ All endpoints require: `Authorization: Bearer <sessionToken>`
 | GET | `/wo-complete` | WO_COMPLETE.canRead | List WO completions |
 | POST | `/wo-complete` | WO_COMPLETE.canCreate | Create WO complete |
 | GET | `/analytics` | REPORTS.canRead | Analytics data |
-| GET | `/notifications` | Authenticated | User notifications |
-| PATCH | `/notifications/:key/read` | Authenticated | Mark notification read |
+| GET | `/notifications` | Authenticated | User notifications (filtered by preferences) |
+| PATCH | `/notifications/:key/read` | Authenticated | Mark one notification read |
+| PATCH | `/notifications/read-all` | Authenticated | Mark all notifications read (atomic bulk insert) |
+| GET | `/notifications/preferences` | Authenticated | Get per-user notification type toggles |
+| PATCH | `/notifications/preferences` | Authenticated | Save per-user notification type toggles |
+| GET | `/auth/sessions` | USERS.canRead | List active sessions |
+| DELETE | `/auth/sessions/user/:userId` | USERS.canWrite | Force-logout a user |
+| GET | `/auth/login-history` | USERS.canRead | Paginated login history |
+| GET | `/auth/login-history/:userId` | USERS.canRead | Login history for a specific user |
+| GET | `/work-orders/numbers` | Authenticated | Lightweight list of all WO numbers (search) |
+| GET | `/search?q=` | Authenticated | Global search — timesheets, WOs, projects, employees, QC, WOC |
 | GET | `/email-logs` | SETTINGS.canRead | Email audit log |
 
 ---
@@ -817,7 +835,7 @@ curl http://localhost:3000/api/auth/login \
 
 | Limitation | Notes |
 |-----------|-------|
-| No WebSocket notifications | Bell notifications poll every 2 minutes |
+| No WebSocket notifications | Bell notifications poll every 60 seconds (background polling paused when tab is not focused) |
 | S3 presigned URLs expire | Profile/employee images only: 24h TTL. Re-fetching regenerates. Attachment downloads use server-side `getAsBase64()` proxy — no expiry issue |
 | WOC date filter is client-side | All WOC records are loaded then filtered in browser |
 | QC date locked to today | By design — cannot backdate QC inspections |
@@ -829,6 +847,75 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v3.5 (June 2026)
+Performance, notifications overhaul, settings pages, global search, and report fixes.
+
+**Notifications — 10 new types**
+All notification types are generated in `NotificationsService.getForUser()` and filtered per-user by the new preferences table:
+
+| Type key | Description | Visible to |
+|---|---|---|
+| `pending_approvals` | Timesheets awaiting approval — digest (>3) or individual cards (≤3); red if any >48h | Privileged |
+| `ts_approved` | Own timesheet approved in last 7 days | All users |
+| `ts_rejected` | Own timesheet rejected in last 7 days, with reason | All users |
+| `forgotten_drafts` | Draft timesheets >2 days old (top 3) | All users |
+| `proj_missing` | No PROJ timesheet submitted by Wednesday of the current week | PROJ users |
+| `qc_status` | QC record passed/failed in last 7 days | Inspector + Privileged |
+| `qc_woc_eligible` | Full QC done but no WO Complete record yet (last 7 days, top 5) | Privileged |
+| `woc_conflict` | WO marked complete but timesheets still in Draft/Submitted (last 30 days, top 3) | Privileged |
+| `woc_new` | New WO Complete records created in last 7 days | Privileged |
+| `login_failures` | ≥5 failed login attempts in the last hour | Admin only |
+
+**Notification Preferences**
+- New `PsNotifPreferences` table (auto-created on startup): `(userId, notifType, enabled)` with UNIQUE constraint
+- `GET /notifications/preferences` — returns `{ [notifType]: boolean }`, all default `true`
+- `PATCH /notifications/preferences` — upserts via MERGE; validates against known type list
+- `getForUser()` loads prefs first and gates each of the 10 sections with `on(type)` check
+- Settings → **Notifications** page (`/settings/notifications`): toggle rows per type with audience badge and description; Save/Reset buttons; visible to all users
+
+**Mark-all-read rewrite**
+- Replaced DELETE + N serial INSERTs with a single atomic bulk `INSERT … SELECT … WHERE NOT EXISTS`
+- Frontend: `invalidateQueries` only fires inside `try` after the PATCH succeeds (not unconditionally)
+
+**Settings — new pages**
+- Settings → **Sessions** (`/settings/sessions`): existing `LoginHistoryPage` with Login History and Active Sessions tabs; accessible via USERS.canRead
+- Settings → **Notifications** (`/settings/notifications`): new `NotificationSettingsPage` with per-type toggles
+
+**Global Search fixes**
+- Fixed `tsDocNo` column name (was `docNo` — silently returning no results)
+- Fixed `department_code` column name (was `department`)
+- Added QC Records group to search results (navigates to `/qc/:id/view`)
+- Added WO Complete group to search results (navigates to `/woc`)
+- Cross-entity search: searching by project ID or WO number now returns related timesheets, QC records, and WOC records
+- Sub-labels show contextual metadata (project ID · WO number · status)
+
+**Dashboard data fix**
+- `entered_by_user_id` column name corrected (was `enteredByUserId`) — role users with `dataScope = 'Own'` were seeing all-zero counts
+- Sargable date ranges: `YEAR()/MONTH()` replaced with explicit range predicates for `entryDate` (DATE column), and `TRY_CAST` approach for `qcDate` / `completedDate` (NVARCHAR columns)
+
+**Performance improvements**
+- **N+1 → batch lookups:** `insertLines()` now collects all employee codes and item codes before the loop, runs one `IN (…)` query each, builds a Map, and resolves from the Map — reduces timesheet save from N+2 DB round-trips to 2
+- **Reference data caching:** `staleTime: 5 * 60 * 1000` added to all 9 reference queries in `InstTimesheetFormPage` and 8 in `ProdTimesheetFormPage`; all option arrays wrapped in `useMemo`
+- **Session heartbeat throttle:** `validateSession` skips the `UPDATE lastActiveAt` if it was written within the last 5 minutes (reads the existing value, compares before writing)
+- **HTTP cache headers:** removed global `Cache-Control: no-store` from the axios default headers; individual sensitive requests can still opt in
+- **Background polling:** `refetchIntervalInBackground: false` added to the pending-approvals 60s poll (pauses when tab is not focused)
+- **DB indexes:** 5 composite indexes applied (`backend/db/perf-indexes.sql`): `PSTsHeader(status, isDeleted)`, `PSTsHeader(entered_by_user_id)`, `PSTsHeader(entryDate)`, `PSTsLabourLine(tsId)`, `PsTsEquipmentLine(tsId)`
+- **Sargable week query:** timesheet week filter changed from `CAST(h.entryDate AS DATE) >= ...` to an explicit range `h.entryDate >= … AND h.entryDate < …`
+
+**Reports — Production Detail Report fixes**
+- **Labour duration was always 0:** `insertLines()` read `lr.duration` but the form sends `lr.durationMinutes`; fixed to `lr.durationMinutes ?? lr.duration`. Existing records (already stored with `durationMinutes = 0`) are recovered by a SQL fallback: `ISNULL(NULLIF(durationMinutes, 0), DATEDIFF(MINUTE, TRY_CAST(startTime AS TIME), TRY_CAST(endTime AS TIME)))` in both the detail and summary report queries
+- **Machinery / Vehicle / Access Equipment missing:** the UNION returned `lineType = 'MACHINERY' / 'VEHICLE' / 'ACCESS'` but the frontend only checked for `'EQUIPMENT'`; all three types now recognised with correct labels and units (`X min`, `X km`, `Xh`)
+- Equipment Lines summary card now counts all three equipment subtypes
+
+**Work Orders**
+- New `GET /work-orders/numbers` endpoint: lightweight UNION of work order numbers from both ERP tables, no joins — used by global search
+
+**Bug fixes**
+- `entered_by_user_id` corrected in notification approved/rejected queries (was `enteredByUserId`)
+- Notification toggle page: removed `disabled` on toggles for non-applicable role types — all users can freely enable/disable any preference
+
+---
 
 ### v3.4 (June 2026)
 Feature and bug-fix release: S3 image proxy, future date guards, attachment preview everywhere.
