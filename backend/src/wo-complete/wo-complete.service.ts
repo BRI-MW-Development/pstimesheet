@@ -42,6 +42,8 @@ export class WoCompleteService implements OnModuleInit {
             ALTER TABLE PsWoComplete ADD status NVARCHAR(60);
           IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PsWoComplete') AND name='customerName')
             ALTER TABLE PsWoComplete ADD customerName NVARCHAR(250);
+          IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PsWoComplete') AND name='fullOutsource')
+            ALTER TABLE PsWoComplete ADD fullOutsource NVARCHAR(10) NULL;
         END
       `);
       await this.pool.request()
@@ -90,7 +92,7 @@ export class WoCompleteService implements OnModuleInit {
   async list(): Promise<any[]> {
     const res = await this.pool.request().query(`
       SELECT id, docNo, completedDate, projectId, projectName, customerName, department,
-             workOrderNumber, workOrderStatus, sourceType, status, enteredBy, remarks, createdAt
+             workOrderNumber, workOrderStatus, sourceType, status, enteredBy, remarks, fullOutsource, createdAt
       FROM PsWoComplete
       WHERE isDeleted = 0
       ORDER BY createdAt DESC
@@ -113,7 +115,7 @@ export class WoCompleteService implements OnModuleInit {
   async update(id: number, body: any): Promise<void> {
     this.assertWocFields(body);
     await this.assertNoDuplicateWo(body.workOrderNumber, id);
-    await this.assertNoPendingTimesheets(body.workOrderNumber);
+    await this.assertNoPendingTimesheets(body.workOrderNumber, body.fullOutsource);
     await this.assertQcFullCompleted(body.workOrderNumber, body.department);
     await this.pool.request()
       .input('id',              mssql.BigInt,        id)
@@ -128,6 +130,7 @@ export class WoCompleteService implements OnModuleInit {
       .input('status',          mssql.NVarChar(60),  body.status          || null)
       .input('enteredBy',       mssql.NVarChar(150), body.enteredBy       || null)
       .input('remarks',         mssql.NVarChar(500), body.remarks         || null)
+      .input('fullOutsource',   mssql.NVarChar(10),  body.fullOutsource   || null)
       .query(`
         UPDATE PsWoComplete SET
           completedDate   = @completedDate,
@@ -140,13 +143,16 @@ export class WoCompleteService implements OnModuleInit {
           sourceType      = @sourceType,
           status          = @status,
           enteredBy       = @enteredBy,
-          remarks         = @remarks
+          remarks         = @remarks,
+          fullOutsource   = @fullOutsource
         WHERE id = @id AND isDeleted = 0
       `);
   }
 
-  private async assertNoPendingTimesheets(workOrderNumber: string): Promise<void> {
+  private async assertNoPendingTimesheets(workOrderNumber: string, fullOutsource?: string): Promise<void> {
     if (!workOrderNumber) return;
+    // Outsourced WOs have no internal timesheets — skip this check
+    if (fullOutsource === 'Yes') return;
     const res = await this.pool.request()
       .input('wo', mssql.NVarChar(100), workOrderNumber)
       .query(`
@@ -209,12 +215,15 @@ export class WoCompleteService implements OnModuleInit {
       if (body.completedDate > todayStr)
         throw new BadRequestException('Completion date cannot be a future date.');
     }
+    const isProduction = body.department?.toLowerCase().includes('production');
+    if (isProduction && !['Yes', 'No'].includes(body.fullOutsource))
+      throw new BadRequestException('Full Outsource (Yes/No) is required for Production Work Orders.');
   }
 
   async create(body: any): Promise<{ docNo: string; id: number }> {
     this.assertWocFields(body);
     await this.assertNoDuplicateWo(body.workOrderNumber);
-    await this.assertNoPendingTimesheets(body.workOrderNumber);
+    await this.assertNoPendingTimesheets(body.workOrderNumber, body.fullOutsource);
     await this.assertQcFullCompleted(body.workOrderNumber, body.department);
     const year = new Date().getFullYear();
     const upd = await this.pool.request()
@@ -244,14 +253,15 @@ export class WoCompleteService implements OnModuleInit {
       .input('status',          mssql.NVarChar(60),  body.status          || null)
       .input('enteredBy',       mssql.NVarChar(150), body.enteredBy       || null)
       .input('remarks',         mssql.NVarChar(500), body.remarks         || null)
+      .input('fullOutsource',   mssql.NVarChar(10),  body.fullOutsource   || null)
       .query<{ id: number }>(`
         INSERT INTO PsWoComplete
           (docNo, completedDate, projectId, projectName, customerName, department,
-           workOrderNumber, workOrderStatus, sourceType, status, enteredBy, remarks)
+           workOrderNumber, workOrderStatus, sourceType, status, enteredBy, remarks, fullOutsource)
         OUTPUT INSERTED.id
         VALUES
           (@docNo, @completedDate, @projectId, @projectName, @customerName, @department,
-           @workOrderNumber, @workOrderStatus, @sourceType, @status, @enteredBy, @remarks)
+           @workOrderNumber, @workOrderStatus, @sourceType, @status, @enteredBy, @remarks, @fullOutsource)
       `);
 
     this.logger.log(`Created WO Complete ${docNo}`);

@@ -89,6 +89,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
     completedDate: _todayWoc,
     enteredBy:    user?.displayName ?? user?.username ?? '',
     remarks:      '',
+    fullOutsource: '',
   };
 
   const [form, setForm]             = useState(isEdit ? { ...blankForm, ...initial } : blankForm);
@@ -250,6 +251,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
     if (!form.workOrderNumber) { toast('Please select a work order.', 'error'); return; }
     if (!form.status)          { toast('Please select a status.', 'error'); return; }
     if (form.completedDate > _todayWoc) { toast('Completion date cannot be a future date.', 'error'); return; }
+    if (isProductionDept && !form.fullOutsource) { toast('Please select Full Outsource (Yes/No) for Production Work Orders.', 'error'); return; }
     save(form);
   }
 
@@ -302,7 +304,7 @@ function WocFormModal({ initial, onClose, onSaved }) {
                 <div className="form-group">
                   <label className="form-label">Department</label>
                   <select className="form-control" value={form.department}
-                    onChange={e => { setForm(f => ({ ...f, department: e.target.value, workOrderNumber: '' })); setTsRows(null); }}>
+                    onChange={e => { setForm(f => ({ ...f, department: e.target.value, workOrderNumber: '', fullOutsource: '' })); setTsRows(null); }}>
                     <option value="">Select department…</option>
                     {depts.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
@@ -327,6 +329,25 @@ function WocFormModal({ initial, onClose, onSaved }) {
                     {WOC_STATUSES.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
+                {isProductionDept && (
+                  <div className="form-group">
+                    <label className="form-label">
+                      Full Outsource <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <select className="form-control" value={form.fullOutsource}
+                      onChange={e => setForm(f => ({ ...f, fullOutsource: e.target.value }))}>
+                      <option value="">Select…</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                    </select>
+                    {form.fullOutsource === 'Yes' && (
+                      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        Timesheets not required. A Full QC inspection is still mandatory.
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label">Completion Date</label>
                   <input type="date" className="form-control" required value={form.completedDate}
@@ -514,6 +535,7 @@ function WocViewModal({ record, onClose }) {
             ['Project ID',    record.projectId ?? '—'],
             ['Customer',      record.customerName ?? record.projectName ?? '—'],
             ['Department',    record.department ?? '—'],
+            ...(record.department?.toLowerCase().includes('production') ? [['Full Outsource', record.fullOutsource ?? '—']] : []),
             ['WO Status',     record.workOrderStatus ?? '—'],
             ['Status',        null],
             ['Completed Date',formatDate(record.completedDate)],
