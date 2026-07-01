@@ -7,6 +7,16 @@ import { useToast } from '../context/ToastContext';
 const LEVEL_VARIANT = { error: 'inactive', warning: 'warning', info: 'submitted', success: 'active' };
 const LEVEL_COLOR   = { error: 'var(--red)', warning: 'var(--amber)', info: 'var(--blue)', success: 'var(--green)' };
 
+function timeAgo(isoStr) {
+  if (!isoStr) return null;
+  const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
+  if (diff < 60)    return 'just now';
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(isoStr).toLocaleDateString();
+}
+
 export default function NotificationsPage() {
   const navigate      = useNavigate();
   const toast         = useToast();
@@ -104,7 +114,7 @@ export default function NotificationsPage() {
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3 }}>{n.detail}</div>
                 )}
                 {n.time && (
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>{n.time}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>{timeAgo(n.time)}</div>
                 )}
               </div>
 

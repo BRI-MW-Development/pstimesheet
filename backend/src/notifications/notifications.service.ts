@@ -136,7 +136,7 @@ export class NotificationsService implements OnModuleInit {
               detail:   `Submitted by ${r.enteredBy ?? '—'}${r.department ? ` · ${r.department}` : ''}`,
               level:    overdue ? 'error' : 'warning',
               link:     '/timesheets/pending-approvals',
-              time:     r.createdAtStr ? new Date(r.createdAtStr).toLocaleString('en-GB') : null,
+              time:     r.createdAtStr ? r.createdAtStr + 'Z' : null,
             });
           }
         }
@@ -164,7 +164,7 @@ export class NotificationsService implements OnModuleInit {
           detail:   'Approved — no further action needed',
           level:    'success',
           link:     `/timesheets/${r.tsType?.toLowerCase() === 'inst' ? 'inst' : 'prod'}/${r.tsDocNo}/view`,
-          time:     r.updatedAtStr ? new Date(r.updatedAtStr).toLocaleString('en-GB') : null,
+          time:     r.updatedAtStr ? r.updatedAtStr + 'Z' : null,
         });
       }
     } catch { /* skip */ }
@@ -190,7 +190,7 @@ export class NotificationsService implements OnModuleInit {
           detail:   r.remarks ? `Reason: ${r.remarks}` : 'Please correct and resubmit',
           level:    'error',
           link:     `/timesheets/${r.tsType?.toLowerCase() === 'inst' ? 'inst' : 'prod'}/${r.tsDocNo}/edit`,
-          time:     r.updatedAtStr ? new Date(r.updatedAtStr).toLocaleString('en-GB') : null,
+          time:     r.updatedAtStr ? r.updatedAtStr + 'Z' : null,
         });
       }
     } catch { /* skip */ }
@@ -282,7 +282,7 @@ export class NotificationsService implements OnModuleInit {
           detail:   `WO: ${r.workOrderNo ?? '—'} · Inspector: ${r.qcInspector ?? '—'}`,
           level:    r.status === 'Passed' ? 'success' : 'error',
           link:     `/qc/${r.id}/view`,
-          time:     r.updatedAtStr ? new Date(r.updatedAtStr).toLocaleString('en-GB') : null,
+          time:     r.updatedAtStr ? r.updatedAtStr + 'Z' : null,
         });
       }
     } catch { /* skip */ }
@@ -314,7 +314,7 @@ export class NotificationsService implements OnModuleInit {
             detail:   `Full QC ${r.qcDocNo} completed — eligible to mark as WO Complete`,
             level:    'info',
             link:     '/woc',
-            time:     r.updatedAtStr ? new Date(r.updatedAtStr).toLocaleString('en-GB') : null,
+            time:     r.updatedAtStr ? r.updatedAtStr + 'Z' : null,
           });
         }
       } catch { /* skip */ }
@@ -369,7 +369,7 @@ export class NotificationsService implements OnModuleInit {
             detail:   `WO ${r.workOrderNumber ?? '—'} · By ${r.enteredBy ?? '—'} · ${r.status ?? '—'}`,
             level:    'info',
             link:     '/woc',
-            time:     r.createdAtStr ? new Date(r.createdAtStr).toLocaleString('en-GB') : null,
+            time:     r.createdAtStr ? r.createdAtStr + 'Z' : null,
           });
         }
       } catch { /* skip */ }

@@ -179,6 +179,16 @@ function GlobalSearch({ onClose }) {
   );
 }
 
+function timeAgo(isoStr) {
+  if (!isoStr) return null;
+  const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
+  if (diff < 60)   return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(isoStr).toLocaleDateString();
+}
+
 /* ─── Notification panel ─── */
 function NotifPanel({ onClose }) {
   const navigate    = useNavigate();
@@ -250,7 +260,7 @@ function NotifPanel({ onClose }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="notif-msg" style={{ fontSize: 12.5, fontWeight: n.isRead ? 400 : 600 }}>{n.message}</div>
                 {n.detail && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.detail}</div>}
-                {n.time && <div className="notif-time">{n.time}</div>}
+                {n.time && <div className="notif-time">{timeAgo(n.time)}</div>}
               </div>
               {!n.isRead && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, marginTop: 6 }} />}
             </div>
