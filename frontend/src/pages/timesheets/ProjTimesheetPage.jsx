@@ -1156,7 +1156,7 @@ function EntryTypeModal({ onClose, onSelect }) {
         <label className="form-label">Entry Type</label>
         <select className="form-control" value={type} onChange={(e) => setType(e.target.value)}>
           <option value="daily">Daily Entry</option>
-          <option value="weekly">Weekly Entry</option>
+          {/* <option value="weekly">Weekly Entry</option> */}
         </select>
       </div>
       <div className="modal-foot">
