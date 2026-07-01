@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import Table, { WipListHeader } from '../../components/ui/Table';
@@ -600,11 +601,25 @@ export default function WocPage() {
   const canCreate    = usePermission('WO_COMPLETE', 'canCreate');
   const canWrite     = usePermission('WO_COMPLETE', 'canWrite');
   const canDelete    = usePermission('WO_COMPLETE', 'canDelete');
+  const location     = useLocation();
+  const navigate     = useNavigate();
 
   const { data: completions = [], isLoading } = useQuery({
     queryKey: ['woc', filters],
     queryFn: () => api.get('/wo-complete', { params: filters }).then(r => r.data),
   });
+
+  // Open a specific record when navigated from global search (?open=<id>)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openId = params.get('open');
+    if (!openId || isLoading || completions.length === 0) return;
+    const record = completions.find(r => r.id === openId);
+    if (record) {
+      setModal({ view: record });
+      navigate('/woc', { replace: true });
+    }
+  }, [location.search, completions, isLoading, navigate]);
 
   const { mutate: remove } = useMutation({
     mutationFn: id => api.delete(`/wo-complete/${id}`).then(r => r.data),

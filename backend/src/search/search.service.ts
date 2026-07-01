@@ -21,7 +21,7 @@ export class SearchService {
     const term = `%${q.trim()}%`;
 
     const [timesheets, workOrders, projects, employees, qcRecords, wocRecords] = await Promise.all([
-      // Timesheets (PROD + INST only — PROJ uses a weekly form with no direct edit URL)
+      // Timesheets (PROD + INST + PROJ)
       this.devPool.request()
         .input('q', mssql.NVarChar(200), term)
         .query<any>(`
@@ -35,7 +35,7 @@ export class SearchService {
             h.department_code AS department
           FROM PSTsHeader h
           WHERE h.isDeleted = 0
-            AND h.tsType IN ('PROD','INST')
+            AND h.tsType IN ('PROD','INST','PROJ')
             AND (
               h.tsDocNo     LIKE @q
               OR h.workOrderNo LIKE @q
@@ -100,6 +100,7 @@ export class SearchService {
         .input('q', mssql.NVarChar(200), term)
         .query<any>(`
           SELECT TOP 5
+            id,
             docNo,
             workOrderNo,
             projectCode,
@@ -122,6 +123,7 @@ export class SearchService {
         .input('q', mssql.NVarChar(200), term)
         .query<any>(`
           SELECT TOP 5
+            id,
             docNo,
             workOrderNumber AS workOrderNo,
             projectId,

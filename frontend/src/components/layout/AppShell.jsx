@@ -116,9 +116,9 @@ function GlobalSearch({ onClose }) {
 
   const groups = results
     ? [
-        { label: 'Timesheets',   items: results.timesheets  ?? [], icon: '📋', path: (r) => `/timesheets/${r.type?.toLowerCase() ?? 'prod'}/${r.docNo}/edit`, display: (r) => r.docNo,          sub: (r) => [r.projectId, r.workOrderNo, r.status].filter(Boolean).join(' · ') },
-        { label: 'QC Records',   items: results.qcRecords   ?? [], icon: '✅', path: (r) => `/qc/${r.docNo}/view`,                                            display: (r) => r.docNo,          sub: (r) => [r.workOrderNo, r.projectCode, r.partialFull].filter(Boolean).join(' · ') },
-        { label: 'WO Complete',  items: results.wocRecords  ?? [], icon: '🏁', path: () => '/woc',                                                          display: (r) => r.docNo,          sub: (r) => [r.workOrderNo, r.projectId].filter(Boolean).join(' · ') },
+        { label: 'Timesheets',   items: results.timesheets  ?? [], icon: '📋', path: (r) => r.type === 'PROJ' ? '/timesheets/project' : `/timesheets/${r.type?.toLowerCase() ?? 'prod'}/${r.docNo}/edit`, display: (r) => r.docNo, sub: (r) => [r.type, r.projectId, r.workOrderNo, r.status].filter(Boolean).join(' · ') },
+        { label: 'QC Records',   items: results.qcRecords   ?? [], icon: '✅', path: (r) => `/qc/${r.id}/view`,                                              display: (r) => r.docNo,          sub: (r) => [r.workOrderNo, r.projectCode, r.partialFull].filter(Boolean).join(' · ') },
+        { label: 'WO Complete',  items: results.wocRecords  ?? [], icon: '🏁', path: (r) => `/woc?open=${r.id}`,                                             display: (r) => r.docNo,          sub: (r) => [r.workOrderNo, r.projectId].filter(Boolean).join(' · ') },
         { label: 'Work Orders',  items: results.workOrders  ?? [], icon: '🔧', path: (r) => '/masters/workorders',                                            display: (r) => r.workOrderNumber, sub: (r) => r.projectName ?? '' },
         { label: 'Projects',     items: results.projects    ?? [], icon: '🏗️', path: (r) => '/masters/projects',                                              display: (r) => r.projectCode,    sub: (r) => r.projectName ?? '' },
         { label: 'Employees',    items: results.employees   ?? [], icon: '👷', path: (r) => '/masters/employees',                                             display: (r) => r.employeeNo,     sub: (r) => [r.firstName, r.lastname].filter(Boolean).join(' ') },
