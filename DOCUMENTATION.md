@@ -1,7 +1,7 @@
-# PS TimeSheet Pro — Technical Documentation
+# OpsDesk — Technical Documentation
 
-**Version:** 3.5  
-**Last Updated:** June 2026  
+**Version:** 3.6  
+**Last Updated:** July 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
 
@@ -28,7 +28,7 @@
 
 ## 1. Project Overview
 
-PS TimeSheet Pro is a full-stack web application for managing:
+OpsDesk is a full-stack web application for managing:
 - **Production & Installation Timesheets** (labour, materials, machinery)
 - **Projects Team Timesheets** (daily & weekly)
 - **WO Complete** (work order completion tracking)
@@ -847,6 +847,31 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v3.6 (July 2026)
+Branding refresh, theme system expansion, and login page redesign.
+
+**App renamed to OpsDesk**
+- Application rebranded from "PS TimeSheet Pro" to **OpsDesk**
+- Browser tab title updated (`index.html`): `PS TimeSheet` → `OpsDesk`
+- Topbar brand name updated: `PS TimeSheet Pro` → `OpsDesk`, sub-line `BRI Professional Signs` → `Professional Signs`
+- Login page wordmark updated: `TimesheetPro` / `Project Timesheet` → `OpsDesk`
+- Footer copyright updated: `BRI Professional Signs` → `Professional Signs`
+
+**Theme system — 3 new themes**
+- **Light** (`data-theme="light"`): clean white/`#f2f2f7` backgrounds, near-black text, iOS-style bright mode; dark sidebar retained for contrast
+- **Dark** (`data-theme="dark"`): deep `#0e0e12` background, `#1c1c24` card surfaces, light text, warmer amber accent tuned for dark backgrounds
+- **Glass / Frosted** (`data-theme="glass"`): semi-transparent surfaces with `backdrop-filter: blur(24px) saturate(160%)` on topbar, sidebar, and cards; deep purple/teal mesh gradient body background for the frosted-glass iOS effect
+- All three themes added to the `THEMES` array in `AppShell.jsx` and appear in the profile menu theme selector
+
+**Login page — feature list update**
+- Added **Project Timesheet** as a feature item ("Log hours against project codes")
+- Hero subtitle updated to lead with "project timesheets": *"A unified platform for project timesheets, production tracking, installation scheduling, QC inspections, and management reporting."*
+
+**Vite proxy fix**
+- `vite.config.js` proxy target changed from `http://localhost:3000` to `http://127.0.0.1:3000` — fixes login failures caused by Node.js preferring IPv6 (`::1`) when resolving `localhost`, which was routing API calls to a different project's dev server on the same port
+
+---
 
 ### v3.5 (June 2026)
 Performance, notifications overhaul, settings pages, global search, and report fixes.

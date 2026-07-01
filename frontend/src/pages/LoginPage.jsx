@@ -16,6 +16,15 @@ const FEATURES = [
   {
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="14"/>
+      </svg>
+    ),
+    label: 'Project Timesheet',
+    desc: 'Log hours against project codes',
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
       </svg>
     ),
@@ -98,23 +107,23 @@ export default function LoginPage() {
           {/* Logo + wordmark */}
           <div className="lp-logo-row">
             <div className="lp-logo-wrap">
-              <img src="/BRI_PS_60x60.png" alt="BRI Professional Signs" className="lp-logo-img" />
+              <img src="/BRI_PS_60x60.png" alt="Professional Signs" className="lp-logo-img" />
             </div>
             <div>
-              <div className="lp-wordmark">TimesheetPro</div>
-              <div className="lp-wordmark-sub">BRI Professional Signs</div>
+              <div className="lp-wordmark">OpsDesk</div>
+              <div className="lp-wordmark-sub">Professional Signs</div>
             </div>
           </div>
 
           {/* Hero text */}
           <div className="lp-hero">
-            <div className="lp-hero-eyebrow">Operations Platform</div>
+            <div className="lp-hero-eyebrow">OpsDesk — Operations Platform</div>
             <div className="lp-hero-title">
               Command<br /><em>Centre</em>
             </div>
             <div className="lp-hero-sub">
-              A unified platform for production tracking, installation scheduling,
-              QC inspections, and management reporting.
+              A unified platform for project timesheets, production tracking,
+              installation scheduling, QC inspections, and management reporting.
             </div>
           </div>
 
@@ -131,7 +140,7 @@ export default function LoginPage() {
             ))}
           </ul>
 
-          <div className="lp-copy">&copy; {year} BRI Professional Signs &mdash; All rights reserved.</div>
+          <div className="lp-copy">&copy; {year} Professional Signs &mdash; All rights reserved.</div>
         </div>
       </div>
 
@@ -141,8 +150,8 @@ export default function LoginPage() {
 
           {/* Mobile-only logo */}
           <div className="lp-mobile-logo">
-            <img src="/BRI_PS_60x60.png" alt="BRI Professional Signs" style={{ width: 36, height: 36, borderRadius: 8 }} />
-            <span style={{ fontWeight: 700, fontSize: 15 }}>TimesheetPro</span>
+            <img src="/BRI_PS_60x60.png" alt="Professional Signs" style={{ width: 36, height: 36, borderRadius: 8 }} />
+            <span style={{ fontWeight: 700, fontSize: 15 }}>OpsDesk</span>
           </div>
 
           <div className="lp-form-header">

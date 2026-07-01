@@ -78,6 +78,9 @@ const THEMES = [
   { value: 'ocean',      label: 'Ocean Blue' },
   { value: 'forest',     label: 'Forest Green' },
   { value: 'graphite',   label: 'Graphite Gray' },
+  { value: 'light',      label: 'Light' },
+  { value: 'dark',       label: 'Dark' },
+  { value: 'glass',      label: 'Glass (Frosted)' },
 ];
 
 /* ─── Live clock ─── */
@@ -352,10 +355,10 @@ export default function AppShell() {
 
         {/* Logo */}
         <div className="logo" onClick={(e) => { e.stopPropagation(); navigate('/dashboard'); }} style={{ cursor: 'pointer' }}>
-          <img src="/BRI_PS_60x60.png" alt="PS TimeSheet Pro" className="brand-logo" />
+          <img src="/BRI_PS_60x60.png" alt="OpsDesk" className="brand-logo" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            <span className="tb-brand-name">PS TimeSheet Pro</span>
-            <span className="tb-brand-sub">BRI Professional Signs</span>
+            <span className="tb-brand-name">OpsDesk</span>
+            <span className="tb-brand-sub">Professional Signs</span>
           </div>
         </div>
 

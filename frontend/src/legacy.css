@@ -195,6 +195,144 @@ body[data-theme='graphite'] {
   --top-menu-link-active: #c7d4e8;
 }
 
+/* ── Light Theme ─────────────────────────────────── */
+body[data-theme='light'] {
+  --bg:           #f2f2f7;
+  --bg2:          #e5e5ea;
+  --surface:      #ffffff;
+  --surface2:     #f2f2f7;
+  --surface3:     #e5e5ea;
+  --sidebar-bg:   #1c1c1e;
+  --sidebar-surf: #2c2c2e;
+  --sidebar-hover:#3a3a3c;
+  --sidebar-act:  #48484a;
+  --border:       rgba(60,60,67,0.13);
+  --border2:      rgba(60,60,67,0.22);
+  --border-dark:  rgba(255,255,255,0.07);
+  --border-dark2: rgba(255,255,255,0.13);
+  --text:         #000000;
+  --text2:        #3c3c43;
+  --text3:        #8e8e93;
+  --text-sb:      #c8c8d0;
+  --text-sb2:     #8e8e93;
+  --accent:       #c47d28;
+  --accent-light: #e8963a;
+  --accent-glow:  rgba(196,125,40,0.12);
+  --accent-sidebar:#e8963a;
+  --sh-sm:        0 1px 4px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+  --sh:           0 4px 12px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* ── Dark Theme ──────────────────────────────────── */
+body[data-theme='dark'] {
+  --bg:           #0e0e12;
+  --bg2:          #16161c;
+  --surface:      #1c1c24;
+  --surface2:     #22222e;
+  --surface3:     #2a2a38;
+  --sidebar-bg:   #09090d;
+  --sidebar-surf: #111118;
+  --sidebar-hover:#1c1c28;
+  --sidebar-act:  #25253a;
+  --border:       rgba(255,255,255,0.07);
+  --border2:      rgba(255,255,255,0.13);
+  --border-dark:  rgba(255,255,255,0.06);
+  --border-dark2: rgba(255,255,255,0.11);
+  --text:         #e4e4f0;
+  --text2:        #9898b0;
+  --text3:        #60607a;
+  --text-sb:      #c8c8e0;
+  --text-sb2:     #7878a0;
+  --accent:       #d4893c;
+  --accent-light: #eda04e;
+  --accent-glow:  rgba(212,137,60,0.18);
+  --accent-sidebar:#eda04e;
+  --sh-sm:        0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.25);
+  --sh:           0 4px 14px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3);
+  --sh-lg:        0 16px 48px rgba(0,0,0,0.7), 0 4px 12px rgba(0,0,0,0.4);
+}
+
+/* ── Glass (Frosted) Theme ───────────────────────── */
+body[data-theme='glass'] {
+  --bg:           transparent;
+  --bg2:          rgba(255,255,255,0.04);
+  --surface:      rgba(255,255,255,0.10);
+  --surface2:     rgba(255,255,255,0.07);
+  --surface3:     rgba(255,255,255,0.05);
+  --sidebar-bg:   rgba(12,10,28,0.65);
+  --sidebar-surf: rgba(25,20,50,0.55);
+  --sidebar-hover:rgba(50,42,90,0.50);
+  --sidebar-act:  rgba(70,60,120,0.60);
+  --border:       rgba(255,255,255,0.18);
+  --border2:      rgba(255,255,255,0.28);
+  --border-dark:  rgba(255,255,255,0.10);
+  --border-dark2: rgba(255,255,255,0.18);
+  --text:         #f0f0fa;
+  --text2:        #b8b8d8;
+  --text3:        #7878a8;
+  --text-sb:      rgba(240,240,255,0.85);
+  --text-sb2:     rgba(180,180,220,0.70);
+  --accent:       #d4893c;
+  --accent-light: #eda04e;
+  --accent-glow:  rgba(212,137,60,0.22);
+  --accent-sidebar:#eda04e;
+  --sh-sm:        0 2px 8px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.15);
+  --sh:           0 6px 24px rgba(0,0,0,0.30), 0 2px 8px rgba(0,0,0,0.20);
+  --sh-lg:        0 20px 60px rgba(0,0,0,0.45), 0 6px 16px rgba(0,0,0,0.28);
+}
+
+/* Glass: mesh gradient background on body */
+body[data-theme='glass'] {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(80,40,160,0.45) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 80% at 80% 90%, rgba(20,80,160,0.40) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 60% 30%, rgba(40,120,100,0.30) 0%, transparent 55%),
+    linear-gradient(160deg, #0d0720 0%, #0a1428 40%, #0a1e18 70%, #180a24 100%);
+}
+
+/* Frosted surfaces */
+body[data-theme='glass'] .topbar,
+body[data-theme='glass'] .sidebar {
+  background: rgba(12,10,26,0.60) !important;
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+body[data-theme='glass'] .profile-menu {
+  background: rgba(18,14,38,0.80) !important;
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.14) !important;
+}
+
+body[data-theme='glass'] .card,
+body[data-theme='glass'] .page-card,
+body[data-theme='glass'] .modal-box,
+body[data-theme='glass'] .dropdown-panel {
+  background: rgba(255,255,255,0.08) !important;
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid rgba(255,255,255,0.14) !important;
+}
+
+body[data-theme='glass'] .main-content {
+  background: transparent !important;
+}
+
+/* Glass: subtle frosted input fields */
+body[data-theme='glass'] input,
+body[data-theme='glass'] select,
+body[data-theme='glass'] textarea {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.18) !important;
+  color: var(--text) !important;
+}
+body[data-theme='glass'] input::placeholder,
+body[data-theme='glass'] textarea::placeholder {
+  color: rgba(180,180,220,0.55) !important;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 14px; }
 
