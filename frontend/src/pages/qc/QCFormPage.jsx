@@ -221,9 +221,10 @@ export default function QCFormPage() {
   const [header,    setHeader]    = useState({ workOrderNo: '', signType: '', projectCode: '', projectName: '', customerName: '', qcDate: new Date().toISOString().slice(0, 10), quantity: '', partialFull: 'Full', qcInspector: currentUserName, status: 'In Progress', remarks: '' });
   const [checklist, setChecklist] = useState(defaultChecklist);
   const [sectionNA, setSectionNA] = useState(defaultSectionNA);
-  const [newComment,    setNewComment]    = useState('');
-  const [activeTab,     setActiveTab]     = useState('history');
-  const [pendingFiles,  setPendingFiles]  = useState([]);  // files queued on create form
+  const [newComment,        setNewComment]        = useState('');
+  const [pendingComments,   setPendingComments]   = useState([]); // comments queued on create form
+  const [activeTab,         setActiveTab]         = useState('history');
+  const [pendingFiles,      setPendingFiles]      = useState([]);  // files queued on create form
   const [converting,   setConverting]    = useState(0);   // count of in-progress FileReader ops
   const [qcLightbox,   setQcLightbox]    = useState(null); // { src, name, mimeType }
 
@@ -283,6 +284,8 @@ export default function QCFormPage() {
 
   // Keep ref in sync so mutation closure always reads current pending list
   pendingFilesRef.current = pendingFiles;
+  const pendingCommentsRef = useRef([]);
+  pendingCommentsRef.current = pendingComments;
 
   /* ── Mutations ─────────────────────────────────── */
   const { mutate: save, isPending: saving } = useMutation({
@@ -303,6 +306,13 @@ export default function QCFormPage() {
           toast(`${uploaded}/${pendingFilesRef.current.length} images uploaded. Some failed.`, 'error');
         }
         setPendingFiles([]);
+      }
+      // Post pending comments after creation
+      if (!isEdit && data?.id && pendingCommentsRef.current.length > 0) {
+        for (const text of pendingCommentsRef.current) {
+          try { await api.post(`/qc/${data.id}/comments`, { commentText: text }); } catch { /* continue */ }
+        }
+        setPendingComments([]);
       }
       toast(isEdit ? 'QC record updated.' : 'QC record created.', 'success');
       if (!isEdit && data?.id) navigate(`/qc/${data.id}/edit`);
@@ -680,12 +690,35 @@ export default function QCFormPage() {
                 {comments.length === 0 ? <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text3)' }}><div style={{ fontSize: 32, marginBottom: 8, opacity: 0.3 }}>💬</div><div style={{ fontSize: 13, fontWeight: 600 }}>No comments yet</div></div>
                   : comments.map(c => <Comment key={c.id} c={c} onDelete={deleteComment} canDelete={isApprover || c.authorName === (user?.displayName ?? user?.username)} currentUser={user} />)}
               </div>
-              {isEdit && (
-                <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6 }}>
-                  <input value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && newComment.trim()) { e.preventDefault(); postComment(newComment.trim()); } }} placeholder="Write a comment…" style={{ flex: 1, padding: '7px 10px', fontSize: 12, border: '1px solid var(--border2)', borderRadius: 8, outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
-                  <button type="button" onClick={() => { if (newComment.trim()) postComment(newComment.trim()); }} style={{ padding: '7px 12px', background: C.teal, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Send</button>
+              <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {!isEdit && pendingComments.length > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {pendingComments.map((c, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface2)', borderRadius: 6, padding: '4px 8px' }}>
+                        <span>{c}</span>
+                        <button type="button" onClick={() => setPendingComments(s => s.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 13, lineHeight: 1 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input value={newComment} onChange={e => setNewComment(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey && newComment.trim()) {
+                        e.preventDefault();
+                        if (isEdit) postComment(newComment.trim());
+                        else { setPendingComments(s => [...s, newComment.trim()]); setNewComment(''); }
+                      }
+                    }}
+                    placeholder={isEdit ? 'Write a comment…' : 'Write a comment… (saved with record)'}
+                    style={{ flex: 1, padding: '7px 10px', fontSize: 12, border: '1px solid var(--border2)', borderRadius: 8, outline: 'none', background: 'var(--bg)', color: 'var(--text)' }} />
+                  <button type="button" onClick={() => {
+                    if (!newComment.trim()) return;
+                    if (isEdit) postComment(newComment.trim());
+                    else { setPendingComments(s => [...s, newComment.trim()]); setNewComment(''); }
+                  }} style={{ padding: '7px 12px', background: C.teal, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Send</button>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
