@@ -135,8 +135,7 @@ export class AuthService implements OnModuleInit {
     return {
       token,
       expiresAt: expiresAt.toISOString(),
-      mustChangePassword: !!user.mustChangePassword,
-      user: { userId: user.userId, username: user.username, displayName: user.displayName, roleCode: user.roleCode, employeeCode: user.employeeCode ?? null },
+      user: { userId: user.userId, username: user.username, displayName: user.displayName, roleCode: user.roleCode, employeeCode: user.employeeCode ?? null, mustChangePassword: !!user.mustChangePassword },
     };
   }
 
@@ -145,6 +144,38 @@ export class AuthService implements OnModuleInit {
     await this.pool.request()
       .input('token', mssql.NVarChar(64), token)
       .query(`UPDATE PSTsSessions SET isActive=0, loggedOutAt=GETDATE() WHERE sessionToken=@token`);
+  }
+
+  // ── Impersonate user (admin only) ──────────────────────────────────────────
+  async impersonateUser(adminUserId: string, targetUserId: string, ip: string, userAgent: string) {
+    if (adminUserId === targetUserId) throw new BadRequestException('Cannot impersonate yourself');
+
+    const userRes = await this.pool.request()
+      .input('userId', mssql.NVarChar(30), targetUserId)
+      .query<{ userId: string; username: string; displayName: string; roleCode: string; employeeCode: string | null; status: string; mustChangePassword: number }>(`
+        SELECT userId, username, displayName, roleCode, employeeCode, status, mustChangePassword
+        FROM   PSTsUsers WHERE userId = @userId
+      `);
+    const target = userRes.recordset[0];
+    if (!target) throw new BadRequestException('User not found');
+    if (target.status !== 'Active') throw new BadRequestException('Cannot impersonate an inactive user');
+
+    const token     = this.generateToken();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_HOURS * 3600 * 1000);
+
+    await this.pool.request()
+      .input('token',   mssql.NVarChar(64),  token)
+      .input('userId',  mssql.NVarChar(30),  target.userId)
+      .input('expires', mssql.DateTime2,     expiresAt)
+      .input('ip',      mssql.NVarChar(45),  ip)
+      .input('ua',      mssql.NVarChar(500), `[Impersonated by ${adminUserId}] ${userAgent}`.slice(0, 500))
+      .query(`INSERT INTO PSTsSessions (sessionToken,userId,expiresAt,ipAddress,userAgent) VALUES (@token,@userId,@expires,@ip,@ua)`);
+
+    this.logger.warn(`IMPERSONATION: Admin ${adminUserId} opened session for ${target.userId} (${target.username})`);
+    return {
+      token,
+      user: { userId: target.userId, username: target.username, displayName: target.displayName, roleCode: target.roleCode, employeeCode: target.employeeCode ?? null, mustChangePassword: !!target.mustChangePassword },
+    };
   }
 
   // ── Validate session (used by guard) ──────────────────────────────────────

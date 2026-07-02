@@ -1,5 +1,7 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
+import { PermissionGuard } from '../auth/permission.guard';
+import { RequirePermission } from '../auth/permission.decorator';
 
 @Controller('notifications')
 export class NotificationsController {
@@ -26,11 +28,15 @@ export class NotificationsController {
     return { ok: true };
   }
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('NOTIFICATIONS', 'canRead')
   @Get('preferences')
   getPreferences(@Req() req: any) {
     return this.notificationsService.getPreferences(req.currentUser.userId);
   }
 
+  @UseGuards(PermissionGuard)
+  @RequirePermission('NOTIFICATIONS', 'canWrite')
   @Patch('preferences')
   @HttpCode(200)
   async setPreferences(@Body() body: Record<string, boolean>, @Req() req: any) {

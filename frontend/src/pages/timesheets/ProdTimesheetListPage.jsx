@@ -126,6 +126,7 @@ export default function ProdTimesheetListPage() {
     { key: 'workOrderNo',    label: 'Work Order',   sort: true },
     { key: 'department_code',label: 'Department',   sort: true },
     { key: 'entryDate',      label: 'Date',         sort: true, render: (r) => formatDate(r.entryDate) },
+    { key: 'createdAt',      label: 'Created Date', sort: true, render: (r) => formatDate(r.createdAt) },
     { key: 'shiftCode',      label: 'Shift',        sort: true },
     { key: 'entered_by_name',label: 'Supervisor',   sort: true },
     {

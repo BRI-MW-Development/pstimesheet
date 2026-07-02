@@ -8,12 +8,12 @@ export class AccessEquipmentController {
   constructor(private readonly accessEquipmentService: AccessEquipmentService) {}
 
   @UseGuards(PermissionGuard)
-  @RequirePermission('ITEMS', 'canRead')
+  @RequirePermission('ACCESS_EQUIPMENT', 'canRead')
   @Get()
   list() { return this.accessEquipmentService.list(); }
 
   @UseGuards(PermissionGuard)
-  @RequirePermission('ITEMS', 'canCreate')
+  @RequirePermission('ACCESS_EQUIPMENT', 'canCreate')
   @Post()
   @HttpCode(201)
   async create(@Body() body: any) {
@@ -25,7 +25,7 @@ export class AccessEquipmentController {
   }
 
   @UseGuards(PermissionGuard)
-  @RequirePermission('ITEMS', 'canWrite')
+  @RequirePermission('ACCESS_EQUIPMENT', 'canWrite')
   @Patch(':equipmentId')
   async update(@Param('equipmentId') equipmentId: string, @Body() body: any) {
     try {
@@ -36,7 +36,7 @@ export class AccessEquipmentController {
   }
 
   @UseGuards(PermissionGuard)
-  @RequirePermission('ITEMS', 'canDelete')
+  @RequirePermission('ACCESS_EQUIPMENT', 'canDelete')
   @Delete(':equipmentId')
   async remove(@Param('equipmentId') equipmentId: string) {
     try {

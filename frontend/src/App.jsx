@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from './context/ToastContext';
 import { useAuthStore } from './store/authStore';
@@ -65,6 +65,41 @@ function RequireAuth() {
   return <Outlet />;
 }
 
+// Public page — claims an impersonation handoff stored in localStorage by an admin.
+// Opens in a new tab; uses sessionStorage so it never clobbers the admin's localStorage session.
+function ImpersonatePage() {
+  const setAuth        = useAuthStore((s) => s.setAuth);
+  const setPermissions = useAuthStore((s) => s.setPermissions);
+  const navigate       = useNavigate();
+
+  useEffect(() => {
+    const raw = localStorage.getItem('ps_impersonate');
+    localStorage.removeItem('ps_impersonate');
+    try {
+      const data = raw ? JSON.parse(raw) : null;
+      if (!data || data.expiresAt < Date.now()) {
+        navigate('/login', { replace: true });
+        return;
+      }
+      // Mark this tab as impersonation BEFORE setAuth so the custom storage
+      // writes only to sessionStorage, not localStorage.
+      sessionStorage.setItem('ps_impersonation_tab', '1');
+      setAuth(data.token, data.user);
+      setPermissions(data.permissions ?? [], data.dataScope ?? 'All');
+      navigate('/dashboard', { replace: true });
+    } catch {
+      navigate('/login', { replace: true });
+    }
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 12 }}>
+      <div className="spinner" />
+      <div style={{ fontSize: 13, color: 'var(--text3)' }}>Opening impersonation session…</div>
+    </div>
+  );
+}
+
 function Spinner() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
@@ -81,6 +116,7 @@ export default function App() {
           <Suspense fallback={<Spinner />}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/impersonate" element={<ImpersonatePage />} />
 
               <Route element={<RequireAuth />}>
                 {/* Print pages — no AppShell chrome */}

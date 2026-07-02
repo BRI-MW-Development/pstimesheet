@@ -5,6 +5,154 @@ import { useAuthStore } from '../../store/authStore';
 import { useLogout } from '../../hooks/useAuth';
 import api from '../../api/client';
 
+const MAX_SNOOZE = 5;
+
+function ChangePasswordPrompt({ userId }) {
+  const clearMustChangePassword = useAuthStore((s) => s.clearMustChangePassword);
+
+  const snoozeKey = `ps_pw_snooze_${userId}`;
+  const snoozeCount = parseInt(localStorage.getItem(snoozeKey) || '0', 10);
+  const forced = snoozeCount >= MAX_SNOOZE;
+
+  const [visible, setVisible] = useState(true);
+  const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [strength, setStrength] = useState({ score: 0, rules: {} });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  function calcStrength(pw) {
+    if (!pw) return { score: 0, rules: {} };
+    const rules = { len: pw.length >= 8, up: /[A-Z]/.test(pw), lo: /[a-z]/.test(pw), num: /[0-9]/.test(pw), sp: /[^A-Za-z0-9]/.test(pw), nsp: !/\s/.test(pw) };
+    return { score: Object.values(rules).filter(Boolean).length, rules };
+  }
+
+  function snooze() {
+    localStorage.setItem(snoozeKey, String(snoozeCount + 1));
+    setVisible(false);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    if (form.newPassword !== form.confirmPassword) { setError('New passwords do not match.'); return; }
+    if (strength.score < 4) { setError('Password is too weak. Use at least 8 characters with uppercase, lowercase, and a number.'); return; }
+    setSaving(true);
+    try {
+      await api.post('/auth/change-password', { currentPassword: form.currentPassword, newPassword: form.newPassword });
+      localStorage.removeItem(snoozeKey);
+      clearMustChangePassword();
+      setDone(true);
+      setTimeout(() => setVisible(false), 2000);
+    } catch (err) {
+      setError(err?.response?.data?.message ?? 'Password change failed. Check your current password.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!visible) return null;
+
+  const strengthColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a'];
+  const fill = Math.round((strength.score / 6) * 100);
+  const strengthColor = strengthColors[Math.min(strength.score - 1, 4)] ?? '#e5e7eb';
+  const remainingSnoozes = MAX_SNOOZE - snoozeCount;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,10,20,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '32px 32px 24px', maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', border: '1px solid var(--border2)' }}>
+
+        {done ? (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Password changed successfully!</div>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 20 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: forced ? '#fee2e2' : '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                {forced ? '🔒' : '🔑'}
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>
+                  {forced ? 'Password change required' : 'Please update your password'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.5 }}>
+                  {forced
+                    ? 'You must set a new password before continuing. This cannot be skipped.'
+                    : `You are using a temporary password. Please set a new one. You can remind me later ${remainingSnoozes} more time${remainingSnoozes !== 1 ? 's' : ''}.`}
+                </div>
+              </div>
+            </div>
+
+            {forced && (
+              <div style={{ padding: '8px 12px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 7, fontSize: 12, color: '#dc2626', marginBottom: 18, fontWeight: 600 }}>
+                ⚠ You have reached the maximum number of reminders. Password change is now mandatory.
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text3)', marginBottom: 5 }}>Current Password</label>
+                <input type="password" required autoComplete="current-password"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 7, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }}
+                  value={form.currentPassword} onChange={e => setForm(f => ({ ...f, currentPassword: e.target.value }))} />
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text3)', marginBottom: 5 }}>New Password</label>
+                <input type="password" required autoComplete="new-password"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 7, border: '1px solid var(--border2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }}
+                  value={form.newPassword} onChange={e => { setForm(f => ({ ...f, newPassword: e.target.value })); setStrength(calcStrength(e.target.value)); }} />
+                {form.newPassword && (
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ height: 4, borderRadius: 2, background: '#e5e7eb', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${fill}%`, background: strengthColor, borderRadius: 2, transition: 'width .2s, background .2s' }} />
+                    </div>
+                    <div style={{ marginTop: 5, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px', fontSize: 11 }}>
+                      {[['len', 'Min 8 chars'], ['up', 'Uppercase'], ['lo', 'Lowercase'], ['num', 'Number'], ['sp', 'Special char'], ['nsp', 'No spaces']].map(([k, lbl]) => (
+                        <span key={k} style={{ color: strength.rules[k] ? '#16a34a' : 'var(--text3)' }}>{strength.rules[k] ? '✓' : '✗'} {lbl}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text3)', marginBottom: 5 }}>Confirm New Password</label>
+                <input type="password" required autoComplete="new-password"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 7, border: `1px solid ${form.confirmPassword && form.confirmPassword !== form.newPassword ? '#fca5a5' : 'var(--border2)'}`, background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }}
+                  value={form.confirmPassword} onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))} />
+                {form.confirmPassword && form.confirmPassword !== form.newPassword && (
+                  <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Passwords do not match</div>
+                )}
+              </div>
+
+              {error && (
+                <div style={{ padding: '8px 12px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 7, fontSize: 12, color: '#dc2626', marginBottom: 14 }}>{error}</div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: forced ? 'flex-end' : 'space-between', alignItems: 'center' }}>
+                {!forced && (
+                  <button type="button" onClick={snooze}
+                    style={{ fontSize: 12, color: 'var(--text3)', background: 'none', border: '1px solid var(--border2)', borderRadius: 7, padding: '8px 14px', cursor: 'pointer' }}>
+                    Remind me later ({remainingSnoozes} left)
+                  </button>
+                )}
+                <button type="submit" disabled={saving}
+                  style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#0f7173', color: '#fff', fontWeight: 700, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                  {saving ? 'Saving…' : 'Change Password'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Navigation config ─── */
 /* ── Permission key attached to each nav link ──────────────────
    perm: { module, action } — link shown only when user has that permission
@@ -38,7 +186,7 @@ const NAV_GROUPS = [
       { label: 'Items',            to: '/masters/items',             perm: { module: 'ITEMS',       action: 'canRead' } },
       { label: 'Machinery',        to: '/masters/machinery',         perm: { module: 'MACHINERY',   action: 'canRead' } },
       { label: 'Vehicles',         to: '/masters/vehicles',          perm: { module: 'VEHICLES',    action: 'canRead' } },
-      { label: 'Access Equipment', to: '/masters/access-equipment',  perm: { module: 'ITEMS',       action: 'canRead' } },
+      { label: 'Access Equipment', to: '/masters/access-equipment',  perm: { module: 'ACCESS_EQUIPMENT', action: 'canRead' } },
       { label: 'Projects',         to: '/masters/projects',          perm: { module: 'PROJECTS',    action: 'canRead' } },
       { label: 'Work Orders',      to: '/masters/workorders',        perm: { module: 'WORK_ORDERS', action: 'canRead' } },
       { label: 'Task Types',       to: '/masters/tasktypes',         perm: { module: 'TASK_TYPES',  action: 'canRead' } },
@@ -55,20 +203,20 @@ const NAV_GROUPS = [
   {
     label: 'Reports', icon: '📈',
     links: [
-      { label: 'Reports',     to: '/reports',           perm: { module: 'REPORTS', action: 'canRead' } },
-      { label: 'Analytics',   to: '/reports/analytics', perm: { module: 'REPORTS', action: 'canRead' } },
-      { label: 'Audit Trail', to: '/reports/audit',     perm: { module: 'REPORTS', action: 'canRead' } },
+      { label: 'Reports',     to: '/reports',           perm: { module: 'REPORTS',     action: 'canReport' } },
+      { label: 'Analytics',   to: '/reports/analytics', perm: { module: 'REPORTS',     action: 'canReport' } },
+      { label: 'Audit Trail', to: '/reports/audit',     perm: { module: 'AUDIT_TRAIL', action: 'canRead'   } },
     ],
   },
   {
     label: 'Settings', icon: '⚙️',
     links: [
-      { label: 'Shift Setup',       to: '/admin/shifts',       perm: { module: 'SHIFTS',       action: 'canRead' } },
-      { label: 'Doc Numbering',     to: '/admin/doc-numbering',perm: { module: 'DOC_NUMBERING', action: 'canRead' } },
-      { label: 'Approval Settings', to: '/settings/approvals', perm: { module: 'SETTINGS',     action: 'canRead' } },
-      { label: 'Email Settings',    to: '/settings/email',     perm: { module: 'SETTINGS',     action: 'canRead' } },
-      { label: 'Sessions',          to: '/settings/sessions',  perm: { module: 'USERS',         action: 'canRead' } },
-      { label: 'Notifications',     to: '/settings/notifications', perm: null },
+      { label: 'Shift Setup',       to: '/admin/shifts',           perm: { module: 'SHIFTS',         action: 'canRead' } },
+      { label: 'Doc Numbering',     to: '/admin/doc-numbering',    perm: { module: 'DOC_NUMBERING',   action: 'canRead' } },
+      { label: 'Approval Settings', to: '/settings/approvals',     perm: { module: 'SETTINGS',        action: 'canRead' } },
+      { label: 'Email Settings',    to: '/settings/email',         perm: { module: 'SETTINGS',        action: 'canRead' } },
+      { label: 'Sessions',          to: '/settings/sessions',      perm: { module: 'USERS',           action: 'canRead' } },
+      { label: 'Notifications',     to: '/settings/notifications', perm: { module: 'NOTIFICATIONS',   action: 'canRead' } },
     ],
   },
 ];
@@ -285,9 +433,11 @@ export default function AppShell() {
   // Removing main-content padding + setting overflow:hidden fixes the height:100% chain
   // so inner scroll panels (ts-scroll-panel, qc-panel-*) get a finite height to scroll within.
   const isFullBleed = /^\/(qc\/(new|[^/]+(\/edit|\/view)?)|timesheets\/(prod|inst|project)\/(new|[^/]+(\/edit|\/view)?))$/.test(location.pathname);
-  const [openGroup,   setOpenGroup]   = useState(null);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showNotif,   setShowNotif]   = useState(false);
+  const [openGroup,      setOpenGroup]      = useState(null);
+  const [showProfile,    setShowProfile]    = useState(false);
+  const [showNotif,      setShowNotif]      = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobile,       setIsMobile]       = useState(() => window.innerWidth <= 768);
   const [theme,       setTheme]       = useState(
     () => localStorage.getItem('ps.theme') || 'industrial'
   );
@@ -340,11 +490,24 @@ export default function AppShell() {
   });
   const notifCount = notifs.filter(n => !n.isRead).length;
 
+  /* Track viewport width for mobile detection */
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+
+  /* Close mobile menu when switching to desktop */
+  useEffect(() => {
+    if (!isMobile) setMobileMenuOpen(false);
+  }, [isMobile]);
+
   /* Close all panels on outside click */
   const closeAll = useCallback(() => {
     setOpenGroup(null);
     setShowProfile(false);
     setShowNotif(false);
+    setMobileMenuOpen(false);
   }, []);
 
   /* Derived */
@@ -360,6 +523,9 @@ export default function AppShell() {
 
   return (
     <>
+      {/* ══ Password change prompt (mustChangePassword with snooze) ══ */}
+      {!!user?.mustChangePassword && <ChangePasswordPrompt userId={user.userId} />}
+
       {/* ════════════════ TOPBAR ════════════════ */}
       <header className="topbar" onClick={closeAll}>
 
@@ -373,7 +539,7 @@ export default function AppShell() {
         </div>
 
         {/* Centre: search + clock */}
-        <div className="topbar-center" onClick={(e) => e.stopPropagation()}>
+        <div className="topbar-center" onClick={(e) => e.stopPropagation()} style={isMobile ? { display: 'none' } : undefined}>
           <GlobalSearch onClose={closeAll} />
           <div className="tb-clock">
             <div className="tb-clock-date">{dateStr}</div>
@@ -406,7 +572,7 @@ export default function AppShell() {
                 : initials}
             </div>
           </button>
-          <div className="user-info" style={{ cursor: 'pointer' }}
+          <div className="user-info" style={{ cursor: 'pointer', ...(isMobile ? { display: 'none' } : {}) }}
             onClick={() => { setShowProfile((v) => !v); setShowNotif(false); setOpenGroup(null); }}>
             <div className="user-name">{user?.displayName ?? user?.username ?? '—'}</div>
             <div className="user-role">{user?.roleCode ?? user?.role ?? ''}</div>
@@ -414,6 +580,24 @@ export default function AppShell() {
 
           {/* Notification panel */}
           {showNotif && <NotifPanel onClose={() => setShowNotif(false)} />}
+
+          {/* Hamburger — mobile only */}
+          {isMobile && (
+            <button
+              aria-label="Toggle navigation"
+              onClick={(e) => { e.stopPropagation(); setMobileMenuOpen((v) => !v); setShowProfile(false); setShowNotif(false); }}
+              style={{
+                display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 5,
+                width: 40, height: 40, flexShrink: 0,
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 6, cursor: 'pointer', padding: 0, marginRight: 10,
+              }}
+            >
+              <span style={{ display: 'block', width: 18, height: 2, background: 'var(--header-text,#fff)', borderRadius: 1, transition: 'all .2s', transform: mobileMenuOpen ? 'translateY(7px) rotate(45deg)' : 'none' }} />
+              <span style={{ display: 'block', width: 18, height: 2, background: 'var(--header-text,#fff)', borderRadius: 1, transition: 'all .2s', opacity: mobileMenuOpen ? 0 : 1 }} />
+              <span style={{ display: 'block', width: 18, height: 2, background: 'var(--header-text,#fff)', borderRadius: 1, transition: 'all .2s', transform: mobileMenuOpen ? 'translateY(-7px) rotate(-45deg)' : 'none' }} />
+            </button>
+          )}
 
           {/* Profile dropdown */}
           {showProfile && (
@@ -470,8 +654,29 @@ export default function AppShell() {
         </div>
       </header>
 
+      {/* Mobile backdrop */}
+      {isMobile && mobileMenuOpen && (
+        <div onClick={closeAll} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 94 }} />
+      )}
+
       {/* ════════════════ TOP GROUP NAV ════════════════ */}
-      <div className="top-group-menu" onClick={closeAll}>
+      <div
+        className="top-group-menu"
+        onClick={closeAll}
+        style={isMobile ? {
+          display: mobileMenuOpen ? 'flex' : 'none',
+          flexDirection: 'column',
+          position: 'fixed',
+          top: 'var(--header-h, 52px)',
+          left: 0, right: 0,
+          zIndex: 95,
+          maxHeight: 'calc(100vh - 52px)',
+          overflowY: 'auto',
+          background: 'var(--sidebar-bg)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          borderBottom: '2px solid var(--top-menu-border, rgba(255,255,255,0.1))',
+        } : undefined}
+      >
         {NAV_GROUPS.map((group) => {
           // Filter links by permission — show only links the user can access
           const visibleLinks = group.links.filter(link => {
@@ -484,21 +689,31 @@ export default function AppShell() {
             <div
               key={group.label}
               className={`top-group${openGroup === group.label ? ' open' : ''}`}
+              style={isMobile ? {
+                flexDirection: 'column', alignItems: 'stretch', width: '100%',
+                padding: 0, borderRight: 'none',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+              } : undefined}
               onClick={(e) => {
                 e.stopPropagation();
-                if (isSingle) { navigate(visibleLinks[0].to); closeAll(); }
-                else setOpenGroup((cur) => cur === group.label ? null : group.label);
+                if (isSingle) { navigate(visibleLinks[0].to); closeAll(); return; }
+                setOpenGroup((cur) => cur === group.label ? null : group.label);
                 setShowProfile(false);
                 setShowNotif(false);
               }}
             >
-              <div className="top-group-heading">
+              <div className="top-group-heading" style={isMobile ? { padding: '14px 18px', fontSize: 13, fontWeight: 600, justifyContent: 'space-between' } : undefined}>
                 <span className="tg-icon">{group.icon}</span>
                 {group.label}
                 {!isSingle && <span className="top-group-arrow">▾</span>}
               </div>
               {!isSingle && (
-                <div className="top-group-dropdown">
+                <div className="top-group-dropdown" style={isMobile && openGroup === group.label ? {
+                  display: 'flex', flexDirection: 'column',
+                  position: 'static', boxShadow: 'none', borderRadius: 0,
+                  background: 'rgba(0,0,0,0.18)', padding: '4px 8px 8px 32px',
+                  minWidth: 'unset',
+                } : isMobile ? { display: 'none' } : undefined}>
                   {visibleLinks.map((link) => (
                     <NavLink
                       key={link.to}
@@ -518,7 +733,7 @@ export default function AppShell() {
 
       {/* ════════════════ MAIN CONTENT ════════════════ */}
       <div className="app-shell" onClick={closeAll}>
-        <main className="main-content" style={isFullBleed ? { padding: 0, overflow: 'hidden' } : undefined} onClick={(e) => e.stopPropagation()}>
+        <main className="main-content" style={isFullBleed ? { padding: 0, overflow: 'hidden', minHeight: 0 } : undefined}>
           <Outlet />
         </main>
       </div>

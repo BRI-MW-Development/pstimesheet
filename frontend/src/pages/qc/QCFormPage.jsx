@@ -212,8 +212,8 @@ export default function QCFormPage() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-  // No sidebar in this route — full viewport. Tabs on tablet/mobile.
-  const isNarrow = windowW <= 900;
+  // Tabs on tablet and mobile — 3-panel side-by-side only on large desktop (>1280px).
+  const isNarrow = windowW <= 1280;
 
   const isApprover = user?.canApprove || ['Admin', 'Manager', 'Supervisor'].includes(user?.roleCode);
 
@@ -474,7 +474,7 @@ export default function QCFormPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, width: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
 
       {qcLightbox && (
         <FileLightbox
@@ -513,11 +513,13 @@ export default function QCFormPage() {
 
       <form onSubmit={e => { e.preventDefault(); if (validate()) save({ ...header, checklistData: { ...checklist, __sectionNA: sectionNA } }); }}
         data-qc-tab={mobQcTab}
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, width: '100%' }}>
+        style={isNarrow
+          ? { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, width: '100%', overflow: 'hidden' }
+          : { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, minHeight: 0, width: '100%' }}>
 
-        {/* ── Mobile tab bar — visible when window ≤ 1440px ── */}
+        {/* ── Mobile tab bar ── */}
         {isNarrow && (
-          <div style={{ display: 'flex', flexShrink: 0, borderBottom: '2px solid var(--border2)', background: 'var(--surface)' }}>
+          <div style={{ display: 'flex', flexShrink: 0, borderBottom: '2px solid var(--border2)', background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 5 }}>
             {[['details','📋','Details'],['checklist','✅','Checklist'],['info','📌','Info']].map(([key,ic,lbl]) => (
               <button key={key} type="button"
                 onClick={() => setMobQcTab(key)}
@@ -529,10 +531,12 @@ export default function QCFormPage() {
         )}
 
         {/* ── Three-panel row ── */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div style={isNarrow
+          ? { flex: 1, display: 'flex', overflowY: 'auto', WebkitOverflowScrolling: 'touch', minHeight: 0 }
+          : { flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
         {/* Left panel */}
-        <div className="ts-form-panel qc-panel-details" style={{ flexShrink: 0, borderRight: '1px solid var(--border)', overflowY: 'auto', display: isNarrow && mobQcTab !== 'details' ? 'none' : undefined, width: isNarrow ? '100%' : undefined }}>
+        <div className="ts-form-panel qc-panel-details" style={{ ...(isNarrow ? { flex: '0 0 auto', width: '100%' } : { flexShrink: 0 }), borderRight: isNarrow ? 'none' : '1px solid var(--border)', overflowY: isNarrow ? 'visible' : 'auto', display: isNarrow && mobQcTab !== 'details' ? 'none' : undefined }}>
 
           {/* Work Order — full width */}
           <div className="ts-field-group"><label className="ts-field-label">Work Order # <span style={{ color: C.fail }}>*</span></label>
@@ -605,7 +609,7 @@ export default function QCFormPage() {
         </div>
 
         {/* Centre: checklist */}
-        <div className="qc-panel-checklist" style={{ flex: 1, overflow: 'auto', padding: '16px 18px 80px', display: isNarrow && mobQcTab !== 'checklist' ? 'none' : 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="qc-panel-checklist" style={{ ...(isNarrow ? { flex: '0 0 auto', width: '100%', overflow: 'visible', padding: '16px 14px 20px' } : { flex: 1, overflow: 'auto', padding: '16px 18px 80px' }), display: isNarrow && mobQcTab !== 'checklist' ? 'none' : 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Inspection Checklist — {QC_SECTIONS.length} sections · {allItems.length} items
             {naSection > 0 && <span style={{ color: C.na }}> · {naSection} section(s) N/A</span>}
@@ -623,7 +627,7 @@ export default function QCFormPage() {
         </div>
 
         {/* Right sidebar */}
-        <div className="qc-panel-info" style={{ flexShrink: 0, borderLeft: isNarrow ? 'none' : '1px solid var(--border2)', display: isNarrow && mobQcTab !== 'info' ? 'none' : 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden', width: isNarrow ? '100%' : undefined }}>
+        <div className="qc-panel-info" style={{ ...(isNarrow ? { flex: '0 0 auto', width: '100%', overflow: 'visible', minHeight: 300 } : { flexShrink: 0, overflow: 'hidden' }), borderLeft: isNarrow ? 'none' : '1px solid var(--border2)', display: isNarrow && mobQcTab !== 'info' ? 'none' : 'flex', flexDirection: 'column', background: 'var(--surface)' }}>
           <div style={{ display: 'flex', borderBottom: '2px solid var(--border2)', flexShrink: 0 }}>
             {[['history', '📋', 'History'], ['comments', '💬', comments.length ? `(${comments.length})` : 'Comments'], ['files', '📎', attachments.length ? `(${attachments.length})` : 'Files']].map(([key, ic, lbl]) => (
               <button key={key} type="button" onClick={() => setActiveTab(key)}
@@ -818,7 +822,7 @@ export default function QCFormPage() {
         </div>{/* end three-panel row */}
 
         {/* Footer */}
-        <div className="ts-modal-footer" style={{ borderTop: '1px solid var(--border)', padding: '10px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10, flexShrink: 0 }}>
+        <div className="ts-modal-footer" style={{ borderTop: '1px solid var(--border)', padding: '10px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10, flexShrink: 0, ...(isNarrow ? { position: 'sticky', bottom: 0, zIndex: 5, background: 'var(--surface)' } : {}) }}>
           {isReadonly ? (
             <button type="button" onClick={() => navigate('/qc')} className="btn btn-ghost">← Back to List</button>
           ) : (

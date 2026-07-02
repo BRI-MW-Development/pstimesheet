@@ -133,7 +133,7 @@ function AttachCell({ attachment, existingAttachments = [], onAdd, onRemoveNew, 
 
 // ── Daily Form ─────────────────────────────────────────────────────────────────
 let _lineKey = 0;
-const EMPTY_LINE = () => ({ _key: ++_lineKey, projectId: '', taskType: '', startTime: '', endTime: '', attachment: null, existingAttachments: [], comments: '', commentOpen: false });
+const EMPTY_LINE = () => ({ _key: ++_lineKey, projectId: '', taskType: '', startTime: '', endTime: '', attachment: null, existingAttachments: [], comments: '', commentOpen: false, nonProjectRelated: false, nonProjectDetails: '' });
 
 const _localDate = (d) => { const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
 const TODAY     = _localDate(new Date());
@@ -150,6 +150,12 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
 
   const [summary, setSummary] = useState({ employee: userEmployeeCode, date: TODAY });
   const [lines, setLines] = useState([EMPTY_LINE()]);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
 
   const { data: employees = [] } = useQuery({ queryKey: ['employees'],  queryFn: () => api.get('/employees').then((r) => r.data) });
   const { data: projects  = [] } = useQuery({ queryKey: ['projects'],   queryFn: () => api.get('/projects').then((r) => r.data) });
@@ -188,6 +194,8 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
           existingAttachments: l.attachments ?? [],
           comments: l.comments ?? '',
           commentOpen: Boolean(l.comments),
+          nonProjectRelated: Boolean(l.nonProjectRelated),
+          nonProjectDetails: l.nonProjectDetails ?? '',
         }))
       : [EMPTY_LINE()]);
   }, [existing]);
@@ -242,13 +250,14 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
     const emp = summary.employee || userEmployeeCode;
     if (!emp?.trim()) { toast('Employee is required.', 'error'); return; }
     // Lines that have ANY field filled in are "active" — all four fields are required on active lines
-    const activeLines = lines.filter((l) => l.projectId?.trim() || l.taskType?.trim() || l.startTime || l.endTime);
+    const activeLines = lines.filter((l) => l.projectId?.trim() || l.nonProjectRelated || l.taskType?.trim() || l.startTime || l.endTime);
     if (activeLines.length === 0) { toast('Add at least one line with data.', 'error'); return; }
 
     for (let i = 0; i < activeLines.length; i++) {
-      const { projectId, taskType, startTime: s, endTime: e } = activeLines[i];
+      const { projectId, taskType, startTime: s, endTime: e, nonProjectRelated, nonProjectDetails } = activeLines[i];
       const lineLabel = `Line ${i + 1}`;
-      if (!projectId?.trim()) { toast(`${lineLabel}: Project ID is required.`, 'error'); return; }
+      if (!nonProjectRelated && !projectId?.trim()) { toast(`${lineLabel}: Project ID is required.`, 'error'); return; }
+      if (nonProjectRelated && !nonProjectDetails?.trim()) { toast(`${lineLabel}: Details are required for Non Project Related entries.`, 'error'); return; }
       if (!taskType?.trim())  { toast(`${lineLabel}: Task Type is required.`, 'error'); return; }
       if (!s)                 { toast(`${lineLabel}: Start Time is required.`, 'error'); return; }
       if (!e)                 { toast(`${lineLabel}: End Time is required.`, 'error'); return; }
@@ -272,10 +281,12 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
         startTime: l.startTime || null,
         endTime:   l.endTime   || null,
         duration:  calcMins(l.startTime, l.endTime) || '0',
-        projectId: l.projectId || null,
+        projectId: l.nonProjectRelated ? null : (l.projectId || null),
         taskTypeCode: l.taskType || null,
         comments: l.comments || null,
         attachment: l.attachment || null,
+        nonProjectRelated: l.nonProjectRelated || false,
+        nonProjectDetails: l.nonProjectRelated ? (l.nonProjectDetails || null) : null,
       })),
     });
   }
@@ -321,21 +332,21 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#3b82f6' }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               Summary
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '220px 180px 1fr 150px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : '220px 180px 1fr 150px' }}>
               <div style={{ padding: '16px 20px', borderRight: '1px solid #f0f0f0' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>Doc No</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: editDocNo ? '#1d4ed8' : '#9ca3af', fontFamily: 'monospace' }}>
                   {editDocNo ?? '— auto-generated —'}
                 </div>
               </div>
-              <div style={{ padding: '16px 20px', borderRight: '1px solid #f0f0f0' }}>
+              <div style={{ padding: '16px 20px', borderRight: isMobile ? undefined : '1px solid #f0f0f0' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>Date</div>
                 <input type="date" className="form-control" value={summary.date}
                   min={MIN_DATE} max={TODAY}
                   style={{ maxWidth: 160, fontSize: 13 }}
                   onChange={(e) => setSummary((s) => ({ ...s, date: e.target.value }))} />
               </div>
-              <div style={{ padding: '16px 20px', borderRight: '1px solid #f0f0f0' }}>
+              <div style={{ padding: '16px 20px', borderRight: '1px solid #f0f0f0', borderTop: isMobile ? '1px solid #f0f0f0' : undefined }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>Employee</div>
                 {isAdmin ? (
                   <SearchSelect options={empOptions} value={summary.employee}
@@ -344,7 +355,7 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', paddingTop: 6 }}>{summary.employee || userEmployeeCode || '—'}</div>
                 )}
               </div>
-              <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+              <div style={{ padding: '16px 20px', textAlign: 'center', borderTop: isMobile ? '1px solid #f0f0f0' : undefined }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 8 }}>Total Duration</div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: totalMinutes > 0 ? '#2563eb' : '#d1d5db', lineHeight: 1 }}>{totalMinutes > 0 ? totalMinutes : '—'}</div>
                 {totalMinutes > 0 && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>minutes</div>}
@@ -446,7 +457,8 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
               <thead>
                 <tr>
                   <th style={{ width: 44, textAlign: 'center' }}>#</th>
-                  <th>Project ID</th>
+                  <th style={{ width: 110, textAlign: 'center' }}>Non-Project</th>
+                  <th>Project ID / Details</th>
                   <th>Task Type</th>
                   <th style={{ width: 120 }}>Start Time</th>
                   <th style={{ width: 120 }}>End Time</th>
@@ -463,9 +475,41 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
                       <td style={{ textAlign: 'center' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#f1f5f9', fontSize: 11, fontWeight: 700, color: '#64748b' }}>{idx + 1}</span>
                       </td>
+                      <td style={{ textAlign: 'center' }}>
+                        {readOnly ? (
+                          line.nonProjectRelated
+                            ? <span style={{ fontSize: 11, fontWeight: 600, color: '#7c3aed', background: '#ede9fe', borderRadius: 4, padding: '2px 8px' }}>Non-Project</span>
+                            : <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
+                        ) : (
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12, color: line.nonProjectRelated ? '#7c3aed' : '#6b7280' }}>
+                            <input
+                              type="checkbox"
+                              checked={line.nonProjectRelated}
+                              onChange={(e) => {
+                                setLine(idx, 'nonProjectRelated', e.target.checked);
+                                if (e.target.checked) setLine(idx, 'projectId', '');
+                                else setLine(idx, 'nonProjectDetails', '');
+                              }}
+                            />
+                            {line.nonProjectRelated && <span style={{ fontSize: 10, fontWeight: 600 }}>Yes</span>}
+                          </label>
+                        )}
+                      </td>
                       <td>
-                        <SearchSelect options={projOptions} value={line.projectId}
-                          onChange={(v) => setLine(idx, 'projectId', v)} placeholder="Type to search…" />
+                        {line.nonProjectRelated ? (
+                          <input
+                            type="text"
+                            className="form-control"
+                            style={{ fontSize: 13, minWidth: 160 }}
+                            value={line.nonProjectDetails}
+                            onChange={(e) => setLine(idx, 'nonProjectDetails', e.target.value)}
+                            placeholder="Enter details…"
+                            readOnly={readOnly}
+                          />
+                        ) : (
+                          <SearchSelect options={projOptions} value={line.projectId}
+                            onChange={(v) => setLine(idx, 'projectId', v)} placeholder="Type to search…" />
+                        )}
                       </td>
                       <td>
                         <select value={line.taskType} onChange={(e) => setLine(idx, 'taskType', e.target.value)}>
@@ -513,7 +557,7 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
                     </tr>
                     {line.commentOpen && (
                       <tr style={{ background: '#f8faff' }}>
-                        <td colSpan={readOnly ? 8 : 9} style={{ padding: '6px 16px 10px 52px' }}>
+                        <td colSpan={readOnly ? 9 : 10} style={{ padding: '6px 16px 10px 52px' }}>
                           <textarea
                             value={line.comments}
                             onChange={(e) => setLine(idx, 'comments', e.target.value)}
@@ -597,6 +641,13 @@ function WeeklyForm({ onBack, onSaved }) {
   const mon = new Date();
   mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
   const defaultWeekStart = localDateStr(mon);
+
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
 
   const [employee, setEmployee] = useState(userEmployeeCode);
   const [weekStart, setWeekStart] = useState(defaultWeekStart);
@@ -859,7 +910,7 @@ function WeeklyForm({ onBack, onSaved }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
           <label style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, whiteSpace: 'nowrap' }}>Employee</label>
           {isAdmin ? (
-            <div style={{ width: 260 }}>
+            <div style={{ width: isMobile ? '100%' : 260 }}>
               <SearchSelect options={empOptions} value={employee} onChange={setEmployee} placeholder="Search employee…" />
             </div>
           ) : (
@@ -1266,6 +1317,7 @@ export default function ProjTimesheetPage() {
     { key: '#',              label: '#',            num: true,  sort: false, render: (_, i) => i + 1 },
     { key: 'docNo',          label: 'Document No',  sort: true, render: (r) => <span className="wip-link">{r.docNo}</span> },
     { key: 'entryDate',      label: 'Date',         sort: true, render: (r) => formatDate(r.entryDate) },
+    { key: 'createdAt',      label: 'Created Date', sort: true, render: (r) => formatDate(r.createdAt) },
     { key: 'entered_by_name',label: 'Employee',     sort: true },
     { key: 'status', label: 'Status', sort: true, render: (r) => <Badge variant={STATUS_VARIANT[r.status] ?? 'draft'}>{r.status ?? '—'}</Badge> },
     {

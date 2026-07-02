@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
@@ -42,6 +43,13 @@ export default function DashboardPage() {
   const permissions = useAuthStore((s) => s.permissions);
   const dataScope   = useAuthStore((s) => s.dataScope);
   const navigate    = useNavigate();
+
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
 
   // ── Permission flags ──────────────────────────────────────────────────────
   const hasProd    = permissions.some(p => p.module === 'PROD'        && p.canRead);
@@ -171,13 +179,14 @@ export default function DashboardPage() {
         </div>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${overviewCells.length}, 1fr)`,
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${overviewCells.length}, 1fr)`,
           gap: 0, padding: '0 4px 4px',
         }}>
           {overviewCells.map(({ label, value, color }, i) => (
             <div key={label} style={{
               padding: '12px 16px',
-              borderRight: i < overviewCells.length - 1 ? '1px solid var(--border2)' : undefined,
+              borderRight: isMobile ? (i % 2 === 0 ? '1px solid var(--border2)' : undefined) : (i < overviewCells.length - 1 ? '1px solid var(--border2)' : undefined),
+              borderTop: isMobile && i >= 2 ? '1px solid var(--border2)' : undefined,
               textAlign: 'center',
             }}>
               <div style={{ fontSize: 22, fontWeight: 700, color }}>{value ?? 0}</div>
@@ -194,7 +203,7 @@ export default function DashboardPage() {
             <div className="card-title">QC Overview</div>
             <button className="btn btn-ghost btn-sm" onClick={() => navigate('/qc')}>View All →</button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 0 }}>
             {[
               { label: 'Total Records',  value: qc.total,      color: 'var(--text)'    },
               { label: 'In Progress',    value: qc.inProgress, color: 'var(--amber)'   },
@@ -203,7 +212,8 @@ export default function DashboardPage() {
             ].map(({ label, value, color }, i, arr) => (
               <div key={label} style={{
                 padding: '16px 20px', cursor: 'pointer',
-                borderRight: i < arr.length - 1 ? '1px solid var(--border2)' : undefined,
+                borderRight: isMobile ? (i % 2 === 0 ? '1px solid var(--border2)' : undefined) : (i < arr.length - 1 ? '1px solid var(--border2)' : undefined),
+              borderTop: isMobile && i >= 2 ? '1px solid var(--border2)' : undefined,
               }} onClick={() => navigate('/qc')}>
                 <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
                 <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1 }}>{value ?? '—'}</div>
@@ -214,7 +224,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Recent Timesheets + Activity ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 20, marginBottom: 20 }}>
 
         <div className="card">
           <div className="card-head">
@@ -300,7 +310,7 @@ export default function DashboardPage() {
         <div className="card-head">
           <div className="card-title">My Login Audit</div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 0 }}>
           {[
             { label: 'Previous Login',       val: fmtDateTime(audit?.previousLogin),       color: 'var(--text1)', large: false },
             { label: 'Successful Today',      val: audit?.successfulToday ?? '—',           color: 'var(--green)',  large: true  },
@@ -311,8 +321,8 @@ export default function DashboardPage() {
           ].map(({ label, val, color, large }, i) => (
             <div key={label} style={{
               padding: '14px 20px',
-              borderRight: (i + 1) % 3 !== 0 ? '1px solid var(--border2)' : undefined,
-              borderTop: i >= 3 ? '1px solid var(--border2)' : undefined,
+              borderRight: !isMobile && (i + 1) % 3 !== 0 ? '1px solid var(--border2)' : undefined,
+              borderTop: (isMobile ? i > 0 : i >= 3) ? '1px solid var(--border2)' : undefined,
             }}>
               <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>
                 {label}

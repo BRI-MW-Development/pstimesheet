@@ -14,6 +14,7 @@ const MODULES = [
   { value: 'INST', label: 'Installation Timesheet' },
   { value: 'PROJ', label: 'Projects Team Timesheet' },
   { value: 'WO',   label: 'WO Complete' },
+  { value: 'QC',   label: 'QC Inspection' },
 ];
 
 const MODULE_BADGE = {
@@ -22,6 +23,7 @@ const MODULE_BADGE = {
   INST: { bg: '#fef9c3', color: '#92400e' },
   PROJ: { bg: '#dcfce7', color: '#166534' },
   WO:   { bg: '#ede9fe', color: '#6d28d9' },
+  QC:   { bg: '#fce7f3', color: '#9d174d' },
 };
 
 function ModuleBadge({ module }) {
@@ -68,6 +70,14 @@ const CRITERIA_FIELDS = [
     value: 'workOrderNo',  label: 'Work Order No',
     type: 'select',  source: 'work-orders',
     getOptions: (data) => (data || []).map((r) => ({ value: r.workOrderNumber, label: r.workOrderNumber })),
+  },
+  {
+    value: 'digitalTech', label: 'Digital Tech (INST)',
+    type: 'select',
+    getOptions: () => [
+      { value: 'Yes', label: 'Yes' },
+      { value: 'No',  label: 'No'  },
+    ],
   },
   { value: 'jobCode',     label: 'Job Code',    type: 'text'   },
   { value: 'totalHours',  label: 'Total Hours', type: 'number' },
@@ -401,7 +411,7 @@ function ApprovalForm({ initial, onSave, onClose, saving }) {
       return md.includes('production') || md.includes('digital');
     if (form.module === 'INST')
       return md.includes('installation');
-    if (form.module === 'PROJ')
+    if (form.module === 'PROJ' || form.module === 'QC')
       return md.includes('project') || md.includes('digital');
     // ALL — show all active departments
     return true;

@@ -94,6 +94,44 @@ export class UsersController {
     }
   }
 
+  @Get(':userId/login-history')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('USERS', 'canRead')
+  getLoginHistory(@Param('userId') userId: string) {
+    return this.usersService.getLoginHistory(userId);
+  }
+
+  @Get(':userId/history')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('USERS', 'canRead')
+  getAuditHistory(@Param('userId') userId: string) {
+    return this.usersService.getAuditHistory(userId);
+  }
+
+  @Post(':userId/upload-profile-image')
+  @HttpCode(200)
+  @UseGuards(PermissionGuard)
+  @RequirePermission('USERS', 'canWrite')
+  async uploadProfileImage(@Param('userId') userId: string, @Body() body: { fileData: string; mimeType: string; fileName: string }, @Req() req: any) {
+    try {
+      const result = await this.usersService.uploadProfileImage(userId, body.fileData, body.mimeType, body.fileName);
+      this.auditService.log({ docType: 'USER', docRef: userId, action: 'PHOTO', performedBy: req.currentUser?.userId, performedByName: req.currentUser?.displayName, details: 'Profile photo updated' });
+      return result;
+    } catch (err) {
+      throw new HttpException({ message: err?.message || 'Upload failed' }, err?.status ?? HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post(':userId/send-credentials')
+  @HttpCode(200)
+  @UseGuards(PermissionGuard)
+  @RequirePermission('USERS', 'canWrite')
+  async sendCredentials(@Param('userId') userId: string, @Body() body: { email: string; username: string; password: string; displayName?: string }) {
+    const result = await this.usersService.sendCredentials(userId, body);
+    if (!result.ok) throw new HttpException({ message: result.reason || 'Email send failed' }, HttpStatus.BAD_GATEWAY);
+    return { ok: true };
+  }
+
   @Delete(':userId')
   @UseGuards(PermissionGuard)
   @RequirePermission('USERS', 'canDelete')

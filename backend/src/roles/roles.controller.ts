@@ -40,6 +40,29 @@ export class RolesController {
   @RequirePermission('ROLES', 'canRead')
   getPermissions(@Param('roleCode') roleCode: string) { return this.rolesService.getPermissions(roleCode); }
 
+  @Get(':roleCode/users')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('ROLES', 'canRead')
+  getUsers(@Param('roleCode') roleCode: string) { return this.rolesService.getUsersForRole(roleCode); }
+
+  @Get(':roleCode/history')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('ROLES', 'canRead')
+  getHistory(@Param('roleCode') roleCode: string) { return this.rolesService.getHistory(roleCode); }
+
+  @Post(':roleCode/clone')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('ROLES', 'canCreate')
+  async clone(@Param('roleCode') roleCode: string, @Req() req: any) {
+    try {
+      const result = await this.rolesService.clone(roleCode);
+      this.auditService.log({ docType: 'ROLE', docRef: result.roleCode, action: 'CREATE', performedBy: req.currentUser?.userId, performedByName: req.currentUser?.displayName, details: `Cloned from ${roleCode}` });
+      return result;
+    } catch (err) {
+      throw new HttpException({ message: err?.message || 'Clone failed' }, err?.status ?? HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
   @Post()
   @UseGuards(PermissionGuard)
   @RequirePermission('ROLES', 'canCreate')

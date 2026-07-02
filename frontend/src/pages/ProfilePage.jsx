@@ -14,6 +14,12 @@ export default function ProfilePage() {
 
   const [editing, setEditing]   = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
   const fileInputRef = useRef(null);
   const [form, setForm] = useState({ displayName: '', email: '', phone: '' });
 
@@ -101,7 +107,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', gap: 20, alignItems: 'start' }}>
 
         {/* Left: avatar card */}
         <div className="card" style={{ padding: 28, textAlign: 'center' }}>
@@ -165,7 +171,7 @@ export default function ProfilePage() {
               <div className="form-section-title" style={{ marginBottom: 20 }}>Edit Profile</div>
               <form
                 onSubmit={(e) => { e.preventDefault(); save(form); }}
-                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}
+                style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px 20px' }}
               >
                 <div className="form-group">
                   <label>Display Name</label>

@@ -8,7 +8,7 @@ export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
   @UseGuards(PermissionGuard)
-  @RequirePermission('REPORTS', 'canRead')
+  @RequirePermission('AUDIT_TRAIL', 'canRead')
   @Get()
   query(
     @Query('docType')     docType?: string,

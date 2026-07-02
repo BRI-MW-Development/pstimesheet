@@ -728,6 +728,7 @@ select { cursor: pointer; }
 @keyframes slideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .modal-md { max-width: 560px; }
 .modal-lg { max-width: 800px; }
+.modal-xl { max-width: 1080px; }
 
 .modal-header {
   display: flex; align-items: center; justify-content: space-between;

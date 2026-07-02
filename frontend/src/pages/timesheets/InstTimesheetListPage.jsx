@@ -121,6 +121,7 @@ export default function InstTimesheetListPage() {
     { key: '#',              label: '#',            num: true,  sort: false, render: (_, i) => i + 1 },
     { key: 'docNo',          label: 'Document No',  sort: true, render: (r) => <span className="wip-link">{r.docNo}</span> },
     { key: 'entryDate',      label: 'Date',         sort: true, render: (r) => formatDate(r.entryDate) },
+    { key: 'createdAt',      label: 'Created Date', sort: true, render: (r) => formatDate(r.createdAt) },
     { key: 'workOrderNo',    label: 'Work Order',   sort: true },
     { key: 'projectCode',    label: 'Project ID',   sort: true },
     { key: 'customerName',   label: 'Customer',     sort: true },

@@ -39,6 +39,14 @@ export default function ProdTimesheetFormPage() {
   const isView = useLocation().pathname.endsWith('/view');
   const fromApprovals = searchParams.get('from') === 'approvals';
   const isApprover = fromApprovals || permissions.some((p) => p.module === 'PROD' && p.canWrite && p.canReport);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  const [mobTab, setMobTab] = useState('details');
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+
   const [showReject, setShowReject] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -309,7 +317,7 @@ export default function ProdTimesheetFormPage() {
   const isReadonly = isView || tsStatus === 'Approved' || tsStatus === 'Rejected' || (tsStatus === 'Submitted' && !isApprover);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
       {/* ── Header bar ── */}
       <div className="ts-modal-head" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -322,11 +330,24 @@ export default function ProdTimesheetFormPage() {
         <button className="btn btn-ghost btn-sm" onClick={() => confirmLeave(fromApprovals ? '/timesheets/pending-approvals' : '/timesheets/prod')}>← Back</button>
       </div>
 
+      {isMobile && (
+        <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+          {[{ key: 'details', label: 'Details' }, { key: 'entries', label: 'Entries' }].map(({ key, label }) => (
+            <button key={key} type="button" onClick={() => setMobTab(key)}
+              style={{ flex: 1, padding: '11px 8px', fontSize: 13, fontWeight: 600, background: 'transparent', border: 'none',
+                borderBottom: `3px solid ${mobTab === key ? 'var(--accent)' : 'transparent'}`,
+                color: mobTab === key ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer', marginBottom: -2 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <form onSubmit={submit} onChange={() => !isDirty && setIsDirty(true)} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden' }}>
+        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : undefined }}>
 
           {/* ── Left panel: header fields ── */}
-          <div className="ts-form-panel" style={{ pointerEvents: isReadonly ? 'none' : undefined }}>
+          <div className="ts-form-panel" style={{ pointerEvents: isReadonly ? 'none' : undefined, display: isMobile && mobTab === 'entries' ? 'none' : undefined }}>
             <div className="ts-field-group">
               <label className="ts-field-label">Project ID <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect
@@ -382,7 +403,7 @@ export default function ProdTimesheetFormPage() {
           </div>
 
           {/* ── Right panel: lines ── */}
-          <div className="ts-lines-panel">
+          <div className="ts-lines-panel" style={{ display: isMobile && mobTab === 'details' ? 'none' : undefined }}>
             <div className="ts-scroll-panel">
               <div style={{ display: 'contents', pointerEvents: isReadonly ? 'none' : undefined }}>
 

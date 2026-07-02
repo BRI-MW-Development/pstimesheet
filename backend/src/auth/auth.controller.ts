@@ -32,6 +32,20 @@ export class AuthController {
     return { ok: true };
   }
 
+  @Post('impersonate/:userId')
+  @HttpCode(200)
+  @UseGuards(PermissionGuard)
+  @RequirePermission('USERS', 'canWrite')
+  async impersonate(@Param('userId') targetUserId: string, @Req() req: any) {
+    const ip = ((req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()) || req.ip || '0.0.0.0';
+    const ua = (req.headers['user-agent'] as string) || '';
+    try {
+      return await this.authService.impersonateUser(req.currentUser.userId, targetUserId, ip, ua);
+    } catch (err: any) {
+      throw new HttpException({ message: err?.message || 'Impersonation failed' }, err?.status ?? HttpStatus.BAD_REQUEST);
+    }
+  }
+
   @Get('me')
   me(@Req() req: any) {
     return req.currentUser;

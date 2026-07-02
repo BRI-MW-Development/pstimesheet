@@ -147,6 +147,14 @@ export class TimesheetsService implements OnModuleInit {
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsLabourLine') AND name='comments')
           ALTER TABLE PSTsLabourLine ADD comments NVARCHAR(500) NULL;
       `);
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsLabourLine') AND name='nonProjectRelated')
+          ALTER TABLE PSTsLabourLine ADD nonProjectRelated BIT NOT NULL DEFAULT 0;
+      `);
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsLabourLine') AND name='nonProjectDetails')
+          ALTER TABLE PSTsLabourLine ADD nonProjectDetails NVARCHAR(500) NULL;
+      `);
       // Attachment table for PROJ timesheet lines
       await this.devPool.request().query(`
         IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='PSTsProjLineAttachment' AND xtype='U')
@@ -163,6 +171,10 @@ export class TimesheetsService implements OnModuleInit {
         );
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsProjLineAttachment') AND name='s3Key')
           ALTER TABLE PSTsProjLineAttachment ADD s3Key NVARCHAR(500) NULL;
+      `);
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='digitalTech')
+          ALTER TABLE PSTsHeader ADD digitalTech NVARCHAR(5) NULL;
       `);
     } catch (err) {
       this.logger.warn(`Schema init skipped (will retry on next request): ${(err as Error)?.message}`);
@@ -344,16 +356,20 @@ export class TimesheetsService implements OnModuleInit {
         .input('startTime',      mssql.NVarChar(10),  lr.startTime || null)
         .input('endTime',        mssql.NVarChar(10),  lr.endTime   || null)
         .input('durationMinutes',mssql.Int,           parseInt(lr.durationMinutes ?? lr.duration, 10) || 0)
-        .input('lineProjectId',  mssql.NVarChar(50),  lr.projectId    || null)
-        .input('taskTypeCode',   mssql.NVarChar(30),  lr.taskTypeCode || null)
-        .input('lineComments',   mssql.NVarChar(500), lr.comments     || null)
+        .input('lineProjectId',        mssql.NVarChar(50),  lr.projectId           || null)
+        .input('taskTypeCode',         mssql.NVarChar(30),  lr.taskTypeCode         || null)
+        .input('lineComments',         mssql.NVarChar(500), lr.comments             || null)
+        .input('nonProjectRelated',    mssql.Bit,           lr.nonProjectRelated ? 1 : 0)
+        .input('nonProjectDetails',    mssql.NVarChar(500), lr.nonProjectDetails    || null)
         .query(`
           INSERT INTO PSTsLabourLine
             (tsId, lineNumber, employeeCode, employeeName, departmentCode,
-             designation, startTime, endTime, durationMinutes, projectId, taskTypeCode, comments)
+             designation, startTime, endTime, durationMinutes, projectId, taskTypeCode, comments,
+             nonProjectRelated, nonProjectDetails)
           VALUES
             (@tsId, @lineNumber, @employeeCode, @employeeName, @departmentCode,
-             @designation, @startTime, @endTime, @durationMinutes, @lineProjectId, @taskTypeCode, @lineComments)
+             @designation, @startTime, @endTime, @durationMinutes, @lineProjectId, @taskTypeCode, @lineComments,
+             @nonProjectRelated, @nonProjectDetails)
         `);
 
       // Save attachment for PROJ lines — upload to S3 if available, otherwise store in DB
@@ -499,14 +515,15 @@ export class TimesheetsService implements OnModuleInit {
         .input('enteredByName',   mssql.NVarChar(150), n(body.entryPerson))
         .input('enteredByUserId', mssql.NVarChar(50),  n(body.enteredByUserId))
         .input('remarks',         mssql.NVarChar(500), n(body.remarks))
+        .input('digitalTech',     mssql.NVarChar(5),   n(body.digitalTech))
         .query<{ tsId: number }>(`
           INSERT INTO PSTsHeader
             (tsDocNo, tsType, entryDate, projectId, projectName, workOrderNo,
-             department_code, shiftCode, entered_by_name, entered_by_user_id, remarks, status)
+             department_code, shiftCode, entered_by_name, entered_by_user_id, remarks, digitalTech, status)
           OUTPUT INSERTED.tsId
           VALUES
             (@tsDocNo, @tsType, @entryDate, @projectId, @projectName, @workOrderNo,
-             @departmentCode, @shiftCode, @enteredByName, @enteredByUserId, @remarks,
+             @departmentCode, @shiftCode, @enteredByName, @enteredByUserId, @remarks, @digitalTech,
              'Draft')
         `);
 
@@ -547,6 +564,8 @@ export class TimesheetsService implements OnModuleInit {
     department?: string,
     userId?: string,
     seeAll?: boolean,
+    employeeCode?: string | null,
+    deptCode?: string | null,
   ): Promise<any[]> {
     const req = this.devPool.request();
     if (type)        req.input('tsType',      mssql.NVarChar(20),  type);
@@ -555,9 +574,26 @@ export class TimesheetsService implements OnModuleInit {
     if (dateTo)      req.input('dateTo',      mssql.NVarChar(20),  dateTo);
     if (status)      req.input('status',      mssql.NVarChar(30),  status);
     if (department)  req.input('department',  mssql.NVarChar(50),  department);
-    // Scope to own records when userId is known and user is not an approver/admin
-    const scopeToUser = userId && !seeAll;
-    if (scopeToUser)  req.input('userId',     mssql.NVarChar(50),  userId);
+
+    let scopeSql = '';
+
+    if (seeAll) {
+      // Admin / approver with All scope — no restriction
+      scopeSql = '';
+    } else if (deptCode) {
+      // OwnDept: see all timesheets for the user's assigned department regardless of who entered them
+      req.input('deptCode', mssql.NVarChar(50), deptCode);
+      scopeSql = `AND h.department_code = @deptCode`;
+    } else if (userId) {
+      // Own: see only timesheets the user entered or where their employee appears in a labour line
+      req.input('userId', mssql.NVarChar(50), userId);
+      if (employeeCode) {
+        req.input('empCode', mssql.NVarChar(100), employeeCode);
+        scopeSql = `AND (h.entered_by_user_id = @userId OR EXISTS (SELECT 1 FROM PSTsLabourLine l WHERE l.tsId = h.tsId AND l.employeeCode = @empCode))`;
+      } else {
+        scopeSql = `AND h.entered_by_user_id = @userId`;
+      }
+    }
 
     const result = await req.query(`
       SELECT
@@ -587,7 +623,7 @@ export class TimesheetsService implements OnModuleInit {
         ${dateTo      ? 'AND h.entryDate       <= @dateTo'      : ''}
         ${status      ? 'AND h.status           = @status'      : ''}
         ${department  ? 'AND h.department_code  = @department'  : ''}
-        ${scopeToUser ? 'AND (h.entered_by_user_id = @userId OR h.entered_by_user_id IS NULL)' : ''}
+        ${scopeSql}
       ORDER BY h.entryDate DESC, h.createdAt DESC
     `);
 
@@ -815,10 +851,12 @@ export class TimesheetsService implements OnModuleInit {
           endTime: end,
           durationMinutes,
           duration_hm: minutesToHm(durationMinutes),
-          projectId:    ci(r, 'projectId'),
-          taskTypeCode: ci(r, 'taskTypeCode'),
-          comments:     ci(r, 'comments'),
-          attachments:  attachByLine[r.lineNumber] ?? [],
+          projectId:          ci(r, 'projectId'),
+          taskTypeCode:       ci(r, 'taskTypeCode'),
+          comments:           ci(r, 'comments'),
+          nonProjectRelated:  Boolean(ci(r, 'nonProjectRelated')),
+          nonProjectDetails:  ci(r, 'nonProjectDetails') ?? '',
+          attachments:        attachByLine[r.lineNumber] ?? [],
         };
       }),
       materialLines:  material.recordset,
@@ -883,6 +921,7 @@ export class TimesheetsService implements OnModuleInit {
         .input('shiftCode',      mssql.NVarChar(30),  n(body.shift))
         .input('enteredByName',  mssql.NVarChar(150), n(body.entryPerson))
         .input('remarks',        mssql.NVarChar(500), n(body.remarks))
+        .input('digitalTech',    mssql.NVarChar(5),   n(body.digitalTech))
         .query(`
           UPDATE PSTsHeader SET
             entryDate       = @entryDate,
@@ -893,6 +932,7 @@ export class TimesheetsService implements OnModuleInit {
             shiftCode       = @shiftCode,
             entered_by_name = @enteredByName,
             remarks         = @remarks,
+            digitalTech     = @digitalTech,
             updatedAt       = SYSUTCDATETIME()
           WHERE tsId = @tsId
         `);
@@ -1247,14 +1287,22 @@ export class TimesheetsService implements OnModuleInit {
    *  - canWrite alone: regular worker who can edit their own drafts — not an approver
    *  - canReport alone: QC Inspector / report viewer — not an approver
    *  - canWrite + canReport: supervisor / manager — IS an approver */
+  async getRoleDataScope(roleCode: string): Promise<string> {
+    if (!roleCode) return 'All';
+    const res = await this.devPool.request()
+      .input('roleCode', mssql.NVarChar(30), roleCode)
+      .query<{ dataScope: string }>(`SELECT ISNULL(dataScope,'All') AS dataScope FROM PSTsRoles WHERE roleCode = @roleCode`);
+    return res.recordset[0]?.dataScope ?? 'All';
+  }
+
   async isTimesheetApprover(roleCode: string): Promise<boolean> {
     if (!roleCode) return false;
     const res = await this.devPool.request()
       .input('roleCode', mssql.NVarChar(30), roleCode)
       .query<{ cnt: number }>(`
         SELECT COUNT(*) AS cnt FROM PSTsRolePermissions
-        WHERE roleCode = @roleCode AND canWrite = 1 AND canReport = 1
-          AND module IN ('PROD','INST','PROJ')
+        WHERE roleCode = @roleCode AND module IN ('PROD','INST','PROJ')
+          AND (canApprove = 1 OR (canWrite = 1 AND canReport = 1))
       `);
     return (res.recordset[0]?.cnt ?? 0) > 0;
   }

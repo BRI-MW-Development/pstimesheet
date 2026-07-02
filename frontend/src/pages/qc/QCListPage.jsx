@@ -114,6 +114,7 @@ export default function QCListPage() {
     { key: 'projectName',  label: 'Project Name', sort: true },
     { key: 'workOrderNo',  label: 'Work Order',   sort: true },
     { key: 'qcDate',       label: 'QC Date',      sort: true,  render: (r) => formatDate(r.qcDate) },
+    { key: 'createdAt',    label: 'Created Date', sort: true,  render: (r) => formatDate(r.createdAt) },
     { key: 'qcInspector',  label: 'QC Inspector', sort: true },
     {
       key: 'status', label: 'Status', sort: true, width: '110px',

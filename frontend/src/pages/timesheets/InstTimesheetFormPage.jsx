@@ -40,6 +40,14 @@ export default function InstTimesheetFormPage() {
   const isView = useLocation().pathname.endsWith('/view');
   const fromApprovals = searchParams.get('from') === 'approvals';
   const isApprover = fromApprovals || permissions.some((p) => p.module === 'INST' && p.canWrite && p.canReport);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  const [mobTab, setMobTab] = useState('details');
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+
   const [showReject, setShowReject] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -51,6 +59,7 @@ export default function InstTimesheetFormPage() {
     department: '',
     date: new Date().toISOString().slice(0, 10),
     shift: '',
+    digitalTech: '',
   });
   const [isDirty, setIsDirty] = useState(false);
   const [wocWarning, setWocWarning] = useState('');
@@ -94,6 +103,7 @@ export default function InstTimesheetFormPage() {
       department: existing.department_code ?? existing.department ?? '',
       date: existing.entryDate?.slice(0, 10) ?? '',
       shift: existing.shiftCode ?? existing.shift ?? '',
+      digitalTech: existing.digitalTech ?? '',
     });
     setLabourRows(
       existing.labourLines?.length
@@ -208,6 +218,7 @@ export default function InstTimesheetFormPage() {
     if (!header.workOrder?.trim())  { toast('Work Order is required.',  'error'); return; }
     if (!header.department?.trim()) { toast('Department is required.',  'error'); return; }
     if (!header.shift?.trim())      { toast('Shift is required.',       'error'); return; }
+    if (isDigitalDept && !header.digitalTech) { toast('Digital Tech is required for Digital department.', 'error'); return; }
 
     // #15 — no future dates
     if (!header.date) { toast('Date is required.', 'error'); return; }
@@ -295,6 +306,7 @@ export default function InstTimesheetFormPage() {
       department: header.department,
       date: header.date,
       shift: header.shift,
+      digitalTech: isDigitalDept ? header.digitalTech : null,
       entryPerson,
       labourRows,
       materialRows,
@@ -349,11 +361,13 @@ export default function InstTimesheetFormPage() {
   const vehOptions   = useMemo(() => vehicles.map((v) => ({ value: v.vehicleId ?? v.plateNo, label: `${v.plateNo} – ${v.vehicleType ?? ''}` })), [vehicles]);
   const accOptions   = useMemo(() => accessEquipment.map((a) => ({ value: a.equipmentName ?? a.name, label: a.equipmentName ?? a.name })), [accessEquipment]);
 
+  const isDigitalDept = (header.department ?? '').toLowerCase().includes('digital');
+
   const tsStatus = existing?.status ?? null;
   const isReadonly = isView || tsStatus === 'Approved' || tsStatus === 'Rejected' || (tsStatus === 'Submitted' && !isApprover);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
       <form onSubmit={handleSubmit} onChange={() => !isDirty && setIsDirty(true)} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="ts-modal-head" style={{ padding: '16px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -365,9 +379,22 @@ export default function InstTimesheetFormPage() {
           <button type="button" className="btn btn-ghost" onClick={() => confirmLeave(fromApprovals ? '/timesheets/pending-approvals' : '/timesheets/inst')}>← Back</button>
         </div>
 
-        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden' }}>
+        {isMobile && (
+          <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+            {[{ key: 'details', label: 'Details' }, { key: 'entries', label: 'Entries' }].map(({ key, label }) => (
+              <button key={key} type="button" onClick={() => setMobTab(key)}
+                style={{ flex: 1, padding: '11px 8px', fontSize: 13, fontWeight: 600, background: 'transparent', border: 'none',
+                  borderBottom: `3px solid ${mobTab === key ? 'var(--accent)' : 'transparent'}`,
+                  color: mobTab === key ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer', marginBottom: -2 }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : undefined }}>
           {/* Left panel — header fields */}
-          <div className="ts-form-panel" style={{ pointerEvents: isReadonly ? 'none' : undefined }}>
+          <div className="ts-form-panel" style={{ pointerEvents: isReadonly ? 'none' : undefined, display: isMobile && mobTab === 'entries' ? 'none' : undefined }}>
             <div className="ts-field-group">
               <label className="ts-field-label">Project ID <span style={{ color: 'var(--red)' }}>*</span></label>
               <SearchSelect
@@ -398,7 +425,7 @@ export default function InstTimesheetFormPage() {
               <SearchSelect
                 options={deptOptions}
                 value={header.department}
-                onChange={(v) => { setIsDirty(true); setHeader((h) => ({ ...h, department: v })); }}
+                onChange={(v) => { setIsDirty(true); setHeader((h) => ({ ...h, department: v, digitalTech: '' })); }}
                 placeholder="Select department…"
               />
             </div>
@@ -419,6 +446,21 @@ export default function InstTimesheetFormPage() {
               />
             </div>
 
+            {isDigitalDept && (
+              <div className="ts-field-group">
+                <label className="ts-field-label">Digital Tech <span style={{ color: 'var(--red)' }}>*</span></label>
+                <select
+                  className="form-control ts-input"
+                  value={header.digitalTech}
+                  onChange={(e) => { setIsDirty(true); setHeader((h) => ({ ...h, digitalTech: e.target.value })); }}
+                >
+                  <option value="">Select…</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+              </div>
+            )}
+
             <div className="ts-field-group">
               <label className="ts-field-label">Entry Person</label>
               <input className="form-control ts-input ts-readonly" value={entryPerson} readOnly />
@@ -436,7 +478,7 @@ export default function InstTimesheetFormPage() {
           </div>
 
           {/* Right panel — line sections */}
-          <div className="ts-lines-panel">
+          <div className="ts-lines-panel" style={{ display: isMobile && mobTab === 'details' ? 'none' : undefined }}>
             <div className="ts-scroll-panel">
               <div style={{ display: 'contents', pointerEvents: isReadonly ? 'none' : undefined }}>
 
