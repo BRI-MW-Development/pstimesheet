@@ -81,12 +81,25 @@ export class TimesheetsController {
     @Query('department')  department?: string,
     @Req() req?: any,
   ) {
-    const roleCode = req?.currentUser?.roleCode ?? '';
+    const roleCode      = req?.currentUser?.roleCode      ?? '';
+    const userId        = req?.currentUser?.userId        ?? '';
+    const employeeCode  = req?.currentUser?.employeeCode  ?? null;
+    const departmentCode = req?.currentUser?.departmentCode ?? null;
     await this.timesheetsService.assertPermission(roleCode, this.typeToModule(type), 'canRead');
-    const userId = req?.currentUser?.userId;
+    const [dataScope, isApprover] = await Promise.all([
+      this.timesheetsService.getRoleDataScope(roleCode),
+      this.timesheetsService.isTimesheetApprover(roleCode),
+    ]);
     const isAdmin = ['Admin', 'Manager', 'Supervisor'].includes(roleCode);
-    const seeAll = isAdmin || (await this.timesheetsService.isTimesheetApprover(roleCode));
-    return this.timesheetsService.list(type, workOrderNo, dateFrom, dateTo, status, department, userId, seeAll);
+
+    // Three-way scope:
+    //  'All' + admin/approver → seeAll (no filter)
+    //  'OwnDept'             → filter by the user's assigned department_code
+    //  anything else         → filter by entered_by_user_id / employee code
+    const seeAll  = dataScope === 'All' && (isAdmin || isApprover);
+    const deptCode = dataScope === 'OwnDept' ? departmentCode : null;
+
+    return this.timesheetsService.list(type, workOrderNo, dateFrom, dateTo, status, department, userId, seeAll, employeeCode, deptCode);
   }
 
   @Get('pending-approvals')
@@ -105,7 +118,7 @@ export class TimesheetsController {
     for (const ts of all) {
       const check = await this.approvalSettingsService.canUserApproveTimesheet(
         userId, displayName, roleCode,
-        { tsType: ts.tsType, department_code: ts.department_code, shiftCode: ts.shiftCode, projectId: ts.projectId, workOrderNo: ts.workOrderNo },
+        { tsType: ts.tsType, department_code: ts.department_code, shiftCode: ts.shiftCode, projectId: ts.projectId, workOrderNo: ts.workOrderNo, digitalTech: ts.digitalTech },
         true,
       );
       this.logger.debug(`[pending-approvals] ${ts.tsDocNo} (${ts.tsType}) user=${userId} displayName="${displayName}" → allowed=${check.allowed} reason="${check.reason}"`);
@@ -209,9 +222,15 @@ export class TimesheetsController {
         approverSetting?.approverEmails ?? [],
         submitterEmail,
         `Timesheet ${docNo} submitted for approval`,
-        `<p>A ${typeLabel} timesheet <strong>${docNo}</strong> has been submitted for approval.</p>
-         <p><b>Submitted by:</b> ${byName}<br><b>Date:</b> ${ts.entryDate}<br><b>Department:</b> ${ts.department_code || '—'}</p>
-         <p>Please log in to review and approve or reject it.</p>`,
+        EmailService.template('Timesheet Submitted for Approval', `
+          <p style="margin:0 0 16px">A ${typeLabel} timesheet requires your approval.</p>
+          <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;width:40%">Document No.</td><td style="padding:12px 16px;font-weight:700;border-bottom:1px solid #e5e7eb">${docNo}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb">Submitted By</td><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb">${byName}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb">Date</td><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb">${ts.entryDate}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px">Department</td><td style="padding:12px 16px">${ts.department_code || '—'}</td></tr>
+          </table>
+        `),
       );
       return { ok: true };
     } catch (err) {
@@ -242,8 +261,18 @@ export class TimesheetsController {
         approverSetting?.approverEmails ?? [],
         submitterEmail,
         `Timesheet ${docNo} approved`,
-        `<p>Hi ${ts.entered_by_name},</p>
-         <p>Your ${typeLabel} timesheet <strong>${docNo}</strong> has been <span style="color:green"><b>approved</b></span> by ${byName}.</p>`,
+        EmailService.template('Timesheet Approved', `
+          <p style="margin:0 0 16px">Hi ${ts.entered_by_name},</p>
+          <p style="margin:0 0 20px;color:#444">Your timesheet has been approved.</p>
+          <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;width:40%">Document No.</td><td style="padding:12px 16px;font-weight:700;border-bottom:1px solid #e5e7eb">${docNo}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb">Type</td><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb">${typeLabel}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px">Approved By</td><td style="padding:12px 16px">${byName}</td></tr>
+          </table>
+          <div style="margin:20px 0;padding:12px 16px;background:#d1fae5;border-left:4px solid #10b981;border-radius:0 6px 6px 0;font-size:13px;color:#065f46">
+            ✓ Approved
+          </div>
+        `),
       );
       return { ok: true };
     } catch (err) {
@@ -273,10 +302,19 @@ export class TimesheetsController {
         approverSetting?.approverEmails ?? [],
         submitterEmail,
         `Timesheet ${docNo} rejected`,
-        `<p>Hi ${ts.entered_by_name},</p>
-         <p>Your ${typeLabel} timesheet <strong>${docNo}</strong> has been <span style="color:red"><b>rejected</b></span> by ${byName}.</p>
-         <p><b>Reason:</b> ${body.reason || '—'}</p>
-         <p>Please correct and resubmit.</p>`,
+        EmailService.template('Timesheet Rejected', `
+          <p style="margin:0 0 16px">Hi ${ts.entered_by_name},</p>
+          <p style="margin:0 0 20px;color:#444">Your timesheet has been rejected and requires correction.</p>
+          <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;width:40%">Document No.</td><td style="padding:12px 16px;font-weight:700;border-bottom:1px solid #e5e7eb">${docNo}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb">Type</td><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb">${typeLabel}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px">Rejected By</td><td style="padding:12px 16px">${byName}</td></tr>
+          </table>
+          <div style="margin:20px 0;padding:12px 16px;background:#fee2e2;border-left:4px solid #ef4444;border-radius:0 6px 6px 0;font-size:13px;color:#991b1b">
+            <strong>Reason:</strong> ${body.reason || '—'}
+          </div>
+          <p style="margin:0;color:#444;font-size:14px">Please correct and resubmit your timesheet.</p>
+        `),
       );
       return { ok: true };
     } catch (err) {

@@ -237,47 +237,59 @@ export class EmailSettingsService implements OnModuleInit {
   // ── Templates ──
 
   getDefaultTemplate(key: string): { subject: string; bodyHtml: string } {
+    const wrap = (title: string, body: string, banner = '') => `
+<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1a1a1a">
+  <div style="background:#0f7173;padding:20px 24px;border-radius:8px 8px 0 0">
+    <h2 style="margin:0;color:#fff;font-size:20px">PS TimeSheet — ${title}</h2>
+  </div>
+  <div style="border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px">
+    ${body}
+    ${banner}
+    <div style="margin-top:24px"><a href="https://apps.professional-signs.com/login" style="display:inline-block;padding:12px 24px;background:#0f7173;color:#fff;text-decoration:none;border-radius:6px;font-weight:700;font-size:14px">Open PS TimeSheet</a></div>
+    <p style="margin:24px 0 0;font-size:12px;color:#9ca3af">If you did not expect this email, please contact your administrator.</p>
+  </div>
+</div>`;
+
+    const table = (rows: [string, string][]) => `
+<table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+  ${rows.map(([label, val], i) => `
+  <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;${i < rows.length - 1 ? 'border-bottom:1px solid #e5e7eb;' : ''}width:40%">${label}</td>
+      <td style="padding:12px 16px;${i < rows.length - 1 ? 'border-bottom:1px solid #e5e7eb;' : ''}font-weight:${i === 0 ? '700' : '400'}">${val}</td></tr>`).join('')}
+</table>`;
+
     const defaults: Record<string, { subject: string; bodyHtml: string }> = {
       TIMESHEET_SUBMIT: {
-        subject: '[TimesheetPro] Timesheet {{docNo}} Submitted for Approval',
-        bodyHtml: `<p>A timesheet has been submitted and requires your approval.</p>
-<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:14px">
-  <tr><td style="color:#6b7280;padding-right:16px">Document No</td><td><strong>{{docNo}}</strong></td></tr>
-  <tr><td style="color:#6b7280">Type</td><td>{{type}}</td></tr>
-  <tr><td style="color:#6b7280">Submitted By</td><td>{{submitter}}</td></tr>
-  <tr><td style="color:#6b7280">Department</td><td>{{department}}</td></tr>
-  <tr><td style="color:#6b7280">Date</td><td>{{date}}</td></tr>
-</table>
-<p style="margin-top:16px">Please review and action this timesheet in TimesheetPro.</p>`,
+        subject: 'PS TimeSheet — Timesheet {{docNo}} Submitted for Approval',
+        bodyHtml: wrap('Timesheet Submitted for Approval',
+          `<p style="margin:0 0 16px;color:#444">A {{type}} timesheet requires your approval.</p>
+          ${table([['Document No.', '<strong>{{docNo}}</strong>'], ['Submitted By', '{{submitter}}'], ['Department', '{{department}}'], ['Date', '{{date}}']])}`,
+        ),
       },
       TIMESHEET_APPROVE: {
-        subject: '[TimesheetPro] Timesheet {{docNo}} Approved',
-        bodyHtml: `<p>Your timesheet has been approved.</p>
-<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:14px">
-  <tr><td style="color:#6b7280;padding-right:16px">Document No</td><td><strong>{{docNo}}</strong></td></tr>
-  <tr><td style="color:#6b7280">Approved By</td><td>{{approver}}</td></tr>
-  <tr><td style="color:#6b7280">Date</td><td>{{date}}</td></tr>
-</table>`,
+        subject: 'PS TimeSheet — Timesheet {{docNo}} Approved',
+        bodyHtml: wrap('Timesheet Approved',
+          `<p style="margin:0 0 16px">Hi {{submitter}},</p>
+          <p style="margin:0 0 20px;color:#444">Your timesheet has been approved.</p>
+          ${table([['Document No.', '<strong>{{docNo}}</strong>'], ['Approved By', '{{approver}}'], ['Date', '{{date}}']])}`,
+          `<div style="margin:20px 0;padding:12px 16px;background:#d1fae5;border-left:4px solid #10b981;border-radius:0 6px 6px 0;font-size:13px;color:#065f46">✓ Approved</div>`,
+        ),
       },
       TIMESHEET_REJECT: {
-        subject: '[TimesheetPro] Timesheet {{docNo}} Rejected',
-        bodyHtml: `<p>Your timesheet has been rejected.</p>
-<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:14px">
-  <tr><td style="color:#6b7280;padding-right:16px">Document No</td><td><strong>{{docNo}}</strong></td></tr>
-  <tr><td style="color:#6b7280">Rejected By</td><td>{{approver}}</td></tr>
-  <tr><td style="color:#6b7280">Reason</td><td>{{reason}}</td></tr>
-  <tr><td style="color:#6b7280">Date</td><td>{{date}}</td></tr>
-</table>
-<p style="margin-top:16px">Please update and resubmit your timesheet in TimesheetPro.</p>`,
+        subject: 'PS TimeSheet — Timesheet {{docNo}} Rejected',
+        bodyHtml: wrap('Timesheet Rejected',
+          `<p style="margin:0 0 16px">Hi {{submitter}},</p>
+          <p style="margin:0 0 20px;color:#444">Your timesheet has been rejected and requires correction.</p>
+          ${table([['Document No.', '<strong>{{docNo}}</strong>'], ['Rejected By', '{{approver}}'], ['Date', '{{date}}']])}`,
+          `<div style="margin:20px 0;padding:12px 16px;background:#fee2e2;border-left:4px solid #ef4444;border-radius:0 6px 6px 0;font-size:13px;color:#991b1b"><strong>Reason:</strong> {{reason}}</div>
+          <p style="margin:0;color:#444;font-size:14px">Please correct and resubmit your timesheet.</p>`,
+        ),
       },
       WO_COMPLETE: {
-        subject: '[TimesheetPro] Work Order {{workOrder}} Completed',
-        bodyHtml: `<p>A work order has been marked as complete.</p>
-<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:14px">
-  <tr><td style="color:#6b7280;padding-right:16px">Work Order</td><td><strong>{{workOrder}}</strong></td></tr>
-  <tr><td style="color:#6b7280">Completed By</td><td>{{submitter}}</td></tr>
-  <tr><td style="color:#6b7280">Date</td><td>{{date}}</td></tr>
-</table>`,
+        subject: 'PS TimeSheet — Work Order {{workOrder}} Marked Complete',
+        bodyHtml: wrap('Work Order Complete',
+          `<p style="margin:0 0 20px;color:#444">A Work Order has been marked as complete.</p>
+          ${table([['Work Order', '<strong>{{workOrder}}</strong>'], ['Completed By', '{{submitter}}'], ['Date', '{{date}}']])}`,
+        ),
       },
     };
     return defaults[key] ?? { subject: '', bodyHtml: '' };

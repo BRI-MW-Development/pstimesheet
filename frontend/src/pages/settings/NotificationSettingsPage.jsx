@@ -34,13 +34,6 @@ const NOTIF_TYPES = [
     privileged:  false,
   },
   {
-    key:         'proj_missing',
-    label:       'Weekly PROJ Reminder',
-    description: 'Alert from Wednesday onward if no Projects timesheet has been submitted for the current week.',
-    audience:    'PROJ users',
-    privileged:  false,
-  },
-  {
     key:         'qc_status',
     label:       'QC Result',
     description: 'Notification when a QC record you are the inspector for passes or fails (last 7 days).',

@@ -4,9 +4,25 @@ import * as mssql from 'mssql';
 import { DEV_SQL_POOL } from '../database/database.constants';
 import { EmailSettingsService } from '../email-settings/email-settings.service';
 
+const APP_URL = process.env.APP_URL || 'https://apps.professional-signs.com/login';
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
+
+  static template(title: string, bodyHtml: string, showLoginBtn = true): string {
+    return `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1a1a1a">
+        <div style="background:#0f7173;padding:20px 24px;border-radius:8px 8px 0 0">
+          <h2 style="margin:0;color:#fff;font-size:20px">PS TimeSheet — ${title}</h2>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px">
+          ${bodyHtml}
+          ${showLoginBtn ? `<div style="margin-top:24px"><a href="${APP_URL}" style="display:inline-block;padding:12px 24px;background:#0f7173;color:#fff;text-decoration:none;border-radius:6px;font-weight:700;font-size:14px">Open PS TimeSheet</a></div>` : ''}
+          <p style="margin:24px 0 0;font-size:12px;color:#9ca3af">If you did not expect this email, please contact your administrator.</p>
+        </div>
+      </div>`;
+  }
 
   constructor(@Inject(DEV_SQL_POOL) private readonly pool: mssql.ConnectionPool) {}
 

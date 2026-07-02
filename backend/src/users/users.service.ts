@@ -4,6 +4,7 @@ import * as mssql from 'mssql';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { S3Service } from '../s3/s3.service';
+import { EmailService } from '../email/email.service';
 import { DEV_SQL_POOL } from '../database/database.constants';
 
 const BCRYPT_ROUNDS = 12;
@@ -33,6 +34,7 @@ export class UsersService implements OnModuleInit {
   constructor(
     @Inject(DEV_SQL_POOL) private readonly pool: ConnectionPool,
     private readonly s3: S3Service,
+    private readonly emailService: EmailService,
   ) {}
 
   async onModuleInit() {
@@ -130,7 +132,7 @@ export class UsersService implements OnModuleInit {
   async create(body: {
     username: string; displayName: string; password: string;
     roleCode: string; email?: string; phone?: string; status: string;
-    employeeCode?: string; departmentCode?: string;
+    employeeCode?: string; departmentCode?: string; mustChangePassword?: boolean;
   }): Promise<User> {
     if (!body.username?.trim())    throw new BadRequestException('username is required');
     if (!body.displayName?.trim()) throw new BadRequestException('displayName is required');
@@ -152,11 +154,12 @@ export class UsersService implements OnModuleInit {
         .input('email',          mssql.NVarChar(150), body.email          || null)
         .input('phone',          mssql.NVarChar(30),  body.phone          || null)
         .input('status',         mssql.NVarChar(10),  body.status         || 'Active')
-        .input('employeeCode',   mssql.NVarChar(30),  body.employeeCode   || null)
-        .input('departmentCode', mssql.NVarChar(30),  body.departmentCode || null)
+        .input('employeeCode',      mssql.NVarChar(30),  body.employeeCode   || null)
+        .input('departmentCode',    mssql.NVarChar(30),  body.departmentCode || null)
+        .input('mustChangePassword', mssql.Bit,          body.mustChangePassword ? 1 : 0)
         .query(`
-          INSERT INTO PSTsUsers (userId, username, displayName, passwordHash, roleCode, email, phone, status, employeeCode, departmentCode)
-          VALUES (@userId, @username, @displayName, @passwordHash, @roleCode, @email, @phone, @status, @employeeCode, @departmentCode)
+          INSERT INTO PSTsUsers (userId, username, displayName, passwordHash, roleCode, email, phone, status, employeeCode, departmentCode, mustChangePassword)
+          VALUES (@userId, @username, @displayName, @passwordHash, @roleCode, @email, @phone, @status, @employeeCode, @departmentCode, @mustChangePassword)
         `);
     } catch (err: any) {
       if (err?.number === 2627 || err?.number === 2601)
@@ -171,7 +174,7 @@ export class UsersService implements OnModuleInit {
   async update(userId: string, body: {
     displayName?: string; password?: string;
     roleCode?: string; email?: string; phone?: string; status?: string;
-    employeeCode?: string; departmentCode?: string;
+    employeeCode?: string; departmentCode?: string; mustChangePassword?: boolean;
   }): Promise<User> {
     const existing = await this.findOne(userId);
 
@@ -190,19 +193,21 @@ export class UsersService implements OnModuleInit {
       .input('email',          mssql.NVarChar(150), body.email          !== undefined ? (body.email  || null) : existing.email)
       .input('phone',          mssql.NVarChar(30),  body.phone          !== undefined ? (body.phone  || null) : existing.phone)
       .input('status',         mssql.NVarChar(10),  body.status               ?? existing.status)
-      .input('employeeCode',   mssql.NVarChar(30),  body.employeeCode   !== undefined ? (body.employeeCode   || null) : existing.employeeCode)
-      .input('departmentCode', mssql.NVarChar(30),  body.departmentCode !== undefined ? (body.departmentCode || null) : existing.departmentCode)
+      .input('employeeCode',       mssql.NVarChar(30),  body.employeeCode   !== undefined ? (body.employeeCode   || null) : existing.employeeCode)
+      .input('departmentCode',     mssql.NVarChar(30),  body.departmentCode !== undefined ? (body.departmentCode || null) : existing.departmentCode)
+      .input('mustChangePassword', mssql.Bit,           body.mustChangePassword !== undefined ? (body.mustChangePassword ? 1 : 0) : (existing.mustChangePassword ? 1 : 0))
       .query(`
         UPDATE PSTsUsers
-        SET    displayName    = @displayName,
-               passwordHash   = CASE WHEN @passwordHash IS NOT NULL THEN @passwordHash ELSE passwordHash END,
-               roleCode       = @roleCode,
-               email          = @email,
-               phone          = @phone,
-               status         = @status,
-               employeeCode   = @employeeCode,
-               departmentCode = @departmentCode,
-               updatedAt      = GETDATE()
+        SET    displayName        = @displayName,
+               passwordHash       = CASE WHEN @passwordHash IS NOT NULL THEN @passwordHash ELSE passwordHash END,
+               roleCode           = @roleCode,
+               email              = @email,
+               phone              = @phone,
+               status             = @status,
+               employeeCode       = @employeeCode,
+               departmentCode     = @departmentCode,
+               mustChangePassword = @mustChangePassword,
+               updatedAt          = GETDATE()
         WHERE  userId = @userId
       `);
 
@@ -232,10 +237,42 @@ export class UsersService implements OnModuleInit {
 
   async remove(userId: string): Promise<{ message: string }> {
     await this.findOne(userId);
+    const tsCount = await this.pool.request()
+      .input('userId', mssql.NVarChar(30), userId)
+      .query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM PSTsHeader WHERE entered_by_user_id = @userId AND isDeleted = 0`);
+    if ((tsCount.recordset[0]?.cnt ?? 0) > 0)
+      throw new BadRequestException(`Cannot delete user with ${tsCount.recordset[0].cnt} timesheet(s). Deactivate the user instead.`);
     await this.pool.request()
       .input('userId', mssql.NVarChar(30), userId)
       .query(`DELETE FROM PSTsUsers WHERE userId = @userId`);
     return { message: `User '${userId}' deleted` };
+  }
+
+  async getLoginHistory(userId: string): Promise<any[]> {
+    const res = await this.pool.request()
+      .input('userId', mssql.NVarChar(30), userId)
+      .query(`
+        SELECT TOP 30 id, username,
+               CONVERT(VARCHAR(24), attemptAt, 126) AS attemptAt,
+               success, ipAddress, city, country, failReason
+        FROM   PSTsLoginHistory
+        WHERE  userId = @userId
+        ORDER  BY attemptAt DESC
+      `);
+    return res.recordset;
+  }
+
+  async getAuditHistory(userId: string): Promise<any[]> {
+    const res = await this.pool.request()
+      .input('userId', mssql.NVarChar(30), userId)
+      .query(`
+        SELECT TOP 50 id, action, performedByName, details,
+               CONVERT(VARCHAR(24), createdAt, 126) AS createdAt
+        FROM   PSTsAuditLog
+        WHERE  docType = 'USER' AND docRef = @userId
+        ORDER  BY createdAt DESC
+      `);
+    return res.recordset;
   }
 
   async unlock(userId: string): Promise<{ message: string }> {
@@ -324,5 +361,28 @@ export class UsersService implements OnModuleInit {
       [base[i], base[j]] = [base[j], base[i]];
     }
     return base.join('');
+  }
+
+  async sendCredentials(userId: string, body: { email: string; username: string; password: string; displayName?: string }): Promise<{ ok: boolean; reason?: string }> {
+    if (!body.email) throw new BadRequestException('Email address is required');
+    const html = EmailService.template('Login Credentials', `
+      <p style="margin:0 0 16px">Hi ${body.displayName || body.username},</p>
+      <p style="margin:0 0 20px;color:#444">Your account has been created. Use the credentials below to log in.</p>
+      <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+        <tr>
+          <td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;width:40%">Username</td>
+          <td style="padding:12px 16px;font-family:monospace;font-size:15px;font-weight:700;border-bottom:1px solid #e5e7eb">${body.username}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;width:40%">Temporary Password</td>
+          <td style="padding:12px 16px;font-family:monospace;font-size:15px;font-weight:700;color:#0f7173;letter-spacing:2px">${body.password}</td>
+        </tr>
+      </table>
+      <div style="margin:20px 0;padding:12px 16px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:0 6px 6px 0;font-size:13px;color:#92400e">
+        ⚠ You will be required to change your password on your first login.
+      </div>
+    `);
+
+    return this.emailService.send(body.email, 'Your PS TimeSheet Login Credentials', html);
   }
 }

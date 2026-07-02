@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as mssql from 'mssql';
 import { DEV_SQL_POOL } from '../database/database.constants';
 
@@ -9,72 +9,65 @@ export class ApprovalSettingsService implements OnModuleInit {
   constructor(@Inject(DEV_SQL_POOL) private readonly pool: mssql.ConnectionPool) {}
 
   async onModuleInit() {
-    try {
-      await this.pool.request().query(`
-        IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='PSApprovalSettings' AND xtype='U')
-        CREATE TABLE PSApprovalSettings (
-          id             INT IDENTITY(1,1) PRIMARY KEY,
-          module         NVARCHAR(20)  NOT NULL DEFAULT 'ALL',
-          department     NVARCHAR(100) NOT NULL DEFAULT '',
-          approverName   NVARCHAR(200),
-          approverEmail  NVARCHAR(200),
-          approverUserId NVARCHAR(50),
-          approverNames  NVARCHAR(MAX),
-          approverEmails NVARCHAR(MAX),
-          approverUserIds NVARCHAR(MAX),
-          anyApprover    BIT NOT NULL DEFAULT 1,
-          createdAt      DATETIME DEFAULT GETDATE(),
-          updatedAt      DATETIME DEFAULT GETDATE()
-        )
-      `);
-      await this.pool.request().query(`
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='approverNames')
-          ALTER TABLE PSApprovalSettings ADD approverNames NVARCHAR(MAX) NULL;
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='approverEmails')
-          ALTER TABLE PSApprovalSettings ADD approverEmails NVARCHAR(MAX) NULL;
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='approverUserIds')
-          ALTER TABLE PSApprovalSettings ADD approverUserIds NVARCHAR(MAX) NULL;
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='anyApprover')
-          ALTER TABLE PSApprovalSettings ADD anyApprover BIT NOT NULL DEFAULT 1;
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='module')
-          ALTER TABLE PSApprovalSettings ADD module NVARCHAR(20) NOT NULL DEFAULT 'ALL';
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='criteria')
-          ALTER TABLE PSApprovalSettings ADD criteria NVARCHAR(MAX) NULL;
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='filterLogic')
-          ALTER TABLE PSApprovalSettings ADD filterLogic NVARCHAR(500) NULL;
-      `);
-      await this.pool.request().query(`
-        EXEC('UPDATE PSApprovalSettings SET approverNames = approverName WHERE approverNames IS NULL AND approverName IS NOT NULL');
-        EXEC('UPDATE PSApprovalSettings SET approverEmails = approverEmail WHERE approverEmails IS NULL AND approverEmail IS NOT NULL');
-      `);
-      await this.pool.request().query(`
-        IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='PSEmailSettings' AND xtype='U')
-        CREATE TABLE PSEmailSettings (
-          id        INT IDENTITY(1,1) PRIMARY KEY,
-          smtpHost  NVARCHAR(200),
-          smtpPort  INT DEFAULT 587,
-          smtpUser  NVARCHAR(200),
-          smtpPass  NVARCHAR(500),
-          fromEmail NVARCHAR(200),
-          fromName  NVARCHAR(200),
-          enabled   BIT DEFAULT 0,
-          updatedAt DATETIME DEFAULT GETDATE()
-        )
-      `);
-      // Ensure PSTsHeader has approval + submission tracking columns
-      await this.pool.request().query(`
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='rejectionReason')
-          ALTER TABLE PSTsHeader ADD rejectionReason NVARCHAR(500) NULL;
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='approvedBy')
-          ALTER TABLE PSTsHeader ADD approvedBy NVARCHAR(200) NULL;
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='approvedAt')
-          ALTER TABLE PSTsHeader ADD approvedAt DATETIME NULL;
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='submittedAt')
-          ALTER TABLE PSTsHeader ADD submittedAt DATETIME NULL;
-      `);
-    } catch (err) {
-      this.logger.warn(`Schema init skipped (will retry on next request): ${(err as Error)?.message}`);
-    }
+    const run = async (label: string, sql: string) => {
+      try { await this.pool.request().query(sql); }
+      catch (err) { this.logger.warn(`Schema step "${label}" failed: ${(err as Error)?.message}`); }
+    };
+
+    await run('create PSApprovalSettings', `
+      IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='PSApprovalSettings' AND xtype='U')
+      CREATE TABLE PSApprovalSettings (
+        id             INT IDENTITY(1,1) PRIMARY KEY,
+        module         NVARCHAR(20)  NOT NULL DEFAULT 'ALL',
+        department     NVARCHAR(100) NOT NULL DEFAULT '',
+        approverName   NVARCHAR(200),
+        approverEmail  NVARCHAR(200),
+        approverUserId NVARCHAR(50),
+        approverNames  NVARCHAR(MAX),
+        approverEmails NVARCHAR(MAX),
+        approverUserIds NVARCHAR(MAX),
+        anyApprover    BIT NOT NULL DEFAULT 1,
+        criteria       NVARCHAR(MAX),
+        filterLogic    NVARCHAR(500),
+        createdAt      DATETIME DEFAULT GETDATE(),
+        updatedAt      DATETIME DEFAULT GETDATE()
+      )
+    `);
+    await run('drop unique dept constraint', `
+      DECLARE @con NVARCHAR(200) = (
+        SELECT name FROM sys.key_constraints
+        WHERE parent_object_id = OBJECT_ID('PSApprovalSettings') AND type = 'UQ'
+      );
+      IF @con IS NOT NULL
+        EXEC('ALTER TABLE PSApprovalSettings DROP CONSTRAINT [' + @con + ']')
+    `);
+    await run('add approverNames',   `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='approverNames')   ALTER TABLE PSApprovalSettings ADD approverNames   NVARCHAR(MAX) NULL`);
+    await run('add approverEmails',  `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='approverEmails')  ALTER TABLE PSApprovalSettings ADD approverEmails  NVARCHAR(MAX) NULL`);
+    await run('add approverUserIds', `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='approverUserIds') ALTER TABLE PSApprovalSettings ADD approverUserIds NVARCHAR(MAX) NULL`);
+    await run('add anyApprover',     `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='anyApprover')     ALTER TABLE PSApprovalSettings ADD anyApprover     BIT NOT NULL DEFAULT 1`);
+    await run('add module',          `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='module')          ALTER TABLE PSApprovalSettings ADD module          NVARCHAR(20) NOT NULL DEFAULT 'ALL'`);
+    await run('add criteria',        `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='criteria')        ALTER TABLE PSApprovalSettings ADD criteria        NVARCHAR(MAX) NULL`);
+    await run('add filterLogic',     `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSApprovalSettings') AND name='filterLogic')     ALTER TABLE PSApprovalSettings ADD filterLogic     NVARCHAR(500) NULL`);
+    await run('backfill names',      `UPDATE PSApprovalSettings SET approverNames  = approverName  WHERE approverNames  IS NULL AND approverName  IS NOT NULL`);
+    await run('backfill emails',     `UPDATE PSApprovalSettings SET approverEmails = approverEmail WHERE approverEmails IS NULL AND approverEmail IS NOT NULL`);
+    await run('create PSEmailSettings', `
+      IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='PSEmailSettings' AND xtype='U')
+      CREATE TABLE PSEmailSettings (
+        id        INT IDENTITY(1,1) PRIMARY KEY,
+        smtpHost  NVARCHAR(200),
+        smtpPort  INT DEFAULT 587,
+        smtpUser  NVARCHAR(200),
+        smtpPass  NVARCHAR(500),
+        fromEmail NVARCHAR(200),
+        fromName  NVARCHAR(200),
+        enabled   BIT DEFAULT 0,
+        updatedAt DATETIME DEFAULT GETDATE()
+      )
+    `);
+    await run('add rejectionReason', `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='rejectionReason') ALTER TABLE PSTsHeader ADD rejectionReason NVARCHAR(500) NULL`);
+    await run('add approvedBy',      `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='approvedBy')      ALTER TABLE PSTsHeader ADD approvedBy      NVARCHAR(200) NULL`);
+    await run('add approvedAt',      `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='approvedAt')      ALTER TABLE PSTsHeader ADD approvedAt      DATETIME NULL`);
+    await run('add submittedAt',     `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='submittedAt')     ALTER TABLE PSTsHeader ADD submittedAt     DATETIME NULL`);
   }
 
   private splitTrim(val: string | null): string[] {
@@ -106,6 +99,7 @@ export class ApprovalSettingsService implements OnModuleInit {
 
   async upsert(rows: { id?: number; module?: string; department?: string; approverNames?: string; approverEmails?: string; approverUserIds?: string; anyApprover?: boolean; criteria?: any[]; filterLogic?: string }[]) {
     for (const row of rows) {
+      try {
       const firstName  = this.splitTrim(row.approverNames || '')[0]  || null;
       const firstEmail = this.splitTrim(row.approverEmails || '')[0] || null;
       const criteriaJson = row.criteria ? JSON.stringify(row.criteria) : null;
@@ -145,6 +139,10 @@ export class ApprovalSettingsService implements OnModuleInit {
           .query(`INSERT INTO PSApprovalSettings (module, department, approverNames, approverEmails, approverUserIds, anyApprover, approverName, approverEmail, criteria, filterLogic)
                   VALUES (@module, @dept, @names, @emails, @userIds, @anyApprover, @name, @email, @criteria, @filterLogic)`);
       }
+      } catch (err: any) {
+        this.logger.error(`upsert approval rule failed: ${err?.message}`);
+        throw new BadRequestException(err?.message ?? 'Failed to save approval rule');
+      }
     }
   }
 
@@ -180,7 +178,7 @@ export class ApprovalSettingsService implements OnModuleInit {
     userId: string,
     displayName: string,
     roleCode: string,
-    ts: { tsType: string; department_code?: string; shiftCode?: string; projectId?: string; workOrderNo?: string },
+    ts: { tsType: string; department_code?: string; shiftCode?: string; projectId?: string; workOrderNo?: string; digitalTech?: string },
     hasCanWrite: boolean,
   ): Promise<{ allowed: boolean; reason: string }> {
     const allRules = await this.list();
@@ -208,7 +206,8 @@ export class ApprovalSettingsService implements OnModuleInit {
         c.field === 'department'  ? ts.department_code :
         c.field === 'shift'       ? ts.shiftCode :
         c.field === 'projectNo'   ? ts.projectId :
-        c.field === 'workOrderNo' ? ts.workOrderNo : null
+        c.field === 'workOrderNo' ? ts.workOrderNo :
+        c.field === 'digitalTech' ? ts.digitalTech : null
       )?.toString().toLowerCase() ?? '';
       const ruleVal = (c.value ?? '').toString().toLowerCase();
       const op = c.operator ?? 'equals';

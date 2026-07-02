@@ -41,7 +41,6 @@ export class NotificationsService implements OnModuleInit {
     'ts_approved',
     'ts_rejected',
     'forgotten_drafts',
-    'proj_missing',
     'qc_status',
     'qc_woc_eligible',
     'woc_conflict',
@@ -220,43 +219,6 @@ export class NotificationsService implements OnModuleInit {
           link:     `/timesheets/${route}/${r.tsDocNo}/edit`,
           time:     null,
         });
-      }
-    } catch { /* skip */ }
-
-    // ── 5. Weekly PROJ not started (Wednesday or later in the week) ────────────
-    if (on('proj_missing')) try {
-      const projPermRes = await this.pool.request()
-        .input('rc', mssql.NVarChar(30), roleCode)
-        .query(`SELECT TOP 1 1 AS ok FROM PSTsRolePermissions WHERE roleCode = @rc AND module = 'PROJ' AND canRead = 1`);
-      const hasProj   = projPermRes.recordset.length > 0;
-      const now       = new Date();
-      const dow       = now.getDay(); // 0=Sun 1=Mon … 6=Sat
-      const isLateWeek = dow >= 3 && dow <= 6; // Wed–Sat
-
-      if (hasProj && isLateWeek) {
-        const monday = new Date(now);
-        monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
-        const weekStart = monday.toISOString().slice(0, 10);
-
-        const projCheckRes = await this.pool.request()
-          .input('userId',    mssql.NVarChar(30), userId)
-          .input('weekStart', mssql.Date,         monday)
-          .query(`
-            SELECT TOP 1 tsId FROM PSTsHeader
-            WHERE tsType = 'PROJ' AND isDeleted = 0
-              AND entered_by_user_id = @userId
-              AND entryDate >= @weekStart
-          `);
-        if (projCheckRes.recordset.length === 0) {
-          items.push({
-            notifKey: `proj-missing-${weekStart}`,
-            message:  'Weekly project timesheet not started',
-            detail:   `No PROJ timesheet submitted for the week of ${weekStart}`,
-            level:    'warning',
-            link:     '/timesheets/proj',
-            time:     null,
-          });
-        }
       }
     } catch { /* skip */ }
 

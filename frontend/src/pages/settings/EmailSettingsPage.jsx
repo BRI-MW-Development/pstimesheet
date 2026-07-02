@@ -351,40 +351,66 @@ function TemplatesTab({ toast, queryClient }) {
     onError: (err) => toast(err?.response?.data?.message ?? 'Reset failed.', 'error'),
   });
 
+  const [showPreview, setShowPreview] = useState(false);
+
   return (
     <div>
       <div className="form-group" style={{ maxWidth: 300, marginBottom: 16 }}>
         <label className="form-label">Template</label>
         <select className="form-control" value={selectedKey}
-          onChange={(e) => setSelectedKey(e.target.value)}>
+          onChange={(e) => { setSelectedKey(e.target.value); setShowPreview(false); }}>
           {TEMPLATE_KEYS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
       </div>
 
       {isLoading ? <p>Loading…</p> : (
-        <div style={{ maxWidth: 720 }}>
-          <div className="form-group">
-            <label className="form-label">Subject</label>
-            <input className="form-control" type="text" value={subject}
-              onChange={(e) => setSubject(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Body (HTML)</label>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-              Variables: {'{{docNo}}'}, {'{{type}}'}, {'{{submitter}}'}, {'{{approver}}'}, {'{{department}}'}, {'{{date}}'}, {'{{reason}}'}, {'{{workOrder}}'}
+        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+          {/* Editor */}
+          <div style={{ flex: '0 0 480px', minWidth: 0 }}>
+            <div className="form-group">
+              <label className="form-label">Subject</label>
+              <input className="form-control" type="text" value={subject}
+                onChange={(e) => setSubject(e.target.value)} />
             </div>
-            <textarea rows={14} value={body} onChange={(e) => setBody(e.target.value)}
-              style={{ fontFamily: 'monospace', fontSize: 12, width: '100%' }} />
+            <div className="form-group">
+              <label className="form-label">Body (HTML)</label>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
+                Variables: {'{{docNo}}'}, {'{{type}}'}, {'{{submitter}}'}, {'{{approver}}'}, {'{{department}}'}, {'{{date}}'}, {'{{reason}}'}, {'{{workOrder}}'}
+              </div>
+              <textarea rows={18} value={body} onChange={(e) => setBody(e.target.value)}
+                style={{ fontFamily: 'monospace', fontSize: 12, width: '100%' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" disabled={isPending} onClick={() => save()}>
+                {isPending ? 'Saving…' : 'Save Template'}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setShowPreview(p => !p)}>
+                {showPreview ? 'Hide Preview' : 'Preview'}
+              </button>
+              <button className="btn btn-ghost" disabled={isResetting}
+                onClick={() => { if (confirm('Reset to default template?')) reset(); }}>
+                {isResetting ? 'Resetting…' : 'Reset to Default'}
+              </button>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary" disabled={isPending} onClick={() => save()}>
-              {isPending ? 'Saving…' : 'Save Template'}
-            </button>
-            <button className="btn btn-ghost" disabled={isResetting}
-              onClick={() => { if (confirm('Reset to default template?')) reset(); }}>
-              {isResetting ? 'Resetting…' : 'Reset to Default'}
-            </button>
-          </div>
+
+          {/* Live preview */}
+          {showPreview && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>Preview</div>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: '#f3f4f6', padding: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
+                  <strong>Subject:</strong> {subject}
+                </div>
+                <iframe
+                  srcDoc={body}
+                  style={{ width: '100%', minHeight: 520, border: 'none', borderRadius: 6, background: '#fff' }}
+                  title="Email preview"
+                  sandbox=""
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

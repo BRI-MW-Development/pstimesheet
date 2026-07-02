@@ -38,12 +38,16 @@ export class WoCompleteController {
     if (body.notifyEmail) {
       this.emailService.send(
         body.notifyEmail,
-        `Work Order ${body.workOrderNumber || result.docNo} marked complete`,
-        `<p>Hi,</p>
-         <p>Work Order <strong>${body.workOrderNumber || '—'}</strong> has been marked as <b>complete</b>.</p>
-         <p><b>Project:</b> ${body.projectId || '—'}<br>
-         <b>Completed Date:</b> ${body.completedDate || '—'}<br>
-         <b>Saved by:</b> ${req.currentUser?.displayName || '—'}</p>`,
+        `Work Order ${body.workOrderNumber || result.docNo} Marked Complete`,
+        EmailService.template('Work Order Complete', `
+          <p style="margin:0 0 20px;color:#444">A Work Order has been marked as complete.</p>
+          <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;width:40%">Work Order</td><td style="padding:12px 16px;font-weight:700;border-bottom:1px solid #e5e7eb">${body.workOrderNumber || '—'}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb">Project</td><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb">${body.projectId || '—'}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb">Completed Date</td><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb">${body.completedDate || '—'}</td></tr>
+            <tr><td style="padding:12px 16px;font-weight:700;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.5px">Saved By</td><td style="padding:12px 16px">${req.currentUser?.displayName || '—'}</td></tr>
+          </table>
+        `),
       );
     }
     return result;
