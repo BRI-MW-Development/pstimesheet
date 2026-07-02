@@ -1,6 +1,6 @@
 # OpsDesk — Technical Documentation
 
-**Version:** 3.6  
+**Version:** 3.7  
 **Last Updated:** July 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -847,6 +847,51 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v3.7 (July 2026)
+Email template unification, approval settings schema fix, Users/Roles page redesign, and Production Timesheet scroll fix.
+
+**Email System — Branded Templates**
+- Added `EmailService.template(title, bodyHtml, showLoginBtn?)` static helper that wraps any email body in the PS TimeSheet branded header (teal `#0f7173`) + footer with an "Open PS TimeSheet" CTA button. Single source of truth for all outgoing email styling.
+- **Login credentials email:** now includes a login URL button (`https://apps.professional-signs.com/login`) and uses the new branded wrapper.
+- **Timesheet emails (submit / approve / reject):** switched from inline hand-rolled HTML to `EmailService.template()`. Approve email shows a green ✓ Approved banner; Reject shows a red banner with the rejection reason.
+- **WO Complete email:** switched to `EmailService.template('Work Order Complete', …)`.
+- **Email Settings default templates:** all 4 default templates (`TIMESHEET_SUBMIT`, `TIMESHEET_APPROVE`, `TIMESHEET_REJECT`, `WO_COMPLETE`) updated to the branded format with consistent subjects (`PS TimeSheet — …` prefix).
+- **Templates tab — live preview:** added a **Preview** toggle button next to Save Template and Reset to Default. Opens a sandboxed `<iframe srcDoc={body}>` panel alongside the HTML editor so admins can see the rendered email while editing. Subject line is shown above the preview frame.
+
+**Approval Settings — Bug Fixes**
+- **500 error on save fixed:** `onModuleInit()` previously wrapped all schema migration steps in a single try/catch — if any step failed (e.g. `criteria` column already exists), the remaining steps (adding `filterLogic`, etc.) were silently skipped, leaving the table incomplete and causing `INSERT` to fail with "Invalid column name." Replaced with a `run(label, sql)` helper that gives each migration step its own try/catch.
+- **UNIQUE constraint on `department` removed:** old schema had a UNIQUE KEY on the `department` column, preventing more than one approval rule per department. A new migration step detects and drops the constraint dynamically using `sys.key_constraints` (no hardcoded constraint name).
+- **Real error surfacing:** `upsert()` now catches SQL errors and re-throws them as `BadRequestException(err.message)` so the frontend receives the actual database error instead of a generic 500.
+
+**Notifications — Weekly PROJ Reminder removed**
+- Removed the `proj_missing` notification type from `NotificationsService` (backend) and from the Notification Settings page toggles (frontend). The weekly Wednesday reminder for missing PROJ timesheets is no longer generated or displayed.
+
+**Users Page — Full Redesign**
+- Rebuilt `UsersPage.jsx` with a two-panel layout: searchable user list on the left, inline edit panel on the right (no modal).
+- Inline editing: username, display name, email, role, department, status — saved with a single Save button per section.
+- Profile image upload inline in the edit panel.
+- Change password panel (admin-initiated reset) included in the edit panel.
+- Login history per user shown as a collapsible section.
+
+**Roles Page — Permissions Matrix**
+- Rebuilt `RolesPage.jsx` with a full permissions matrix table: rows = modules, columns = permission types (`canRead`, `canCreate`, `canWrite`, `canDelete`, `canReport`).
+- Inline checkbox editing; Save button persists all changes in one API call.
+- Module groups (Timesheets, Master Data, Settings, etc.) with visual separators.
+
+**Auth — Change Password & Failed Attempts**
+- Users can change their own password via **Settings → Change Password** (`/settings/change-password`).
+- `auth.service.ts`: failed login attempts tracked in `PSTsFailedAttempts`; account locked for 15 minutes after 10 consecutive failures (existing behaviour documented explicitly).
+- Session guards updated; login history endpoint improvements.
+
+**AppShell — Scrollable Form Routes**
+- Production Timesheet form route (`/timesheets/prod/:docNo/edit` etc.) added to the `isFullBleed` route pattern in `AppShell.jsx` — `main-content` gets `padding: 0; overflow: hidden`, allowing the right-hand scroll panel (`ts-scroll-panel`) to scroll independently rather than the whole page.
+
+**SQL Maintenance Scripts**
+- `backend/scripts/bulk-update-employee-contacts.sql` — MERGE statements to update `emailId` and `phone` for ~84 employees in `PSTsEmployeeProfile`. Includes `ALTER TABLE … ADD phone` for the new column. Data-only; no service code changes.
+- `backend/scripts/clear-test-data.sql` — wrapped in `BEGIN TRANSACTION / COMMIT`; deletes all timesheet, QC, WO Complete, audit log, login history, and failed attempts records; resets `psTsDocSequence.currentNo = 0`. Safe for fresh test cycles without touching users, roles, master data, or settings.
+
+---
 
 ### v3.6 (July 2026)
 Branding refresh, theme system expansion, and login page redesign.
