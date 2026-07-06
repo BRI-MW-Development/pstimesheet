@@ -112,12 +112,15 @@ export class AuthService implements OnModuleInit {
       .input('ip',        mssql.NVarChar(45),  ip)
       .input('ua',        mssql.NVarChar(500), userAgent)
       .query(`INSERT INTO PSTsSessions (sessionToken,userId,expiresAt,ipAddress,userAgent) VALUES (@token,@userId,@expiresAt,@ip,@ua)`);
-    // Clean up expired/old sessions for this user (keep last 5 active + purge all expired)
+    // Invalidate all previous active sessions for this user — one active session per user at a time
     await this.pool.request()
       .input('userId', mssql.NVarChar(30), user.userId)
+      .input('token',  mssql.NVarChar(64), token)
       .query(`
+        UPDATE PSTsSessions SET isActive=0, loggedOutAt=GETDATE()
+        WHERE userId=@userId AND sessionToken<>@token AND isActive=1;
         DELETE FROM PSTsSessions WHERE expiresAt < GETDATE();
-        DELETE FROM PSTsSessions WHERE userId = @userId AND isActive = 0
+        DELETE FROM PSTsSessions WHERE userId=@userId AND isActive=0
           AND loggedOutAt < DATEADD(DAY, -7, GETDATE());
       `).catch(() => { /* non-critical — don't fail login */ });
 
