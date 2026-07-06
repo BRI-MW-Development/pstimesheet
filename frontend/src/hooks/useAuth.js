@@ -9,7 +9,15 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: async ({ username, password }) => {
-      const loginRes = await api.post('/auth/login', { username, password }).then((r) => r.data);
+      // Fetch geo from the browser — it sees the real public IP, the server sees a private/NAT IP
+      let city, country;
+      try {
+        const geo = await fetch('https://ip-api.com/json/?fields=city,country,status', { signal: AbortSignal.timeout(3000) })
+          .then((r) => r.json());
+        if (geo?.status === 'success') { city = geo.city; country = geo.country; }
+      } catch { /* non-critical — login still works without location */ }
+
+      const loginRes = await api.post('/auth/login', { username, password, city, country }).then((r) => r.data);
       // Fetch permissions immediately after login using the token we just got
       const permsRes = await api
         .get('/auth/permissions', {
