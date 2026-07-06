@@ -264,23 +264,19 @@ function RulesTab({ toast, queryClient }) {
             <tr>
               <th>Event</th>
               <th style={{ width: 90, textAlign: 'center' }}>Enabled</th>
-              <th style={{ width: 130, textAlign: 'center' }}>Notify Approver</th>
               <th style={{ width: 130, textAlign: 'center' }}>Notify Submitter</th>
               <th>CC Emails</th>
             </tr>
           </thead>
           <tbody>
             {display.length === 0 && (
-              <tr><td colSpan={5} className="table-empty">No notification rules configured.</td></tr>
+              <tr><td colSpan={4} className="table-empty">No notification rules configured.</td></tr>
             )}
             {display.map((rule, i) => (
               <tr key={`${rule.module}-${rule.event}-${i}`}>
                 <td style={{ fontSize: 13 }}>{ruleLabel(rule)}</td>
                 <td style={{ textAlign: 'center' }}>
                   <input type="checkbox" checked={!!rule.enabled} onChange={() => toggle(i, 'enabled')} />
-                </td>
-                <td style={{ textAlign: 'center' }}>
-                  <input type="checkbox" checked={!!rule.sendToApprover} onChange={() => toggle(i, 'sendToApprover')} />
                 </td>
                 <td style={{ textAlign: 'center' }}>
                   <input type="checkbox" checked={!!rule.sendToSubmitter} onChange={() => toggle(i, 'sendToSubmitter')} />

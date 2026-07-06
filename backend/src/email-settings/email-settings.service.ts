@@ -186,13 +186,13 @@ export class EmailSettingsService implements OnModuleInit {
   // ── Notification Rules ──
 
   private readonly _defaultRules = [
-    { module: 'PROD', event: 'SUBMIT',   enabled: true,  sendToApprover: true,  sendToSubmitter: false, ccEmails: '' },
-    { module: 'PROD', event: 'APPROVE',  enabled: true,  sendToApprover: false, sendToSubmitter: true,  ccEmails: '' },
-    { module: 'PROD', event: 'REJECT',   enabled: true,  sendToApprover: false, sendToSubmitter: true,  ccEmails: '' },
-    { module: 'INST', event: 'SUBMIT',   enabled: true,  sendToApprover: true,  sendToSubmitter: false, ccEmails: '' },
-    { module: 'INST', event: 'APPROVE',  enabled: true,  sendToApprover: false, sendToSubmitter: true,  ccEmails: '' },
-    { module: 'INST', event: 'REJECT',   enabled: true,  sendToApprover: false, sendToSubmitter: true,  ccEmails: '' },
-    { module: 'WO',   event: 'COMPLETE', enabled: true,  sendToApprover: false, sendToSubmitter: false, ccEmails: '' },
+    { module: 'PROD', event: 'SUBMIT',   enabled: true,  sendToSubmitter: false, ccEmails: '' },
+    { module: 'PROD', event: 'APPROVE',  enabled: true,  sendToSubmitter: true,  ccEmails: '' },
+    { module: 'PROD', event: 'REJECT',   enabled: true,  sendToSubmitter: true,  ccEmails: '' },
+    { module: 'INST', event: 'SUBMIT',   enabled: true,  sendToSubmitter: false, ccEmails: '' },
+    { module: 'INST', event: 'APPROVE',  enabled: true,  sendToSubmitter: true,  ccEmails: '' },
+    { module: 'INST', event: 'REJECT',   enabled: true,  sendToSubmitter: true,  ccEmails: '' },
+    { module: 'WO',   event: 'COMPLETE', enabled: true,  sendToSubmitter: false, ccEmails: '' },
   ];
 
   async getNotificationRule(module: string, event: string) {
@@ -212,23 +212,22 @@ export class EmailSettingsService implements OnModuleInit {
     return res.recordset;
   }
 
-  async saveNotificationRules(rules: Array<{ module: string; event: string; enabled: boolean; sendToApprover: boolean; sendToSubmitter: boolean; ccEmails?: string }>) {
+  async saveNotificationRules(rules: Array<{ module: string; event: string; enabled: boolean; sendToSubmitter: boolean; ccEmails?: string }>) {
     for (const r of rules) {
       await this.pool.request()
         .input('module',          mssql.NVarChar(20),  r.module)
         .input('event',           mssql.NVarChar(20),  r.event)
         .input('enabled',         mssql.Bit,           r.enabled ? 1 : 0)
-        .input('sendToApprover',  mssql.Bit,           r.sendToApprover ? 1 : 0)
         .input('sendToSubmitter', mssql.Bit,           r.sendToSubmitter ? 1 : 0)
         .input('ccEmails',        mssql.NVarChar(500), r.ccEmails || null)
         .query(`
           MERGE PSEmailNotificationRules AS target
           USING (SELECT @module AS module, @event AS event) AS src ON (target.module = src.module AND target.event = src.event)
           WHEN MATCHED THEN
-            UPDATE SET enabled=@enabled, sendToApprover=@sendToApprover, sendToSubmitter=@sendToSubmitter, ccEmails=@ccEmails
+            UPDATE SET enabled=@enabled, sendToSubmitter=@sendToSubmitter, ccEmails=@ccEmails
           WHEN NOT MATCHED THEN
-            INSERT (module, event, enabled, sendToApprover, sendToSubmitter, ccEmails)
-            VALUES (@module, @event, @enabled, @sendToApprover, @sendToSubmitter, @ccEmails);
+            INSERT (module, event, enabled, sendToSubmitter, ccEmails)
+            VALUES (@module, @event, @enabled, @sendToSubmitter, @ccEmails);
         `);
     }
     return { ok: true };

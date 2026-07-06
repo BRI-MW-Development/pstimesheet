@@ -44,7 +44,7 @@ export class TimesheetsController {
         return;
       }
       const targets = new Set<string>();
-      if (rule.sendToApprover) approverEmails.forEach(e => e && targets.add(e));
+      approverEmails.forEach(e => e && targets.add(e));
       if (rule.sendToSubmitter && submitterEmail) targets.add(submitterEmail);
       if (rule.ccEmails) rule.ccEmails.split(',').map(e => e.trim()).filter(Boolean).forEach(e => targets.add(e));
       this.logger.log(`NOTIFY: sending to [${[...targets]}]`);
