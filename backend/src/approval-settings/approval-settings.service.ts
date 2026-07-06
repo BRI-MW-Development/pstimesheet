@@ -160,6 +160,56 @@ export class ApprovalSettingsService implements OnModuleInit {
   }
 
   /**
+   * Return all approver emails from every approval rule that matches this timesheet.
+   * Uses the same module + criteria matching logic as canUserApproveTimesheet so the
+   * notification always goes to the right approvers regardless of department/digitalTech/shift.
+   */
+  async getApproversForTimesheet(
+    ts: { tsType?: string; department_code?: string; shiftCode?: string; projectId?: string; workOrderNo?: string; digitalTech?: string },
+  ): Promise<string[]> {
+    const allRules = await this.list();
+    if (!allRules.length) return [];
+
+    const tsModule = ts.tsType === 'INST' ? 'INST' : ts.tsType === 'PROJ' ? 'PROJ' : 'PROD';
+
+    const evalCriterion = (c: any): boolean => {
+      const tsVal = (
+        c.field === 'department'  ? ts.department_code :
+        c.field === 'shift'       ? ts.shiftCode :
+        c.field === 'projectNo'   ? ts.projectId :
+        c.field === 'workOrderNo' ? ts.workOrderNo :
+        c.field === 'digitalTech' ? ts.digitalTech : null
+      )?.toString().toLowerCase() ?? '';
+      const ruleVal = (c.value ?? '').toString().toLowerCase();
+      const op = c.operator ?? 'equals';
+      return op === 'equals'      ? tsVal === ruleVal
+           : op === 'not equals'  ? tsVal !== ruleVal
+           : op === 'contains'    ? tsVal.includes(ruleVal)
+           : op === 'starts with' ? tsVal.startsWith(ruleVal)
+           : false;
+    };
+
+    const criteriaMatch = (rule: any): boolean => {
+      const real = (rule.criteria ?? []).filter((c: any) => c.field && c.value);
+      if (!real.length) return true;
+      const groups: Record<string, any[]> = {};
+      for (const c of real) {
+        if (!groups[c.field]) groups[c.field] = [];
+        groups[c.field].push(c);
+      }
+      return Object.values(groups).every(grp => grp.some(evalCriterion));
+    };
+
+    const emails = new Set<string>();
+    for (const rule of allRules) {
+      if (rule.module !== 'ALL' && rule.module !== tsModule) continue;
+      if (!criteriaMatch(rule)) continue;
+      this.splitTrim(rule.approverEmails).forEach(e => e && emails.add(e));
+    }
+    return [...emails];
+  }
+
+  /**
    * Check whether userId/displayName is authorised to approve a given timesheet.
    *
    * New approach (direct):

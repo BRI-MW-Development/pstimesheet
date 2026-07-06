@@ -214,12 +214,12 @@ export class TimesheetsController {
       const byName = req.currentUser?.displayName || '';
       await this.timesheetsService.submitForApproval(docNo, byName);
       this.auditService.log({ docType: `TIMESHEET-${(ts.tsType||'PROD').toUpperCase()}`, docRef: docNo, action: 'SUBMIT', performedBy: req.currentUser?.userId, performedByName: byName, details: 'Submitted for approval' });
-      const approverSetting = await this.approvalSettingsService.getByDepartment(ts.department_code);
+      const approverEmails = await this.approvalSettingsService.getApproversForTimesheet(ts);
       const typeLabel = ts.tsType === 'INST' ? 'Installation' : 'Production';
       const submitterEmail = await this.getEmailForUser(ts.entered_by_name);
       await this.notify(
         ts.tsType === 'INST' ? 'INST' : 'PROD', 'SUBMIT',
-        approverSetting?.approverEmails ?? [],
+        approverEmails,
         submitterEmail,
         `Timesheet ${docNo} submitted for approval`,
         EmailService.template('Timesheet Submitted for Approval', `
@@ -253,12 +253,12 @@ export class TimesheetsController {
       const byName = req.currentUser?.displayName || body?.approverName || '';
       await this.timesheetsService.approve(docNo, byName, body?.edits);
       this.auditService.log({ docType: `TIMESHEET-${(ts.tsType||'PROD').toUpperCase()}`, docRef: docNo, action: 'APPROVE', performedBy: req.currentUser?.userId, performedByName: byName, details: 'Approved' });
-      const approverSetting = await this.approvalSettingsService.getByDepartment(ts.department_code);
+      const approverEmails = await this.approvalSettingsService.getApproversForTimesheet(ts);
       const typeLabel = ts.tsType === 'INST' ? 'Installation' : 'Production';
       const submitterEmail = await this.getEmailForUser(ts.entered_by_name);
       await this.notify(
         ts.tsType === 'INST' ? 'INST' : 'PROD', 'APPROVE',
-        approverSetting?.approverEmails ?? [],
+        approverEmails,
         submitterEmail,
         `Timesheet ${docNo} approved`,
         EmailService.template('Timesheet Approved', `
@@ -294,12 +294,12 @@ export class TimesheetsController {
       const byName = req.currentUser?.displayName || '';
       await this.timesheetsService.reject(docNo, byName, body.reason || '');
       this.auditService.log({ docType: `TIMESHEET-${(ts.tsType||'PROD').toUpperCase()}`, docRef: docNo, action: 'REJECT', performedBy: req.currentUser?.userId, performedByName: byName, details: `Rejected: ${body.reason || '—'}` });
-      const approverSetting = await this.approvalSettingsService.getByDepartment(ts.department_code);
+      const approverEmails = await this.approvalSettingsService.getApproversForTimesheet(ts);
       const typeLabel = ts.tsType === 'INST' ? 'Installation' : 'Production';
       const submitterEmail = await this.getEmailForUser(ts.entered_by_name);
       await this.notify(
         ts.tsType === 'INST' ? 'INST' : 'PROD', 'REJECT',
-        approverSetting?.approverEmails ?? [],
+        approverEmails,
         submitterEmail,
         `Timesheet ${docNo} rejected`,
         EmailService.template('Timesheet Rejected', `
