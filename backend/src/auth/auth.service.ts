@@ -654,9 +654,9 @@ export class AuthService implements OnModuleInit {
   private async geoLookup(ip: string): Promise<{ city: string; country: string } | null> {
     if (!ip || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) return null;
     try {
-      const res  = await fetch(`https://ip-api.com/json/${ip}?fields=city,country,status`, { signal: AbortSignal.timeout(3000) });
+      const res  = await fetch(`https://ipwho.is/${ip}`, { signal: AbortSignal.timeout(3000) });
       const data = await res.json() as any;
-      if (data.status === 'success') return { city: data.city, country: data.country };
+      if (data.success) return { city: data.city, country: data.country };
     } catch { /* geo lookup is best-effort */ }
     return null;
   }
