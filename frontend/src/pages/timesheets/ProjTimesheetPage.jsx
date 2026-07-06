@@ -323,8 +323,9 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
       </div>
 
       {/* ── Body ── */}
-      <div className="ts-scroll-panel" style={{ pointerEvents: readOnly ? 'none' : undefined }}>
+      <div className="ts-scroll-panel">
         <form id="pt-daily-form" onSubmit={handleSubmit}>
+          <div style={{ display: 'contents', pointerEvents: readOnly ? 'none' : undefined }}>
 
           {/* ── Summary section ── */}
           <div className="ts-section">
@@ -581,6 +582,7 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
             )}
           </div>
 
+          </div>{/* end pointer-events wrapper */}
         </form>
       </div>
 
