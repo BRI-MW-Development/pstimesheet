@@ -1247,7 +1247,7 @@ export class TimesheetsService implements OnModuleInit {
     const res = await req.query(`
       SELECT h.tsId, h.tsDocNo, h.tsType, h.entryDate, h.department_code, h.workOrderNo,
              h.projectId, h.projectName, h.shiftCode, h.entered_by_name, h.status,
-             h.createdAt, h.submittedAt,
+             h.digitalTech, h.createdAt, h.submittedAt,
              (SELECT COALESCE(SUM(durationMinutes),0) FROM PSTsLabourLine WHERE tsId = h.tsId) AS totalDuration
       FROM PSTsHeader h
       WHERE h.isDeleted = 0
