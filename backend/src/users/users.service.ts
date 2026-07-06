@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { S3Service } from '../s3/s3.service';
 import { EmailService } from '../email/email.service';
+import { EmailSettingsService } from '../email-settings/email-settings.service';
 import { DEV_SQL_POOL } from '../database/database.constants';
 
 const BCRYPT_ROUNDS = 12;
@@ -35,6 +36,7 @@ export class UsersService implements OnModuleInit {
     @Inject(DEV_SQL_POOL) private readonly pool: ConnectionPool,
     private readonly s3: S3Service,
     private readonly emailService: EmailService,
+    private readonly emailSettingsService: EmailSettingsService,
   ) {}
 
   async onModuleInit() {
@@ -383,6 +385,17 @@ export class UsersService implements OnModuleInit {
       </div>
     `);
 
-    return this.emailService.send(body.email, 'Your PS TimeSheet Login Credentials', html);
+    const result = await this.emailService.send(body.email, 'Your PS TimeSheet Login Credentials', html);
+    try {
+      await this.emailSettingsService.addLog({
+        module: 'USERS',
+        event: 'CREDENTIALS',
+        recipient: body.email,
+        subject: 'Your PS TimeSheet Login Credentials',
+        status: result.ok ? 'sent' : 'failed',
+        errorMsg: result.ok ? undefined : result.reason,
+      });
+    } catch {}
+    return result;
   }
 }
