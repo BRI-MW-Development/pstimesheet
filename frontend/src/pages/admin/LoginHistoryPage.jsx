@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import Table, { WipListHeader } from '../../components/ui/Table';
@@ -158,7 +159,8 @@ function ActiveSessionsTab() {
 }
 
 export default function LoginHistoryPage() {
-  const [tab, setTab] = useState('history');
+  const location = useLocation();
+  const [tab, setTab] = useState(location.pathname.includes('sessions') ? 'sessions' : 'history');
   const [days, setDays] = useState('30');
 
   return (
