@@ -248,6 +248,16 @@ export class ApprovalSettingsService implements OnModuleInit {
       return { allowed: true,  reason: `Matched rule(s): ${matching.map(r => `#${r.id}(${r.module})`).join(', ')}` };
     }
 
+    // No rule matched this user. Check whether ANY rule governs this timesheet type at all.
+    // If the admin has set up rules for PROD but none for INST, INST timesheets should still
+    // be approvable by anyone with canWrite — same behaviour as "no rules configured".
+    const rulesForModule = allRules.filter(r => r.module === 'ALL' || r.module === tsModule);
+    if (rulesForModule.length === 0) {
+      return hasCanWrite
+        ? { allowed: true,  reason: `No rules configured for ${tsModule} — permission-based approval allowed.` }
+        : { allowed: false, reason: `No rules configured for ${tsModule} and you do not have canWrite permission.` };
+    }
+
     return { allowed: false, reason: 'No approval rule authorises you to approve this timesheet.' };
   }
 
