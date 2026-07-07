@@ -634,17 +634,6 @@ export class TimesheetsService implements OnModuleInit {
       totalHours: r.totalDuration != null ? r.totalDuration / 60 : null,
     }));
 
-    // Resolve employee display names from ERP master (fixes records where only the code was stored)
-    const empCodes = [...new Set(rows.map(r => r.employeeCode).filter(Boolean))];
-    if (empCodes.length > 0) {
-      const empMap = await this.batchLookupEmployees(empCodes);
-      for (const row of rows as any[]) {
-        if (row.employeeCode && empMap.has(row.employeeCode)) {
-          row.employeeName = empMap.get(row.employeeCode)!.name || row.employeeName;
-        }
-      }
-    }
-
     // Enrich with customerName from live ERP (batch lookup by workOrderNo)
     const woNums = [...new Set(rows.map(r => r.workOrderNo).filter(Boolean))];
     if (woNums.length > 0) {

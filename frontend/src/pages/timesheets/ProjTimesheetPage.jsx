@@ -1320,7 +1320,7 @@ export default function ProjTimesheetPage() {
     { key: 'docNo',          label: 'Document No',  sort: true, render: (r) => <span className="wip-link">{r.docNo}</span> },
     { key: 'entryDate',      label: 'Date',         sort: true, render: (r) => formatDate(r.entryDate) },
     { key: 'createdAt',      label: 'Created Date', sort: true, render: (r) => formatDate(r.createdAt) },
-    { key: 'employeeName',    label: 'Employee',     sort: true, render: (r) => r.employeeName || r.entered_by_name || '—' },
+    { key: 'employeeName',    label: 'Employee',     sort: true, render: (r) => r.employeeName || r.employeeCode || r.entered_by_name || '—' },
     { key: 'status', label: 'Status', sort: true, render: (r) => <Badge variant={STATUS_VARIANT[r.status] ?? 'draft'}>{r.status ?? '—'}</Badge> },
     {
       key: 'actions', label: '', sort: false,
