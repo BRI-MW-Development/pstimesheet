@@ -612,14 +612,8 @@ export class TimesheetsService implements OnModuleInit {
         (SELECT COUNT(*)  FROM PSTsLabourLine   WHERE tsId = h.tsId) AS labourCount,
         (SELECT COUNT(*)  FROM PSTsMaterialLine  WHERE tsId = h.tsId) AS materialCount,
         (SELECT COUNT(*)  FROM PSTsEquipmentLine WHERE tsId = h.tsId) AS equipmentCount,
-        (SELECT TOP 1 l.employeeCode FROM PSTsLabourLine l WHERE l.tsId = h.tsId ORDER BY l.lineNumber) AS employeeCode,
-        COALESCE(
-          (SELECT TOP 1 LTRIM(RTRIM(ISNULL(me.firstName,'') + ' ' + ISNULL(me.lastname,'')))
-           FROM PSTsLabourLine l2
-           INNER JOIN PSEmployeeMaster me ON me.employeeNo = l2.employeeCode AND me.isDeleted = 0
-           WHERE l2.tsId = h.tsId ORDER BY l2.lineNumber),
-          (SELECT TOP 1 l3.employeeName FROM PSTsLabourLine l3 WHERE l3.tsId = h.tsId ORDER BY l3.lineNumber)
-        ) AS employeeName,
+        (SELECT TOP 1 employeeName FROM PSTsLabourLine WHERE tsId = h.tsId ORDER BY lineNumber) AS employeeName,
+        (SELECT TOP 1 employeeCode FROM PSTsLabourLine WHERE tsId = h.tsId ORDER BY lineNumber) AS employeeCode,
         (SELECT COALESCE(SUM(durationMinutes),0) FROM PSTsLabourLine WHERE tsId = h.tsId) AS totalDuration
       FROM PSTsHeader h
       WHERE h.isDeleted = 0
@@ -639,6 +633,17 @@ export class TimesheetsService implements OnModuleInit {
       projectId:  r.projectCode,   // keep both names: PROJ list uses projectId, PROD/INST use projectCode
       totalHours: r.totalDuration != null ? r.totalDuration / 60 : null,
     }));
+
+    // Resolve employee display names from ERP master (fixes records where only the code was stored)
+    const empCodes = [...new Set(rows.map(r => r.employeeCode).filter(Boolean))];
+    if (empCodes.length > 0) {
+      const empMap = await this.batchLookupEmployees(empCodes);
+      for (const row of rows as any[]) {
+        if (row.employeeCode && empMap.has(row.employeeCode)) {
+          row.employeeName = empMap.get(row.employeeCode)!.name || row.employeeName;
+        }
+      }
+    }
 
     // Enrich with customerName from live ERP (batch lookup by workOrderNo)
     const woNums = [...new Set(rows.map(r => r.workOrderNo).filter(Boolean))];
