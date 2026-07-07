@@ -68,8 +68,6 @@ export default function InstTimesheetFormPage() {
   const [vehicleRows,  setVehicleRows]  = useState([]);
   const [accessRows,   setAccessRows]   = useState([]);
 
-  const entryPerson = (isEdit && existing?.entered_by_name) ? existing.entered_by_name : (user?.displayName ?? user?.username ?? '');
-
   const STALE_5M = 5 * 60 * 1000;
   const { data: employees        = [] } = useQuery({ queryKey: ['employees', 'inst'],      queryFn: () => api.get('/employees', { params: { deptFilter: 'inst' } }).then((r) => r.data), staleTime: STALE_5M });
   const { data: departments      = [] } = useQuery({ queryKey: ['departments'],      queryFn: () => api.get('/departments').then((r) => r.data), staleTime: STALE_5M });
@@ -90,6 +88,8 @@ export default function InstTimesheetFormPage() {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
+
+  const entryPerson = (isEdit && existing?.entered_by_name) ? existing.entered_by_name : (user?.displayName ?? user?.username ?? '');
 
   useEffect(() => {
     if (!existing) return;
