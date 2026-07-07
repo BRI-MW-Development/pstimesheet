@@ -292,7 +292,7 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
   }
 
   const empOptions  = employees.map((e) => ({ value: e.employeeNo, label: `${e.employeeNo} – ${[e.firstName, e.lastname].filter(Boolean).join(' ')}` }));
-  const projOptions = projects.map((p) => ({ value: p.projectCode, label: p.projectCode }));
+  const projOptions = projects.map((p) => ({ value: p.projectCode, label: p.projectName ? `${p.projectCode} – ${p.projectName}` : p.projectCode }));
   const ttOptions   = taskTypes.map((t) => ({ value: t.taskTypeCode ?? t.name, label: t.taskTypeName ?? t.name }));
 
   const statusLabel = existing?.status;
