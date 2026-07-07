@@ -1,6 +1,6 @@
 # OpsDesk — Technical Documentation
 
-**Version:** 3.7  
+**Version:** 3.8  
 **Last Updated:** July 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -422,7 +422,6 @@ Default rules: PROD/INST/WO × SUBMIT/APPROVE/REJECT/COMPLETE events
 
 Each rule controls:
 - `enabled` — whether emails are sent at all
-- `sendToApprover` — email the designated approver
 - `sendToSubmitter` — email the person who submitted
 - `ccEmails` — additional recipients
 
@@ -847,6 +846,41 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v3.8 (July 2026)
+Bug-fix release covering entry person display, blank screen on view, scroll, geo location, and email settings cleanup.
+
+**Entry Person — All Timesheet Types**
+- **Root cause:** All three form pages (`ProdTimesheetFormPage`, `InstTimesheetFormPage`, `ProjTimesheetPage` DailyForm) were storing `user?.employeeCode` (e.g. `PSE0041`) in `entered_by_name` instead of `user?.displayName`. Fixed to use `user?.displayName ?? user?.username ?? ''` for new records.
+- **PROD:** Fixed in initial `useState` default; `useEffect` correctly overwrites from `existing.entered_by ?? existing.entered_by_name` when editing an existing record.
+- **INST & PROJ (blank screen fix):** `entryPerson` was declared as a `const` referencing `existing` *before* the `useQuery` that declares `existing` — JavaScript `const` is not hoisted, causing a `ReferenceError` at runtime and a blank screen when clicking View. Fixed by moving the `entryPerson` declaration to *after* the `existing` useQuery in both files.
+- **Note:** Records created before this fix have `PSE0041` (or similar code) stored in the DB. They will continue to display the stored code when viewed; only new records use the display name.
+
+**PROJ Timesheet — Scroll in View Mode**
+- `pointer-events: none` was applied directly to the `ts-scroll-panel` container, blocking scroll events on the scrollable element itself. Moved `pointer-events: none` to the inner `display: contents` wrapper so the scroll panel receives pointer events and scrolls normally in read-only view mode.
+
+**PROJ Timesheet — Project Name in Form Lines**
+- Project dropdown now shows both code and name: `` `${p.projectCode} – ${p.projectName}` `` (falls back to code only if name is blank).
+
+**PROJ Timesheet — Column Widths (Daily Form)**
+- Task Type column widened to `180px`; Attachment column narrowed to `120px` for better form balance.
+
+**PROJ Timesheet — Employee Name in List**
+- Employee column render fallback chain: `r.employeeName || r.employeeCode || r.entered_by_name || '—'` ensures a name is always shown even when the top-level `employeeName` field is absent.
+
+**PROJ Timesheet — Delete Guard**
+- Delete button on the list now only renders when `row.status === 'Draft'`. Previously the icon was visible on Approved timesheets.
+
+**Backend — Missing EmailModule (500 errors)**
+- `EmailService` was injected into `TimesheetsController` but `EmailModule` was not listed in `TimesheetsModule` imports. NestJS DI failed at startup, making the entire timesheets module dead (all endpoints returned 500). Fixed by adding `EmailModule` to `TimesheetsModule` imports.
+
+**Geo Location — Login History**
+- Switched geo API from `ip-api.com` (HTTPS is paid-only) to `ipwho.is` (free HTTPS) in both `useAuth.js` (frontend) and `auth.service.ts` (backend fallback). Updated success check from `geo.status === 'success'` to `geo.success`.
+
+**Email Settings — sendToApprover Removed**
+- `sendToApprover` toggle removed from `PSEmailNotificationRules` schema, `_defaultRules` defaults, `saveNotificationRules` MERGE query, and the Email Settings UI table. The approver is always notified via the existing approval workflow; a separate toggle was redundant.
+
+---
 
 ### v3.7 (July 2026)
 Email template unification, approval settings schema fix, Users/Roles page redesign, and Production Timesheet scroll fix.
