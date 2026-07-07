@@ -146,7 +146,6 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
   const permissions = useAuthStore((s) => s.permissions);
   const isAdmin = permissions.some((p) => p.module === 'USERS' && p.canWrite);
   const userEmployeeCode = user?.employeeCode ?? '';
-  const entryPerson = (editDocNo && existing?.entered_by_name) ? existing.entered_by_name : (user?.displayName ?? user?.username ?? '');
 
   const [summary, setSummary] = useState({ employee: userEmployeeCode, date: TODAY });
   const [lines, setLines] = useState([EMPTY_LINE()]);
@@ -166,6 +165,8 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
     queryFn: () => api.get(`/timesheets/${editDocNo}`).then((r) => r.data),
     enabled: Boolean(editDocNo),
   });
+
+  const entryPerson = (editDocNo && existing?.entered_by_name) ? existing.entered_by_name : (user?.displayName ?? user?.username ?? '');
 
   const { data: dayEntries = [] } = useQuery({
     queryKey: ['day-entries', summary.employee, summary.date, editDocNo],
