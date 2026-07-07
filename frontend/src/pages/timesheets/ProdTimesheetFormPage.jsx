@@ -57,7 +57,7 @@ export default function ProdTimesheetFormPage() {
     department: '',
     date: new Date().toISOString().slice(0, 10),
     shift: '',
-    entryPerson: user?.employeeCode ?? user?.username ?? '',
+    entryPerson: user?.displayName ?? user?.username ?? '',
   });
   const [isDirty, setIsDirty] = useState(false);
   const [wocWarning, setWocWarning] = useState('');
