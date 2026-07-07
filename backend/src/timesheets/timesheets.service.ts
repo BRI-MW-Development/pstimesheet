@@ -612,8 +612,14 @@ export class TimesheetsService implements OnModuleInit {
         (SELECT COUNT(*)  FROM PSTsLabourLine   WHERE tsId = h.tsId) AS labourCount,
         (SELECT COUNT(*)  FROM PSTsMaterialLine  WHERE tsId = h.tsId) AS materialCount,
         (SELECT COUNT(*)  FROM PSTsEquipmentLine WHERE tsId = h.tsId) AS equipmentCount,
-        (SELECT TOP 1 employeeName    FROM PSTsLabourLine WHERE tsId = h.tsId ORDER BY lineNumber) AS employeeName,
-        (SELECT TOP 1 employeeCode    FROM PSTsLabourLine WHERE tsId = h.tsId ORDER BY lineNumber) AS employeeCode,
+        (SELECT TOP 1 l.employeeCode FROM PSTsLabourLine l WHERE l.tsId = h.tsId ORDER BY l.lineNumber) AS employeeCode,
+        COALESCE(
+          (SELECT TOP 1 LTRIM(RTRIM(ISNULL(me.firstName,'') + ' ' + ISNULL(me.lastname,'')))
+           FROM PSTsLabourLine l2
+           INNER JOIN PSEmployeeMaster me ON me.employeeNo = l2.employeeCode AND me.isDeleted = 0
+           WHERE l2.tsId = h.tsId ORDER BY l2.lineNumber),
+          (SELECT TOP 1 l3.employeeName FROM PSTsLabourLine l3 WHERE l3.tsId = h.tsId ORDER BY l3.lineNumber)
+        ) AS employeeName,
         (SELECT COALESCE(SUM(durationMinutes),0) FROM PSTsLabourLine WHERE tsId = h.tsId) AS totalDuration
       FROM PSTsHeader h
       WHERE h.isDeleted = 0
