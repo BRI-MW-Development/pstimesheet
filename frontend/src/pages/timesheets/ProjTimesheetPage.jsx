@@ -460,11 +460,11 @@ function DailyForm({ editDocNo, readOnly, onBack, onSaved, onEdit }) {
                   <th style={{ width: 44, textAlign: 'center' }}>#</th>
                   <th style={{ width: 110, textAlign: 'center' }}>Non-Project</th>
                   <th>Project ID / Details</th>
-                  <th>Task Type</th>
+                  <th style={{ width: 180 }}>Task Type</th>
                   <th style={{ width: 120 }}>Start Time</th>
                   <th style={{ width: 120 }}>End Time</th>
                   <th style={{ width: 96, textAlign: 'center' }}>Duration</th>
-                  <th style={{ width: 190 }}>Attachment</th>
+                  <th style={{ width: 120 }}>Attachment</th>
                   <th style={{ width: 48, textAlign: 'center' }}>Note</th>
                   {!readOnly && <th style={{ width: 40 }}></th>}
                 </tr>
