@@ -53,7 +53,7 @@ function EmployeeMultiSelect({ options, value, onChange }) {
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.25)' }} onMouseDown={() => setOpen(false)} />
           <div
-            style={{ position: 'fixed', zIndex: 1001, top: pos.top, left: pos.left, width: Math.max(pos.width, 240), background: 'var(--card-bg)', border: '2px solid var(--accent)', borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.28)', overflow: 'hidden' }}
+            style={{ position: 'fixed', zIndex: 1001, top: pos.top, left: pos.left, width: Math.max(pos.width, 240), background: 'var(--surface)', border: '2px solid var(--accent)', borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.28)', overflow: 'hidden' }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
