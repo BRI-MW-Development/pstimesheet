@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApprovalSettingsService } from './approval-settings.service';
 import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermission } from '../auth/permission.decorator';
@@ -10,6 +10,18 @@ export class ApprovalSettingsController {
   @UseGuards(PermissionGuard) @RequirePermission('SETTINGS', 'canRead')
   @Get()
   list() { return this.svc.list(); }
+
+  @Get('preview-approver')
+  async previewApprover(@Query() q: any) {
+    return this.svc.previewApproverNames({
+      tsType:        q.tsType,
+      department_code: q.department,
+      shiftCode:     q.shift,
+      projectId:     q.projectId,
+      workOrderNo:   q.workOrderNo,
+      digitalTech:   q.digitalTech,
+    });
+  }
 
   @UseGuards(PermissionGuard) @RequirePermission('SETTINGS', 'canWrite')
   @Post()

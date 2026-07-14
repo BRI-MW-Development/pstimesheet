@@ -91,6 +91,15 @@ export default function InstTimesheetFormPage() {
 
   const entryPerson = (isEdit && existing?.entered_by_name) ? existing.entered_by_name : (user?.displayName ?? user?.username ?? '');
 
+  const { data: approverPreview } = useQuery({
+    queryKey: ['approver-preview', 'INST', header.department, header.digitalTech],
+    queryFn: () => api.get('/approval-settings/preview-approver', {
+      params: { tsType: 'INST', department: header.department, digitalTech: header.digitalTech || undefined },
+    }).then((r) => r.data),
+    enabled: !!header.department,
+    staleTime: 60000,
+  });
+
   useEffect(() => {
     if (!existing) return;
     const pid = existing.projectId ?? existing.project_code ?? '';
@@ -465,6 +474,17 @@ export default function InstTimesheetFormPage() {
               <label className="ts-field-label">Entry Person</label>
               <input className="form-control ts-input ts-readonly" value={entryPerson} readOnly />
             </div>
+
+            {approverPreview?.names?.length > 0 && (
+              <div className="ts-field-group">
+                <label className="ts-field-label">Approver</label>
+                <div className="form-control ts-input ts-readonly" style={{ height: 'auto', minHeight: 34, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {approverPreview.names.map((n) => (
+                    <span key={n} style={{ fontSize: 13 }}>{n}</span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="ts-divider"></div>
 
