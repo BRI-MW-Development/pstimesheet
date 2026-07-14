@@ -665,24 +665,26 @@ export class TimesheetsService implements OnModuleInit {
   // ── Detail Report ────────────────────────────────────────────────
   async reportDetail(filters: {
     dateFrom?: string; dateTo?: string; type?: string;
-    status?: string; department?: string; workOrderNo?: string;
+    status?: string; department?: string; workOrderNo?: string; projectId?: string;
   }): Promise<any> {
-    const { dateFrom, dateTo, type, status, department, workOrderNo } = filters;
+    const { dateFrom, dateTo, type, status, department, workOrderNo, projectId } = filters;
     const req = this.devPool.request();
-    if (type)        req.input('tsType',     mssql.NVarChar(20),  type);
-    if (workOrderNo) req.input('workOrderNo',mssql.NVarChar(100),  workOrderNo);
-    if (dateFrom)    req.input('dateFrom',   mssql.NVarChar(20),  dateFrom);
-    if (dateTo)      req.input('dateTo',     mssql.NVarChar(20),  dateTo);
-    if (status)      req.input('status',     mssql.NVarChar(30),  status);
-    if (department)  req.input('department', mssql.NVarChar(50),  department);
+    if (type)        req.input('tsType',      mssql.NVarChar(20),  type);
+    if (workOrderNo) req.input('workOrderNo', mssql.NVarChar(100), workOrderNo);
+    if (projectId)   req.input('projectId',   mssql.NVarChar(100), projectId);
+    if (dateFrom)    req.input('dateFrom',    mssql.NVarChar(20),  dateFrom);
+    if (dateTo)      req.input('dateTo',      mssql.NVarChar(20),  dateTo);
+    if (status)      req.input('status',      mssql.NVarChar(30),  status);
+    if (department)  req.input('department',  mssql.NVarChar(50),  department);
 
     const where = `WHERE h.isDeleted = 0
-      ${type        ? 'AND h.tsType         = @tsType'      : ''}
-      ${workOrderNo ? 'AND h.workOrderNo    = @workOrderNo' : ''}
-      ${dateFrom    ? 'AND h.entryDate     >= @dateFrom'    : ''}
-      ${dateTo      ? 'AND h.entryDate     <= @dateTo'      : ''}
-      ${status      ? 'AND h.status         = @status'      : ''}
-      ${department  ? 'AND h.department_code= @department'  : ''}`;
+      ${type        ? 'AND h.tsType          = @tsType'      : ''}
+      ${workOrderNo ? 'AND h.workOrderNo     = @workOrderNo' : ''}
+      ${projectId   ? 'AND h.projectId       = @projectId'   : ''}
+      ${dateFrom    ? 'AND h.entryDate      >= @dateFrom'    : ''}
+      ${dateTo      ? 'AND h.entryDate      <= @dateTo'      : ''}
+      ${status      ? 'AND h.status          = @status'      : ''}
+      ${department  ? 'AND h.department_code = @department'  : ''}`;
 
     const result = await req.query(`
       SELECT

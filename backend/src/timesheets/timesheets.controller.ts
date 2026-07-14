@@ -346,10 +346,11 @@ export class TimesheetsController {
     @Query('status')      status?: string,
     @Query('department')  department?: string,
     @Query('workOrderNo') workOrderNo?: string,
+    @Query('projectId')   projectId?: string,
     @Req() req?: any,
   ) {
     await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', this.typeToModule(type), 'canReport');
-    return this.timesheetsService.reportDetail({ dateFrom, dateTo, type, status, department, workOrderNo });
+    return this.timesheetsService.reportDetail({ dateFrom, dateTo, type, status, department, workOrderNo, projectId });
   }
 
   @Get('report-summary')

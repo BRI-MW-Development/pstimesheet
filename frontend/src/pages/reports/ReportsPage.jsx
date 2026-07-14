@@ -138,11 +138,18 @@ function FilterBar({ filters, setFilters, onRun, showType = true, tsType = '', e
               </div>
             </>
           ) : (
-            <div>
-              <label className="form-label">Department</label>
-              <input className="form-control form-control-sm" placeholder="Dept code" value={filters.department}
-                onChange={(e) => setFilters((f) => ({ ...f, department: e.target.value }))} />
-            </div>
+            <>
+              <div>
+                <label className="form-label">Project ID</label>
+                <input className="form-control form-control-sm" placeholder="Project ID" value={filters.projectId ?? ''}
+                  onChange={(e) => setFilters((f) => ({ ...f, projectId: e.target.value }))} />
+              </div>
+              <div>
+                <label className="form-label">Work Order #</label>
+                <input className="form-control form-control-sm" placeholder="Work Order No" value={filters.workOrderNo ?? ''}
+                  onChange={(e) => setFilters((f) => ({ ...f, workOrderNo: e.target.value }))} />
+              </div>
+            </>
           )}
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
             <button className="btn btn-primary btn-sm" style={{ width: '100%' }} onClick={onRun}>
@@ -285,7 +292,7 @@ const LINE_LABEL   = { LABOUR: 'Labour', MATERIAL: 'Material', EQUIPMENT: 'Equip
 function DetailReport({ tsType, onBack }) {
   const typeLabels = { PROD: 'Production', INST: 'Installation', PROJ: 'Project' };
   const isProj = tsType === 'PROJ';
-  const BLANK = { dateFrom: '', dateTo: '', status: '', department: '' };
+  const BLANK = { dateFrom: '', dateTo: '', status: '', department: '', workOrderNo: '', projectId: '' };
   const [filters, setFilters] = useState(BLANK);
   const [submitted, setSubmitted] = useState(null);
   const [selectedEmps, setSelectedEmps] = useState([]);
