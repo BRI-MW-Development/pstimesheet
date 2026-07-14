@@ -79,15 +79,15 @@ async function buildPool(config: {
     {
       provide: DEV_SQL_POOL,
       useFactory: async (): Promise<mssql.ConnectionPool> => {
-        const server = process.env.DEV_DB_SERVER;
-        const database = process.env.DEV_DB_NAME;
-        const user = process.env.DEV_DB_USER;
-        const password = process.env.DEV_DB_PASSWORD;
-        const port = Number(process.env.DEV_DB_PORT ?? 1433);
-        const trustCert = (process.env.DEV_DB_TRUST_CERT ?? 'yes').toLowerCase() === 'yes';
+        const server   = process.env.DEV_DB_SERVER   ?? process.env.DB_SERVER;
+        const database = process.env.DEV_DB_NAME     ?? process.env.DB_NAME;
+        const user     = process.env.DEV_DB_USER     ?? process.env.DB_USER;
+        const password = process.env.DEV_DB_PASSWORD ?? process.env.DB_PASSWORD;
+        const port     = Number(process.env.DEV_DB_PORT ?? process.env.DB_PORT ?? 1433);
+        const trustCert = ((process.env.DEV_DB_TRUST_CERT ?? process.env.DB_TRUST_CERT) ?? 'yes').toLowerCase() === 'yes';
 
         if (!server || !database || !user || !password) {
-          throw new Error('Missing dev DB config. Required: DEV_DB_SERVER, DEV_DB_NAME, DEV_DB_USER, DEV_DB_PASSWORD');
+          throw new Error('Missing DB config. Required: DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD');
         }
 
         return buildPool({ server, database, user, password, port, trustCert });
