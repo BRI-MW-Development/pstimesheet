@@ -16,8 +16,43 @@ function exportCSV(headers, rows, filename) {
   a.click();
 }
 
+// ── Employee multi-select dropdown ────────────────────────────────────────────
+function EmployeeMultiSelect({ options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const label = value.length === 0 ? 'All Employees'
+              : value.length === 1 ? value[0]
+              : `${value.length} selected`;
+  return (
+    <div style={{ position: 'relative' }}>
+      <div className="form-control form-control-sm"
+           style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+           onClick={() => setOpen((o) => !o)}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label}</span>
+        <span style={{ marginLeft: 6, flexShrink: 0, fontSize: 10 }}>▾</span>
+      </div>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 998 }} onClick={() => setOpen(false)} />
+          <div style={{ position: 'absolute', zIndex: 999, background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, top: '110%', left: 0, minWidth: '100%', maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+            {options.length === 0
+              ? <div style={{ padding: '8px 12px', color: 'var(--text3)', fontSize: 12 }}>Run report first to see employees</div>
+              : options.map((emp) => (
+                  <label key={emp} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}>
+                    <input type="checkbox" checked={value.includes(emp)}
+                           onChange={(e) => onChange(e.target.checked ? [...value, emp] : value.filter((s) => s !== emp))} />
+                    {emp}
+                  </label>
+                ))
+            }
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Filter bar shared by both reports ─────────────────────────────────────────
-function FilterBar({ filters, setFilters, onRun, showType = true }) {
+function FilterBar({ filters, setFilters, onRun, showType = true, tsType = '', employeeOptions = [], selectedEmps = [], onEmpsChange }) {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-body" style={{ padding: '14px 16px' }}>
@@ -55,11 +90,18 @@ function FilterBar({ filters, setFilters, onRun, showType = true }) {
               <option>Rejected</option>
             </select>
           </div>
-          <div>
-            <label className="form-label">Department</label>
-            <input className="form-control form-control-sm" placeholder="Dept code" value={filters.department}
-              onChange={(e) => setFilters((f) => ({ ...f, department: e.target.value }))} />
-          </div>
+          {tsType === 'PROJ' ? (
+            <div>
+              <label className="form-label">Employee</label>
+              <EmployeeMultiSelect options={employeeOptions} value={selectedEmps} onChange={onEmpsChange} />
+            </div>
+          ) : (
+            <div>
+              <label className="form-label">Department</label>
+              <input className="form-control form-control-sm" placeholder="Dept code" value={filters.department}
+                onChange={(e) => setFilters((f) => ({ ...f, department: e.target.value }))} />
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
             <button className="btn btn-primary btn-sm" style={{ width: '100%' }} onClick={onRun}>
               Run Report
@@ -200,15 +242,25 @@ const LINE_LABEL   = { LABOUR: 'Labour', MATERIAL: 'Material', EQUIPMENT: 'Equip
 
 function DetailReport({ tsType, onBack }) {
   const typeLabels = { PROD: 'Production', INST: 'Installation', PROJ: 'Project' };
+  const isProj = tsType === 'PROJ';
   const BLANK = { dateFrom: '', dateTo: '', status: '', department: '' };
   const [filters, setFilters] = useState(BLANK);
   const [submitted, setSubmitted] = useState(null);
+  const [selectedEmps, setSelectedEmps] = useState([]);
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: allRows = [], isLoading } = useQuery({
     queryKey: ['rpt-detail', tsType, submitted],
     queryFn: () => api.get('/timesheets/report-detail', { params: { type: tsType, ...submitted } }).then((r) => r.data),
     enabled: Boolean(submitted),
   });
+
+  const employeeOptions = isProj
+    ? [...new Set(allRows.map((r) => r.entered_by_name).filter(Boolean))].sort()
+    : [];
+
+  const rows = (isProj && selectedEmps.length > 0)
+    ? allRows.filter((r) => selectedEmps.includes(r.entered_by_name))
+    : allRows;
 
   function lineDesc(r) {
     if (r.lineType === 'LABOUR')                            return r.employeeName ?? r.employeeCode ?? '—';
@@ -226,16 +278,49 @@ function DetailReport({ tsType, onBack }) {
     return '—';
   }
 
-  function doExport() {
-    exportCSV(
-      ['Doc No', 'Date', 'Department', 'WO / Project', 'Line', 'Type', 'Description', 'Qty / Hours', 'Status'],
-      rows.map((r) => [
-        r.tsDocNo, r.entryDate, r.department_code, r.workOrderNo ?? r.projectId ?? '',
-        r.lineNumber, r.lineType, lineDesc(r), lineQty(r), r.status,
-      ]),
-      `${tsType.toLowerCase()}-detail-${new Date().toISOString().slice(0, 10)}.csv`
-    );
+  function lineDuration(r) {
+    if (r.lineType === 'LABOUR' && r.qty != null) {
+      const h = Math.floor(r.qty / 60);
+      const m = r.qty % 60;
+      return h > 0 && m > 0 ? `${h}h ${m}m` : h > 0 ? `${h}h` : `${m}m`;
+    }
+    return lineQty(r);
   }
+
+  function lineMins(r) {
+    if (r.lineType === 'LABOUR')    return r.qty != null ? r.qty : '—';
+    if (r.lineType === 'MACHINERY') return r.qty != null ? r.qty : '—';
+    return '—';
+  }
+
+  const colCount = isProj ? 10 : 10;
+
+  function doExport() {
+    if (isProj) {
+      exportCSV(
+        ['Doc No', 'Date', 'WO / Project', 'Line', 'Type', 'Description', 'Duration', 'Mins', 'Status'],
+        rows.map((r) => [
+          r.tsDocNo, r.entryDate, r.workOrderNo ?? r.projectId ?? '',
+          r.lineNumber, r.lineType, lineDesc(r), lineDuration(r), lineMins(r), r.status,
+        ]),
+        `proj-detail-${new Date().toISOString().slice(0, 10)}.csv`
+      );
+    } else {
+      exportCSV(
+        ['Doc No', 'Date', 'Department', 'WO / Project', 'Line', 'Type', 'Description', 'Qty / Hours', 'Status'],
+        rows.map((r) => [
+          r.tsDocNo, r.entryDate, r.department_code, r.workOrderNo ?? r.projectId ?? '',
+          r.lineNumber, r.lineType, lineDesc(r), lineQty(r), r.status,
+        ]),
+        `${tsType.toLowerCase()}-detail-${new Date().toISOString().slice(0, 10)}.csv`
+      );
+    }
+  }
+
+  const totalLabourMins = rows.filter((r) => r.lineType === 'LABOUR').reduce((s, r) => s + (r.qty ?? 0), 0);
+  const totalDurationLabel = isProj
+    ? (() => { const h = Math.floor(totalLabourMins / 60); const m = totalLabourMins % 60; return h > 0 && m > 0 ? `${h}h ${m}m` : h > 0 ? `${h}h` : `${m}m`; })()
+    : `${(totalLabourMins / 60).toFixed(1)}h`;
 
   return (
     <div className="page-content">
@@ -243,12 +328,21 @@ function DetailReport({ tsType, onBack }) {
         title={`${typeLabels[tsType]} Detail Report`}
         sub={`Line-level breakdown for ${typeLabels[tsType]} timesheets — labour, materials and equipment`}
         onBack={onBack}
-        onClear={() => { setFilters(BLANK); setSubmitted(null); }}
+        onClear={() => { setFilters(BLANK); setSubmitted(null); setSelectedEmps([]); }}
         onExport={doExport}
         hasData={rows.length > 0}
       />
 
-      <FilterBar filters={filters} setFilters={setFilters} showType={false} onRun={() => setSubmitted({ ...filters })} />
+      <FilterBar
+        filters={filters}
+        setFilters={setFilters}
+        showType={false}
+        onRun={() => setSubmitted({ ...filters })}
+        tsType={tsType}
+        employeeOptions={employeeOptions}
+        selectedEmps={selectedEmps}
+        onEmpsChange={setSelectedEmps}
+      />
 
       {rows.length > 0 && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -257,7 +351,7 @@ function DetailReport({ tsType, onBack }) {
             { label: 'Labour Lines',    value: rows.filter((r) => r.lineType === 'LABOUR').length },
             { label: 'Material Lines',  value: rows.filter((r) => r.lineType === 'MATERIAL').length },
             { label: 'Equipment Lines', value: rows.filter((r) => ['MACHINERY','VEHICLE','ACCESS','EQUIPMENT'].includes(r.lineType)).length },
-            { label: 'Total Duration',  value: `${(rows.filter((r) => r.lineType === 'LABOUR').reduce((s, r) => s + (r.qty ?? 0), 0) / 60).toFixed(1)}h` },
+            { label: 'Total Duration',  value: totalDurationLabel },
           ].map((k) => (
             <div key={k.label} className="card" style={{ marginBottom: 0, flex: 1, minWidth: 110 }}>
               <div className="card-body" style={{ padding: '12px 16px', textAlign: 'center' }}>
@@ -272,21 +366,23 @@ function DetailReport({ tsType, onBack }) {
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-body" style={{ padding: 0 }}>
           <div style={{ overflowX: 'auto' }}>
-            <table className="wip-table" style={{ minWidth: 780 }}>
+            <table className="wip-table" style={{ minWidth: isProj ? 720 : 780 }}>
               <thead>
                 <tr>
-                  <th>#</th><th>Doc No</th><th>Date</th><th>Department</th>
+                  <th>#</th><th>Doc No</th><th>Date</th>
+                  {!isProj && <th>Department</th>}
                   <th>WO / Project</th><th>Line</th><th>Type</th>
                   <th>Description</th>
-                  <th style={{ textAlign: 'right' }}>Qty / Hours</th>
+                  <th style={{ textAlign: 'right' }}>{isProj ? 'Duration' : 'Qty / Hours'}</th>
+                  {isProj && <th style={{ textAlign: 'right' }}>Mins</th>}
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text3)', padding: 40 }}>Loading…</td></tr>
+                  <tr><td colSpan={colCount} style={{ textAlign: 'center', color: 'var(--text3)', padding: 40 }}>Loading…</td></tr>
                 ) : rows.length === 0 ? (
-                  <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text3)', padding: 40 }}>
+                  <tr><td colSpan={colCount} style={{ textAlign: 'center', color: 'var(--text3)', padding: 40 }}>
                     {submitted ? 'No records found.' : 'Select filters and click Run Report'}
                   </td></tr>
                 ) : rows.map((r, i) => (
@@ -294,12 +390,13 @@ function DetailReport({ tsType, onBack }) {
                     <td style={{ color: 'var(--text3)', fontSize: 11 }}>{i + 1}</td>
                     <td><span className="wip-link">{r.tsDocNo}</span></td>
                     <td>{formatDate(r.entryDate)}</td>
-                    <td>{r.department_code ?? '—'}</td>
+                    {!isProj && <td>{r.department_code ?? '—'}</td>}
                     <td>{r.workOrderNo ?? r.projectId ?? '—'}</td>
                     <td style={{ color: 'var(--text3)', fontSize: 11 }}>{r.lineNumber}</td>
                     <td><Badge variant={LINE_VARIANT[r.lineType] ?? 'draft'}>{LINE_LABEL[r.lineType] ?? r.lineType}</Badge></td>
                     <td>{lineDesc(r)}</td>
-                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{lineQty(r)}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{isProj ? lineDuration(r) : lineQty(r)}</td>
+                    {isProj && <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{lineMins(r)}</td>}
                     <td><Badge variant={STATUS_VARIANT[r.status] ?? 'draft'}>{r.status}</Badge></td>
                   </tr>
                 ))}
