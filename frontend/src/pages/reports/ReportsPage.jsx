@@ -275,12 +275,12 @@ function DetailReport({ tsType, onBack }) {
   });
 
   const employeeOptions = isProj
-    ? [...new Set(allRows.map((r) => r.entered_by_name).filter(Boolean))].sort()
+    ? [...new Set(allRows.filter((r) => r.lineType === 'LABOUR').map((r) => r.employeeName).filter(Boolean))].sort()
     : [];
 
   const rows = (() => {
     let r = allRows;
-    if (isProj && selectedEmps.length > 0) r = r.filter((row) => selectedEmps.includes(row.entered_by_name));
+    if (isProj && selectedEmps.length > 0) r = r.filter((row) => row.lineType === 'LABOUR' && selectedEmps.includes(row.employeeName));
     if (isProj && projIdFilter.trim()) r = r.filter((row) => (row.projectId ?? '').toLowerCase().includes(projIdFilter.trim().toLowerCase()));
     return r;
   })();
@@ -371,13 +371,20 @@ function DetailReport({ tsType, onBack }) {
 
       {rows.length > 0 && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
-          {[
-            { label: 'Total Lines',     value: rows.length },
-            { label: 'Labour Lines',    value: rows.filter((r) => r.lineType === 'LABOUR').length },
-            { label: 'Material Lines',  value: rows.filter((r) => r.lineType === 'MATERIAL').length },
-            { label: 'Equipment Lines', value: rows.filter((r) => ['MACHINERY','VEHICLE','ACCESS','EQUIPMENT'].includes(r.lineType)).length },
-            { label: 'Total Duration',  value: totalDurationLabel },
-          ].map((k) => (
+          {(isProj
+            ? [
+                { label: 'Total Lines',    value: rows.length },
+                { label: 'Labour Lines',   value: rows.filter((r) => r.lineType === 'LABOUR').length },
+                { label: 'Total Duration', value: totalDurationLabel },
+              ]
+            : [
+                { label: 'Total Lines',     value: rows.length },
+                { label: 'Labour Lines',    value: rows.filter((r) => r.lineType === 'LABOUR').length },
+                { label: 'Material Lines',  value: rows.filter((r) => r.lineType === 'MATERIAL').length },
+                { label: 'Equipment Lines', value: rows.filter((r) => ['MACHINERY','VEHICLE','ACCESS','EQUIPMENT'].includes(r.lineType)).length },
+                { label: 'Total Duration',  value: totalDurationLabel },
+              ]
+          ).map((k) => (
             <div key={k.label} className="card" style={{ marginBottom: 0, flex: 1, minWidth: 110 }}>
               <div className="card-body" style={{ padding: '12px 16px', textAlign: 'center' }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{k.value}</div>
