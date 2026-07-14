@@ -407,12 +407,13 @@ function ApprovalForm({ initial, onSave, onClose, saving }) {
   const activeDepts = allDepts.filter(d => d.isActive !== false && d.isActive !== 0);
   const filteredDepts = activeDepts.filter(d => {
     const md = (d.mainDepartment ?? '').toLowerCase();
+    const dc = (d.departmentCode ?? '').toLowerCase();
     if (form.module === 'PROD' || form.module === 'WO')
-      return md.includes('production') || md.includes('digital');
+      return md.includes('production') || md.includes('digital') || dc.includes('produc');
     if (form.module === 'INST')
-      return md.includes('installation');
+      return md.includes('install') || dc.includes('install');
     if (form.module === 'PROJ' || form.module === 'QC')
-      return md.includes('project') || md.includes('digital');
+      return md.includes('project') || md.includes('digital') || dc.includes('proj');
     // ALL — show all active departments
     return true;
   });
