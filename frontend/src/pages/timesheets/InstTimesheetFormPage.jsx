@@ -475,7 +475,12 @@ export default function InstTimesheetFormPage() {
               <input className="form-control ts-input ts-readonly" value={entryPerson} readOnly />
             </div>
 
-            {approverPreview?.names?.length > 0 && (
+            {(tsStatus === 'Approved' || tsStatus === 'Rejected') && existing?.approvedBy ? (
+              <div className="ts-field-group">
+                <label className="ts-field-label">Approver</label>
+                <input className="form-control ts-input ts-readonly" value={existing.approvedBy} readOnly />
+              </div>
+            ) : approverPreview?.names?.length > 0 && (
               <div className="ts-field-group">
                 <label className="ts-field-label">Approver</label>
                 <div className="form-control ts-input ts-readonly" style={{ height: 'auto', minHeight: 34, display: 'flex', flexDirection: 'column', gap: 2 }}>
