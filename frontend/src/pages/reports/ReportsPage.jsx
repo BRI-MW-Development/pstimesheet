@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
 import Badge from '../../components/ui/Badge';
@@ -19,21 +19,33 @@ function exportCSV(headers, rows, filename) {
 // ── Employee multi-select dropdown ────────────────────────────────────────────
 function EmployeeMultiSelect({ options, value, onChange }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const triggerRef = useRef(null);
+
   const label = value.length === 0 ? 'All Employees'
               : value.length === 1 ? value[0]
               : `${value.length} selected`;
+
+  const toggle = () => {
+    if (!open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+    setOpen((o) => !o);
+  };
+
   return (
-    <div style={{ position: 'relative' }}>
-      <div className="form-control form-control-sm"
+    <div>
+      <div ref={triggerRef} className="form-control form-control-sm"
            style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-           onClick={() => setOpen((o) => !o)}>
+           onClick={toggle}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label}</span>
         <span style={{ marginLeft: 6, flexShrink: 0, fontSize: 10 }}>▾</span>
       </div>
       {open && (
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 998 }} onClick={() => setOpen(false)} />
-          <div style={{ position: 'absolute', zIndex: 999, background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, top: '110%', left: 0, minWidth: '100%', maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+          <div style={{ position: 'fixed', zIndex: 999, top: pos.top, left: pos.left, width: pos.width, background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
             {options.length === 0
               ? <div style={{ padding: '8px 12px', color: 'var(--text3)', fontSize: 12 }}>Run report first to see employees</div>
               : options.map((emp) => (
@@ -52,7 +64,7 @@ function EmployeeMultiSelect({ options, value, onChange }) {
 }
 
 // ── Filter bar shared by both reports ─────────────────────────────────────────
-function FilterBar({ filters, setFilters, onRun, showType = true, tsType = '', employeeOptions = [], selectedEmps = [], onEmpsChange }) {
+function FilterBar({ filters, setFilters, onRun, showType = true, tsType = '', employeeOptions = [], selectedEmps = [], onEmpsChange, projIdFilter = '', onProjIdChange }) {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-body" style={{ padding: '14px 16px' }}>
@@ -91,10 +103,17 @@ function FilterBar({ filters, setFilters, onRun, showType = true, tsType = '', e
             </select>
           </div>
           {tsType === 'PROJ' ? (
-            <div>
-              <label className="form-label">Employee</label>
-              <EmployeeMultiSelect options={employeeOptions} value={selectedEmps} onChange={onEmpsChange} />
-            </div>
+            <>
+              <div>
+                <label className="form-label">Employee</label>
+                <EmployeeMultiSelect options={employeeOptions} value={selectedEmps} onChange={onEmpsChange} />
+              </div>
+              <div>
+                <label className="form-label">Project ID</label>
+                <input className="form-control form-control-sm" placeholder="Project ID" value={projIdFilter}
+                  onChange={(e) => onProjIdChange(e.target.value)} />
+              </div>
+            </>
           ) : (
             <div>
               <label className="form-label">Department</label>
@@ -247,6 +266,7 @@ function DetailReport({ tsType, onBack }) {
   const [filters, setFilters] = useState(BLANK);
   const [submitted, setSubmitted] = useState(null);
   const [selectedEmps, setSelectedEmps] = useState([]);
+  const [projIdFilter, setProjIdFilter] = useState('');
 
   const { data: allRows = [], isLoading } = useQuery({
     queryKey: ['rpt-detail', tsType, submitted],
@@ -258,9 +278,12 @@ function DetailReport({ tsType, onBack }) {
     ? [...new Set(allRows.map((r) => r.entered_by_name).filter(Boolean))].sort()
     : [];
 
-  const rows = (isProj && selectedEmps.length > 0)
-    ? allRows.filter((r) => selectedEmps.includes(r.entered_by_name))
-    : allRows;
+  const rows = (() => {
+    let r = allRows;
+    if (isProj && selectedEmps.length > 0) r = r.filter((row) => selectedEmps.includes(row.entered_by_name));
+    if (isProj && projIdFilter.trim()) r = r.filter((row) => (row.projectId ?? '').toLowerCase().includes(projIdFilter.trim().toLowerCase()));
+    return r;
+  })();
 
   function lineDesc(r) {
     if (r.lineType === 'LABOUR')                            return r.employeeName ?? r.employeeCode ?? '—';
@@ -293,15 +316,15 @@ function DetailReport({ tsType, onBack }) {
     return '—';
   }
 
-  const colCount = isProj ? 10 : 10;
+  const colCount = isProj ? 9 : 10;
 
   function doExport() {
     if (isProj) {
       exportCSV(
-        ['Doc No', 'Date', 'WO / Project', 'Line', 'Type', 'Description', 'Duration', 'Mins', 'Status'],
+        ['Doc No', 'Date', 'WO / Project', 'Line', 'Description', 'Duration', 'Mins', 'Status'],
         rows.map((r) => [
           r.tsDocNo, r.entryDate, r.workOrderNo ?? r.projectId ?? '',
-          r.lineNumber, r.lineType, lineDesc(r), lineDuration(r), lineMins(r), r.status,
+          r.lineNumber, lineDesc(r), lineDuration(r), lineMins(r), r.status,
         ]),
         `proj-detail-${new Date().toISOString().slice(0, 10)}.csv`
       );
@@ -328,7 +351,7 @@ function DetailReport({ tsType, onBack }) {
         title={`${typeLabels[tsType]} Detail Report`}
         sub={`Line-level breakdown for ${typeLabels[tsType]} timesheets — labour, materials and equipment`}
         onBack={onBack}
-        onClear={() => { setFilters(BLANK); setSubmitted(null); setSelectedEmps([]); }}
+        onClear={() => { setFilters(BLANK); setSubmitted(null); setSelectedEmps([]); setProjIdFilter(''); }}
         onExport={doExport}
         hasData={rows.length > 0}
       />
@@ -342,6 +365,8 @@ function DetailReport({ tsType, onBack }) {
         employeeOptions={employeeOptions}
         selectedEmps={selectedEmps}
         onEmpsChange={setSelectedEmps}
+        projIdFilter={projIdFilter}
+        onProjIdChange={setProjIdFilter}
       />
 
       {rows.length > 0 && (
@@ -371,7 +396,8 @@ function DetailReport({ tsType, onBack }) {
                 <tr>
                   <th>#</th><th>Doc No</th><th>Date</th>
                   {!isProj && <th>Department</th>}
-                  <th>WO / Project</th><th>Line</th><th>Type</th>
+                  <th>WO / Project</th><th>Line</th>
+                  {!isProj && <th>Type</th>}
                   <th>Description</th>
                   <th style={{ textAlign: 'right' }}>{isProj ? 'Duration' : 'Qty / Hours'}</th>
                   {isProj && <th style={{ textAlign: 'right' }}>Mins</th>}
@@ -393,7 +419,7 @@ function DetailReport({ tsType, onBack }) {
                     {!isProj && <td>{r.department_code ?? '—'}</td>}
                     <td>{r.workOrderNo ?? r.projectId ?? '—'}</td>
                     <td style={{ color: 'var(--text3)', fontSize: 11 }}>{r.lineNumber}</td>
-                    <td><Badge variant={LINE_VARIANT[r.lineType] ?? 'draft'}>{LINE_LABEL[r.lineType] ?? r.lineType}</Badge></td>
+                    {!isProj && <td><Badge variant={LINE_VARIANT[r.lineType] ?? 'draft'}>{LINE_LABEL[r.lineType] ?? r.lineType}</Badge></td>}
                     <td>{lineDesc(r)}</td>
                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{isProj ? lineDuration(r) : lineQty(r)}</td>
                     {isProj && <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{lineMins(r)}</td>}
