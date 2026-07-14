@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
 import Badge from '../../components/ui/Badge';
@@ -16,24 +16,73 @@ function exportCSV(headers, rows, filename) {
   a.click();
 }
 
-// ── Employee multi-select (scrollable checkbox list) ─────────────────────────
+// ── Employee searchable multi-select dropdown ─────────────────────────────────
 function EmployeeMultiSelect({ options, value, onChange }) {
-  if (options.length === 0) {
-    return (
-      <div className="form-control form-control-sm" style={{ color: 'var(--text3)', fontSize: 12, height: 'auto', minHeight: 32 }}>
-        Run report first
-      </div>
-    );
-  }
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const containerRef = useRef(null);
+  const searchRef = useRef(null);
+
+  const filtered = options.filter((e) => e.toLowerCase().includes(search.toLowerCase()));
+  const label = value.length === 0 ? 'All Employees'
+              : value.length === 1 ? value[0]
+              : `${value.length} selected`;
+
+  const openDropdown = () => {
+    if (containerRef.current) {
+      const r = containerRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 2, left: r.left, width: r.width });
+    }
+    setOpen(true);
+    setSearch('');
+    setTimeout(() => searchRef.current?.focus(), 10);
+  };
+
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 6, maxHeight: 108, overflowY: 'auto', background: 'var(--input-bg, var(--card-bg))' }}>
-      {options.map((emp) => (
-        <label key={emp} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid var(--border)' }}>
-          <input type="checkbox" checked={value.includes(emp)}
-                 onChange={(e) => onChange(e.target.checked ? [...value, emp] : value.filter((s) => s !== emp))} />
-          {emp}
-        </label>
-      ))}
+    <div ref={containerRef}>
+      <div className="form-control form-control-sm"
+           style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+           onClick={() => (open ? setOpen(false) : openDropdown())}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {options.length === 0 ? <span style={{ color: 'var(--text3)', fontSize: 12 }}>Run report first</span> : label}
+        </span>
+        <span style={{ flexShrink: 0, fontSize: 10, marginLeft: 6 }}>▾</span>
+      </div>
+      {open && (
+        <>
+          {/* backdrop — onMouseDown so stopPropagation inside dropdown prevents this from firing */}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1000 }} onMouseDown={() => setOpen(false)} />
+          <div
+            style={{ position: 'fixed', zIndex: 1001, top: pos.top, left: pos.left, width: Math.max(pos.width, 220), background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', overflow: 'hidden' }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
+              <input ref={searchRef} className="form-control form-control-sm" placeholder="Search…"
+                     value={search} onChange={(e) => setSearch(e.target.value)}
+                     style={{ margin: 0 }} />
+            </div>
+            <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+              {filtered.length === 0
+                ? <div style={{ padding: '8px 12px', color: 'var(--text3)', fontSize: 12 }}>No matches</div>
+                : filtered.map((emp) => (
+                    <label key={emp} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}>
+                      <input type="checkbox" checked={value.includes(emp)}
+                             onChange={(e) => onChange(e.target.checked ? [...value, emp] : value.filter((s) => s !== emp))} />
+                      {emp}
+                    </label>
+                  ))
+              }
+            </div>
+            {value.length > 0 && (
+              <div style={{ padding: '5px 10px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-outline btn-sm" style={{ fontSize: 11, padding: '2px 8px' }}
+                        onClick={() => onChange([])}>Clear</button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
