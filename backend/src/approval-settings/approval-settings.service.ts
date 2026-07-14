@@ -293,7 +293,7 @@ export class ApprovalSettingsService implements OnModuleInit {
     const userIsApproverFor = (rule: any): boolean => {
       const ids   = this.splitTrim(rule.approverUserIds);
       const names = this.splitTrim(rule.approverNames);
-      if (ids.length > 0)   return ids.includes(userId);
+      if (ids.length > 0 && ids.includes(userId)) return true;
       if (names.length > 0) return names.some(n => n.toLowerCase() === (displayName ?? '').toLowerCase());
       return false; // no specific approvers saved → nobody matches
     };

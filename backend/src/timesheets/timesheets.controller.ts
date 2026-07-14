@@ -103,15 +103,17 @@ export class TimesheetsController {
   }
 
   @Get('pending-approvals')
-  async getPendingApprovals(@Query('department') department?: string, @Req() req?: any) {
-    const roleCode   = req?.currentUser?.roleCode   ?? '';
-    const userId     = req?.currentUser?.userId     ?? '';
+  async getPendingApprovals(@Query('department') department?: string, @Query('debug') debug?: string, @Req() req?: any) {
+    const roleCode    = req?.currentUser?.roleCode    ?? '';
+    const userId      = req?.currentUser?.userId      ?? '';
     const displayName = req?.currentUser?.displayName ?? '';
 
     const isApprover = await this.timesheetsService.isTimesheetApprover(roleCode);
     if (!isApprover) throw new HttpException({ message: 'You do not have permission to view pending approvals' }, HttpStatus.FORBIDDEN);
 
     const all = await this.timesheetsService.getPendingApprovals(department);
+    const debugMode = debug === '1';
+    const debugRows: any[] = [];
 
     // Filter to only timesheets this specific user is authorised to approve
     const allowed: typeof all = [];
@@ -121,10 +123,12 @@ export class TimesheetsController {
         { tsType: ts.tsType, department_code: ts.department_code, shiftCode: ts.shiftCode, projectId: ts.projectId, workOrderNo: ts.workOrderNo, digitalTech: ts.digitalTech },
         true,
       );
-      this.logger.debug(`[pending-approvals] ${ts.tsDocNo} (${ts.tsType}) user=${userId} displayName="${displayName}" → allowed=${check.allowed} reason="${check.reason}"`);
+      this.logger.log(`[pending-approvals] ${ts.tsDocNo} (${ts.tsType}) dept="${ts.department_code}" user=${userId} name="${displayName}" → allowed=${check.allowed} reason="${check.reason}"`);
       if (check.allowed) allowed.push(ts);
+      if (debugMode) debugRows.push({ tsDocNo: ts.tsDocNo, tsType: ts.tsType, department_code: ts.department_code, allowed: check.allowed, reason: check.reason });
     }
-    this.logger.log(`[pending-approvals] user=${userId} total=${all.length} allowed=${allowed.length}`);
+    this.logger.log(`[pending-approvals] user=${userId} name="${displayName}" total=${all.length} allowed=${allowed.length}`);
+    if (debugMode) return { userId, displayName, total: all.length, allowed: allowed.length, rows: debugRows };
     return allowed;
   }
 

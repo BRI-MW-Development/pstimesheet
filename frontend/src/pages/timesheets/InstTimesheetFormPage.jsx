@@ -315,7 +315,7 @@ export default function InstTimesheetFormPage() {
       department: header.department,
       date: header.date,
       shift: header.shift,
-      digitalTech: isDigitalDept ? header.digitalTech : null,
+      digitalTech: isDigitalDept ? header.digitalTech : 'No',
       entryPerson,
       labourRows,
       materialRows,
