@@ -169,6 +169,7 @@ const NAV_GROUPS = [
       { label: 'Installation',      to: '/timesheets/inst',              perm: { module: 'INST',        action: 'canRead' } },
       { label: 'Projects Team',     to: '/timesheets/project',           perm: { module: 'PROJ',        action: 'canRead' } },
       { label: 'Pending Approvals', to: '/timesheets/pending-approvals', perm: { module: 'PENDING_APPROVALS', action: 'canRead' } },
+      { label: 'Timeline', to: '/timesheets/timeline', perm: { module: 'TIMELINE', action: 'canRead' } },
       { label: 'WO Complete',       to: '/woc',                          perm: { module: 'WO_COMPLETE', action: 'canRead' } },
     ],
   },
@@ -197,6 +198,7 @@ const NAV_GROUPS = [
     links: [
       { label: 'Users',         to: '/admin/users',         perm: { module: 'USERS', action: 'canRead' } },
       { label: 'Roles',         to: '/admin/roles',         perm: { module: 'ROLES', action: 'canRead' } },
+      { label: 'HOD Teams',     to: '/admin/hod-teams',     perm: { module: 'HOD_TEAMS', action: 'canRead' } },
       { label: 'Login History', to: '/admin/login-history', perm: { module: 'USERS', action: 'canRead' } },
     ],
   },
@@ -432,7 +434,7 @@ export default function AppShell() {
   // Form pages fill the full content area.
   // Removing main-content padding + setting overflow:hidden fixes the height:100% chain
   // so inner scroll panels (ts-scroll-panel, qc-panel-*) get a finite height to scroll within.
-  const isFullBleed = /^\/(qc\/(new|[^/]+(\/edit|\/view)?)|timesheets\/(prod|inst|project)\/(new|[^/]+(\/edit|\/view)?))$/.test(location.pathname);
+  const isFullBleed = /^\/(qc\/(new|[^/]+(\/edit|\/view)?)|timesheets\/(prod|inst|project)\/(new|[^/]+(\/edit|\/view)?)|timesheets\/timeline|admin\/hod-teams)$/.test(location.pathname);
   const [openGroup,      setOpenGroup]      = useState(null);
   const [showProfile,    setShowProfile]    = useState(false);
   const [showNotif,      setShowNotif]      = useState(false);

@@ -124,10 +124,10 @@ export class RolesService implements OnModuleInit {
       .input('roleCode', mssql.NVarChar(30), roleCode)
       .query(`
         SELECT TOP 50 id, action, performedByName, details,
-               CONVERT(VARCHAR(24), createdAt, 126) AS createdAt
+               CONVERT(VARCHAR(24), loggedAt, 126) AS createdAt
         FROM   PSTsAuditLog
         WHERE  docType = 'ROLE' AND docRef = @roleCode
-        ORDER  BY createdAt DESC
+        ORDER  BY loggedAt DESC
       `);
     return res.recordset;
   }

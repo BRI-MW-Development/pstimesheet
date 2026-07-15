@@ -1,9 +1,12 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Logger, NotFoundException, Param, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Logger, NotFoundException, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { PermissionGuard } from '../auth/permission.guard';
+import { RequirePermission } from '../auth/permission.decorator';
 import { TimesheetsService } from './timesheets.service';
 import { AuditService } from '../audit/audit.service';
 import { ApprovalSettingsService } from '../approval-settings/approval-settings.service';
 import { EmailSettingsService } from '../email-settings/email-settings.service';
 import { EmailService } from '../email/email.service';
+import { HodTeamsService } from '../hod-teams/hod-teams.service';
 
 @Controller('timesheets')
 export class TimesheetsController {
@@ -15,6 +18,7 @@ export class TimesheetsController {
     private readonly approvalSettingsService: ApprovalSettingsService,
     private readonly emailSettingsService: EmailSettingsService,
     private readonly emailService: EmailService,
+    private readonly hodTeamsService: HodTeamsService,
   ) {}
 
   // Send notifications respecting the rules table
@@ -96,10 +100,52 @@ export class TimesheetsController {
     //  'All' + admin/approver → seeAll (no filter)
     //  'OwnDept'             → filter by the user's assigned department_code
     //  anything else         → filter by entered_by_user_id / employee code
-    const seeAll  = dataScope === 'All' && (isAdmin || isApprover);
-    const deptCode = dataScope === 'OwnDept' ? departmentCode : null;
+    const seeAll = dataScope === 'All' && (isAdmin || isApprover);
 
-    return this.timesheetsService.list(type, workOrderNo, dateFrom, dateTo, status, department, userId, seeAll, employeeCode, deptCode);
+    // HOD team filter — fetch first so it can override OwnDept/Own scope
+    let teamCodes: string[] | null = null;
+    if (!seeAll && employeeCode) {
+      const codes = await this.hodTeamsService.getTeamByHod(employeeCode);
+      if (codes.length > 0) teamCodes = codes;
+    }
+
+    // HOD team takes full priority — ignore department scope when team is assigned
+    // This handles employees from different departments assigned to the same HOD
+    const deptCode = (!teamCodes && dataScope === 'OwnDept') ? departmentCode : null;
+
+    return this.timesheetsService.list(type, workOrderNo, dateFrom, dateTo, status, department, userId, seeAll, employeeCode, deptCode, teamCodes);
+  }
+
+  @Get('employee-timeline')
+  async employeeTimeline(
+    @Query('employeeCode') employeeCode: string,
+    @Query('dateFrom')     dateFrom: string,
+    @Query('dateTo')       dateTo: string,
+    @Query('type')         type?: string,
+  ) {
+    return this.timesheetsService.getEmployeeMonthTimeline({ employeeCode, dateFrom, dateTo, type });
+  }
+
+  @UseGuards(PermissionGuard)
+  @RequirePermission('TIMELINE', 'canRead')
+  @Get('timeline')
+  async timeline(
+    @Query('date')       date: string,
+    @Query('department') department?: string,
+    @Query('type')       type?: string,
+    @Req() req?: any,
+  ) {
+    const employeeCode = req?.currentUser?.employeeCode ?? null;
+    const roleCode     = req?.currentUser?.roleCode     ?? '';
+    const isAdmin      = ['Admin', 'Manager', 'Supervisor'].includes(roleCode);
+
+    let teamCodes: string[] | null = null;
+    if (!isAdmin && employeeCode) {
+      const codes = await this.hodTeamsService.getTeamByHod(employeeCode);
+      if (codes.length > 0) teamCodes = codes;
+    }
+
+    return this.timesheetsService.getTimeline({ date, department, type, teamCodes });
   }
 
   @Get('pending-approvals')

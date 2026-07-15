@@ -1,6 +1,6 @@
 # OpsDesk — Technical Documentation
 
-**Version:** 3.8  
+**Version:** 3.9  
 **Last Updated:** July 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -259,6 +259,47 @@ Fields are arranged in 2-column pairs to reduce vertical scrolling:
 
 **Print:** `/qc/:id/print` — opens in new tab, generates high-quality PDF via jsPDF + html2canvas. Photos are loaded server-side as base64 data URIs (`GET /qc/attachments/:id/download`) to avoid S3 CORS restrictions that block html2canvas `useCORS`. Missing S3 objects show "Unavailable" instead of a spinner.
 
+### Timeline
+
+Route: `/timesheets/timeline`  
+Permission: `TIMELINE.canRead`
+
+Visual Gantt-style view of all timesheet sessions for a given date. Shows labour start/end times as horizontal bars per employee, grouped by department.
+
+**Overnight shifts:** Sessions starting on date D but ending past midnight are split into two visual representations:
+- Entry-date bar clips at midnight (23:59) and shows a `▶` indicator
+- Next-day continuation bar starts at 00:00 with a `◀` indicator and dashed border
+- Both bars are generated via a UNION ALL query — the second SELECT matches `h.entryDate = DATEADD(day, -1, TRY_CAST(@date AS DATE))` (sargable, uses index)
+
+**HOD scoping:** If the logged-in user has an HOD team assigned, only their team members' sessions are shown (same scoping as the timesheet list).
+
+### HOD Teams
+
+Route: `/admin/hod-teams`  
+Permission: `HOD_TEAMS.canRead` (view) · `HOD_TEAMS.canWrite` (add/remove)
+
+Many-to-many assignment of employees to HODs (Heads of Department). One employee can belong to multiple HODs; one HOD can manage employees across departments.
+
+**Table:** `PSHodTeamMembers(id, hodCode, employeeCode, createdAt)` — unique constraint on `(hodCode, employeeCode)`. Auto-created on startup via `onModuleInit()`.
+
+**HOD data scope override:** When a user has team members in `PSHodTeamMembers`, the HOD team filter takes priority over the role's `dataScope` (`OwnDept` / `Own`). The `deptCode` filter is only applied when no team is assigned:
+```typescript
+deptCode = (!teamCodes && dataScope === 'OwnDept') ? departmentCode : null
+```
+
+This ensures cross-department employees assigned to a HOD remain visible regardless of department boundaries.
+
+**In-memory cache:** `HodTeamsService.getTeamByHod()` caches results for 60 seconds per HOD code (`Map<string, { codes, expiresAt }>`). Cache is invalidated immediately on `addMember()` / `removeMember()`.
+
+**Endpoints:**
+
+| Method | Path | Permission | Description |
+|--------|------|-----------|-------------|
+| GET | `/hod-teams` | HOD_TEAMS.canRead | All HOD→employee assignments |
+| GET | `/hod-teams/:hodCode` | HOD_TEAMS.canRead | Team members for one HOD |
+| POST | `/hod-teams` | HOD_TEAMS.canWrite | Add employee to HOD team |
+| DELETE | `/hod-teams/:hodCode/:employeeCode` | HOD_TEAMS.canWrite | Remove employee from HOD team |
+
 ### Settings
 
 | Route | Description |
@@ -314,6 +355,7 @@ Requires `REPORTS.canRead` permission.
 | `psTsDocSequence` | Auto-incrementing doc numbers |
 | `PsNotifSeen` | Notification read state (userId, notifKey) |
 | `PsNotifPreferences` | Per-user notification type preferences (userId, notifType, enabled) |
+| `PSHodTeamMembers` | Many-to-many HOD → employee assignments (hodCode, employeeCode) — auto-created on startup |
 
 ### Key Column: `PSTsHeader.entered_by_user_id`
 Added in v3.2. Stores the creator's user ID for data scoping. Auto-migrated via `onModuleInit()` (`ALTER TABLE ... ADD ... NULL`). Existing records have NULL and are visible to all users until re-saved.
@@ -762,6 +804,11 @@ All endpoints require: `Authorization: Bearer <sessionToken>`
 | GET | `/qc/eligible-wos` | Authenticated | WOs with Full QC (for WOC) |
 | GET | `/wo-complete` | WO_COMPLETE.canRead | List WO completions |
 | POST | `/wo-complete` | WO_COMPLETE.canCreate | Create WO complete |
+| GET | `/timesheets/timeline` | TIMELINE.canRead | Gantt timeline for a given date (HOD-scoped) |
+| GET | `/hod-teams` | HOD_TEAMS.canRead | All HOD→employee assignments |
+| GET | `/hod-teams/:hodCode` | HOD_TEAMS.canRead | Team members for a specific HOD |
+| POST | `/hod-teams` | HOD_TEAMS.canWrite | Add employee to HOD team |
+| DELETE | `/hod-teams/:hodCode/:employeeCode` | HOD_TEAMS.canWrite | Remove employee from HOD team |
 | GET | `/analytics` | REPORTS.canRead | Analytics data |
 | GET | `/notifications` | Authenticated | User notifications (filtered by preferences) |
 | PATCH | `/notifications/:key/read` | Authenticated | Mark one notification read |
@@ -846,6 +893,45 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v3.9 (July 2026)
+HOD Teams, Timeline module, overnight shift support, and bug fixes.
+
+**HOD Teams — new module**
+- New `PSHodTeamMembers` table (auto-created on startup): many-to-many HOD → employee assignments with a unique constraint on `(hodCode, employeeCode)`.
+- `HodTeamsService` with 60-second in-memory TTL cache (`Map<hodCode, { codes, expiresAt }>`). Cache invalidated immediately on add/remove mutations.
+- `HodTeamsController` — 4 endpoints, all guarded with `PermissionGuard` + `RequirePermission('HOD_TEAMS', ...)`.
+- `HodTeamsModule` is exported so `TimesheetsModule` can inject `HodTeamsService` for data scoping.
+- **HOD scope override:** when a user has an HOD team, `teamCodes` takes full priority over `dataScope`. The `deptCode` filter is only applied when `!teamCodes && dataScope === 'OwnDept'` — ensures cross-department employees assigned to a HOD remain visible.
+- `HodTeamsPage.jsx` (`/admin/hod-teams`): split-panel UI — left panel is a searchable employee list with HOD badge; right panel shows the selected HOD's current team with add/remove. Double deduplication (Set in queryFn + Map at render) handles ERP JOIN duplicates.
+
+**Timeline — new module (`TIMELINE`)**
+- `TimelinePage.jsx` (`/timesheets/timeline`): Gantt-style visual of sessions for a selected date. Labour bars rendered per employee grouped by department.
+- `TIMELINE` module added to `MODULE_LABELS` and the Timesheets group in `RolesPage.jsx`. Timeline nav in `AppShell.jsx` changed from `module: 'PROD'` to `module: 'TIMELINE'`.
+- `GET /timesheets/timeline` endpoint guarded with `@RequirePermission('TIMELINE', 'canRead')`.
+- HOD scoping applied: non-admin users with a HOD team only see their team members' sessions.
+
+**Overnight shift — Timeline fix**
+- Sessions starting near midnight and ending the following day are now split into two visual bars:
+  - Entry-date bar: clips at minute 1440 (00:00 next day), shows `▶` indicator
+  - Next-day continuation bar: starts at minute 0, shows `◀` indicator with dashed border, tooltip shows "Start: 00:00 (prev day →)"
+- Backend: UNION ALL in `getTimeline()` — second SELECT uses `h.entryDate = DATEADD(day, -1, TRY_CAST(@date AS DATE))` (sargable, uses index) instead of the previous non-sargable `CONVERT(VARCHAR, DATEADD(day, 1, …))` comparison.
+
+**Roles & Users — history tab fix**
+- `RolesService.getHistory()` and `UsersService.getHistory()` were querying a non-existent `createdAt` column. Fixed to `loggedAt` (the actual column name in `PSTsAuditLog`). Both ORDER BY and CONVERT clauses updated.
+
+**Role permissions — cache stale after save fix**
+- `RolesPage.jsx` save mutation `onSuccess` was only invalidating `['roles']`. Added `queryClient.invalidateQueries({ queryKey: ['role-perms', roleCode] })` so the permissions modal reflects the saved state immediately without requiring a page refresh.
+
+**Module wiring**
+- `HodTeamsModule` added to `AppModule` imports.
+- `TimesheetsModule` imports `HodTeamsModule` to inject `HodTeamsService` into `TimesheetsController`.
+- `isFullBleed` regex in `AppShell.jsx` extended to include `admin/hod-teams`.
+
+**Backend tsconfig**
+- Added `"ignoreDeprecations": "5.0"` to `backend/tsconfig.json` to silence the VS Code warning about `baseUrl` without affecting `tsc` compilation.
+
+---
 
 ### v3.8 (July 2026)
 Bug-fix release covering entry person display, blank screen on view, scroll, geo location, and email settings cleanup.

@@ -566,6 +566,7 @@ export class TimesheetsService implements OnModuleInit {
     seeAll?: boolean,
     employeeCode?: string | null,
     deptCode?: string | null,
+    teamCodes?: string[] | null,
   ): Promise<any[]> {
     const req = this.devPool.request();
     if (type)        req.input('tsType',      mssql.NVarChar(20),  type);
@@ -578,14 +579,15 @@ export class TimesheetsService implements OnModuleInit {
     let scopeSql = '';
 
     if (seeAll) {
-      // Admin / approver with All scope — no restriction
       scopeSql = '';
+    } else if (teamCodes && teamCodes.length > 0) {
+      // HOD scope: show only timesheets where a team member appears in a labour line
+      const inList = teamCodes.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+      scopeSql = `AND EXISTS (SELECT 1 FROM PSTsLabourLine l WHERE l.tsId = h.tsId AND l.employeeCode IN (${inList}))`;
     } else if (deptCode) {
-      // OwnDept: see all timesheets for the user's assigned department regardless of who entered them
       req.input('deptCode', mssql.NVarChar(50), deptCode);
       scopeSql = `AND h.department_code = @deptCode`;
     } else if (userId) {
-      // Own: see only timesheets the user entered or where their employee appears in a labour line
       req.input('userId', mssql.NVarChar(50), userId);
       if (employeeCode) {
         req.input('empCode', mssql.NVarChar(100), employeeCode);
@@ -660,6 +662,187 @@ export class TimesheetsService implements OnModuleInit {
     }
 
     return rows;
+  }
+
+  // ── Timeline ─────────────────────────────────────────────────────
+  async getTimeline(filters: { date: string; department?: string; type?: string; teamCodes?: string[] | null }): Promise<any[]> {
+    const { date, department, type, teamCodes } = filters;
+    const req = this.devPool.request();
+    req.input('date', mssql.NVarChar(20), date);
+    if (type)       req.input('tsType', mssql.NVarChar(20), type);
+    if (department) req.input('dept',   mssql.NVarChar(50), department);
+
+    const teamFilter = teamCodes ? `AND l.employeeCode IN (${teamCodes.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})` : '';
+
+    const result = await req.query(`
+      -- Same-day entries (overnight entries clipped at midnight)
+      SELECT
+        ISNULL(l.employeeCode, 'UNK') AS employeeCode,
+        ISNULL(l.employeeName, 'Unknown') AS employeeName,
+        ISNULL(h.workOrderNo, h.projectId) AS workOrderNo,
+        h.projectId,
+        h.projectName,
+        h.department_code,
+        h.tsDocNo,
+        h.status,
+        l.startTime,
+        l.endTime,
+        l.lineNumber,
+        ISNULL(NULLIF(l.durationMinutes, 0),
+          CASE
+            WHEN l.startTime IS NOT NULL AND l.startTime <> ''
+             AND l.endTime   IS NOT NULL AND l.endTime   <> ''
+            THEN
+              CASE WHEN TRY_CAST(l.startTime AS TIME) > TRY_CAST(l.endTime AS TIME)
+                   THEN 1440 - DATEDIFF(MINUTE, '00:00', TRY_CAST(l.startTime AS TIME)) + DATEDIFF(MINUTE, '00:00', TRY_CAST(l.endTime AS TIME))
+                   ELSE DATEDIFF(MINUTE, TRY_CAST(l.startTime AS TIME), TRY_CAST(l.endTime AS TIME))
+              END
+            ELSE 0
+          END
+        ) AS durationMinutes,
+        CASE WHEN l.startTime IS NOT NULL AND l.startTime <> ''
+                  AND l.endTime IS NOT NULL AND l.endTime <> ''
+                  AND TRY_CAST(l.startTime AS TIME) > TRY_CAST(l.endTime AS TIME)
+             THEN 1 ELSE 0 END AS isOvernight,
+        0 AS isContinuation
+      FROM PSTsHeader h
+      JOIN PSTsLabourLine l ON l.tsId = h.tsId
+      WHERE h.isDeleted = 0
+        AND h.status <> 'Rejected'
+        AND CONVERT(VARCHAR(10), h.entryDate, 120) = @date
+        ${type       ? 'AND h.tsType          = @tsType' : ''}
+        ${department ? 'AND h.department_code = @dept'   : ''}
+        ${teamFilter}
+
+      UNION ALL
+
+      -- Overnight continuations: previous-day overnight entries shown on next day (midnight → end)
+      SELECT
+        ISNULL(l.employeeCode, 'UNK') AS employeeCode,
+        ISNULL(l.employeeName, 'Unknown') AS employeeName,
+        ISNULL(h.workOrderNo, h.projectId) AS workOrderNo,
+        h.projectId,
+        h.projectName,
+        h.department_code,
+        h.tsDocNo,
+        h.status,
+        '00:00' AS startTime,
+        l.endTime,
+        l.lineNumber,
+        DATEDIFF(MINUTE, '00:00', TRY_CAST(l.endTime AS TIME)) AS durationMinutes,
+        1 AS isOvernight,
+        1 AS isContinuation
+      FROM PSTsHeader h
+      JOIN PSTsLabourLine l ON l.tsId = h.tsId
+      WHERE h.isDeleted = 0
+        AND h.status <> 'Rejected'
+        AND h.entryDate = DATEADD(day, -1, TRY_CAST(@date AS DATE))
+        AND l.startTime IS NOT NULL AND l.startTime <> ''
+        AND l.endTime IS NOT NULL AND l.endTime <> ''
+        AND TRY_CAST(l.startTime AS TIME) > TRY_CAST(l.endTime AS TIME)
+        ${type       ? 'AND h.tsType          = @tsType' : ''}
+        ${department ? 'AND h.department_code = @dept'   : ''}
+        ${teamFilter}
+
+      ORDER BY employeeName, startTime, lineNumber
+    `);
+
+    const empMap = new Map<string, any>();
+    for (const row of result.recordset) {
+      const key = row.employeeCode;
+      if (!empMap.has(key)) {
+        empMap.set(key, {
+          employeeCode: row.employeeCode,
+          employeeName: row.employeeName,
+          tasks: [],
+        });
+      }
+      const startTime = toHM(row.startTime) ?? '';
+      const endTime   = toHM(row.endTime)   ?? '';
+      const durationMinutes = Number(row.durationMinutes) || calcDurationMinutes(startTime, endTime) || 0;
+      empMap.get(key)!.tasks.push({
+        workOrderNo:     row.workOrderNo    ?? '',
+        projectId:       row.projectId      ?? '',
+        projectName:     row.projectName    ?? '',
+        department:      row.department_code ?? '',
+        tsDocNo:         row.tsDocNo,
+        status:          row.status,
+        startTime,
+        endTime,
+        durationMinutes,
+        lineNumber:      row.lineNumber,
+        isOvernight:     !!row.isOvernight,
+        isContinuation:  !!row.isContinuation,
+      });
+    }
+
+    return [...empMap.values()].map(emp => {
+      const totalMinutes = emp.tasks.reduce((s: number, t: any) => s + t.durationMinutes, 0);
+      const withTime     = emp.tasks.filter((t: any) => t.startTime);
+      const clockIn      = withTime[0]?.startTime ?? '';
+      const clockOut     = withTime[withTime.length - 1]?.endTime ?? '';
+      return { ...emp, totalMinutes, clockIn, clockOut };
+    });
+  }
+
+  // ── Employee Month Timeline ──────────────────────────────────────
+  async getEmployeeMonthTimeline(filters: { employeeCode: string; dateFrom: string; dateTo: string; type?: string }): Promise<any[]> {
+    const { employeeCode, dateFrom, dateTo, type } = filters;
+    const req = this.devPool.request();
+    req.input('employeeCode', mssql.NVarChar(100), employeeCode);
+    req.input('dateFrom',     mssql.NVarChar(10),  dateFrom);
+    req.input('dateTo',       mssql.NVarChar(10),  dateTo);
+    if (type) req.input('tsType', mssql.NVarChar(20), type);
+
+    const result = await req.query(`
+      SELECT
+        CONVERT(VARCHAR(10), h.entryDate, 120) AS entryDate,
+        ISNULL(h.workOrderNo, h.projectId)     AS workOrderNo,
+        h.projectId, h.projectName,
+        h.department_code AS department,
+        h.tsDocNo, h.status,
+        l.startTime, l.endTime, l.lineNumber,
+        ISNULL(NULLIF(l.durationMinutes, 0),
+          CASE
+            WHEN l.startTime IS NOT NULL AND l.startTime <> ''
+             AND l.endTime   IS NOT NULL AND l.endTime   <> ''
+            THEN DATEDIFF(MINUTE, TRY_CAST(l.startTime AS TIME), TRY_CAST(l.endTime AS TIME))
+            ELSE 0
+          END
+        ) AS durationMinutes
+      FROM PSTsHeader h
+      JOIN PSTsLabourLine l ON l.tsId = h.tsId
+      WHERE h.isDeleted = 0
+        AND h.status <> 'Rejected'
+        AND l.employeeCode = @employeeCode
+        AND CONVERT(VARCHAR(10), h.entryDate, 120) >= @dateFrom
+        AND CONVERT(VARCHAR(10), h.entryDate, 120) <= @dateTo
+        ${type ? 'AND h.tsType = @tsType' : ''}
+      ORDER BY h.entryDate, l.startTime, l.lineNumber
+    `);
+
+    const dateMap = new Map<string, any[]>();
+    for (const row of result.recordset) {
+      const d = String(row.entryDate);
+      if (!dateMap.has(d)) dateMap.set(d, []);
+      const startTime = toHM(row.startTime) ?? '';
+      const endTime   = toHM(row.endTime)   ?? '';
+      const durationMinutes = Number(row.durationMinutes) || calcDurationMinutes(startTime, endTime) || 0;
+      dateMap.get(d)!.push({
+        workOrderNo:     row.workOrderNo  ?? '',
+        projectId:       row.projectId    ?? '',
+        projectName:     row.projectName  ?? '',
+        department:      row.department   ?? '',
+        tsDocNo:         row.tsDocNo,
+        status:          row.status,
+        startTime,
+        endTime,
+        durationMinutes,
+        lineNumber:      row.lineNumber,
+      });
+    }
+
+    return [...dateMap.entries()].map(([date, tasks]) => ({ date, tasks }));
   }
 
   // ── Detail Report ────────────────────────────────────────────────

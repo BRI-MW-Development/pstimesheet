@@ -6,9 +6,10 @@ import { ApprovalSettingsModule } from '../approval-settings/approval-settings.m
 import { EmailSettingsModule } from '../email-settings/email-settings.module';
 import { EmailModule } from '../email/email.module';
 import { S3Module } from '../s3/s3.module';
+import { HodTeamsModule } from '../hod-teams/hod-teams.module';
 
 @Module({
-  imports: [AuditModule, ApprovalSettingsModule, EmailSettingsModule, EmailModule, S3Module],
+  imports: [AuditModule, ApprovalSettingsModule, EmailSettingsModule, EmailModule, S3Module, HodTeamsModule],
   controllers: [TimesheetsController],
   providers: [TimesheetsService],
 })

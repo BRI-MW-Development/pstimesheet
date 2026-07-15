@@ -28,7 +28,7 @@ const PM = [
 
 const MODULE_LABELS = {
   PROD: 'Production Timesheets', INST: 'Installation Timesheets', PROJ: 'Projects Timesheets',
-  PENDING_APPROVALS: 'Pending Approvals',
+  PENDING_APPROVALS: 'Pending Approvals', TIMELINE: 'Timeline',
   WO_COMPLETE: 'WO Complete', QC: 'Quality Control (QC)',
   REPORTS: 'Reports & Analytics', AUDIT_TRAIL: 'Audit Trail',
   EMPLOYEES: 'Employees', DEPARTMENTS: 'Departments', ITEMS: 'Items',
@@ -36,14 +36,15 @@ const MODULE_LABELS = {
   PROJECTS: 'Projects', WORK_ORDERS: 'Work Orders', TASK_TYPES: 'Task Types',
   USERS: 'Users', ROLES: 'Roles', SHIFTS: 'Shifts', DOC_NUMBERING: 'Doc Numbering',
   SETTINGS: 'Settings', NOTIFICATIONS: 'Notification Settings',
+  HOD_TEAMS: 'HOD Teams',
 };
 
 const MODULE_GROUPS = [
-  { label: 'Timesheets',      modules: ['PROD', 'INST', 'PROJ', 'PENDING_APPROVALS', 'WO_COMPLETE'] },
+  { label: 'Timesheets',      modules: ['PROD', 'INST', 'PROJ', 'PENDING_APPROVALS', 'TIMELINE', 'WO_COMPLETE'] },
   { label: 'Quality Control', modules: ['QC'] },
   { label: 'Reports',         modules: ['REPORTS', 'AUDIT_TRAIL'] },
   { label: 'Master Data',     modules: ['EMPLOYEES', 'DEPARTMENTS', 'ITEMS', 'MACHINERY', 'VEHICLES', 'ACCESS_EQUIPMENT', 'PROJECTS', 'WORK_ORDERS', 'TASK_TYPES'] },
-  { label: 'Administration',  modules: ['USERS', 'ROLES', 'SHIFTS', 'DOC_NUMBERING', 'SETTINGS', 'NOTIFICATIONS'] },
+  { label: 'Administration',  modules: ['USERS', 'ROLES', 'SHIFTS', 'DOC_NUMBERING', 'SETTINGS', 'NOTIFICATIONS', 'HOD_TEAMS'] },
 ];
 
 const ALL_MODULES = MODULE_GROUPS.flatMap((g) => g.modules);
@@ -150,8 +151,9 @@ function RoleModal({ role, onClose }) {
       await api.put(`/roles/${roleCode}/permissions`, { permissions: Object.values(payload.perms) });
       return { roleCode };
     },
-    onSuccess: () => {
+    onSuccess: ({ roleCode }) => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: ['role-perms', roleCode] });
       toast(role.roleCode ? 'Role updated.' : 'Role created.', 'success');
       onClose();
     },

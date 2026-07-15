@@ -33,6 +33,7 @@ const InstTimesheetListPage  = lazy(() => import('./pages/timesheets/InstTimeshe
 const InstTimesheetFormPage  = lazy(() => import('./pages/timesheets/InstTimesheetFormPage'));
 const ProjTimesheetPage      = lazy(() => import('./pages/timesheets/ProjTimesheetPage'));
 const PendingApprovalsPage   = lazy(() => import('./pages/timesheets/PendingApprovalsPage'));
+const TimelinePage           = lazy(() => import('./pages/timesheets/TimelinePage'));
 
 // QC
 const QCListPage             = lazy(() => import('./pages/qc/QCListPage'));
@@ -47,6 +48,7 @@ const AnalyticsPage          = lazy(() => import('./pages/reports/AnalyticsPage'
 
 // Admin / System Settings
 const UsersPage              = lazy(() => import('./pages/admin/UsersPage'));
+const HodTeamsPage           = lazy(() => import('./pages/admin/HodTeamsPage'));
 const RolesPage              = lazy(() => import('./pages/admin/RolesPage'));
 const ShiftsPage             = lazy(() => import('./pages/admin/ShiftsPage'));
 const DocNumberingPage       = lazy(() => import('./pages/admin/DocNumberingPage'));
@@ -148,6 +150,7 @@ export default function App() {
                   <Route path="timesheets/inst/:id/view"        element={<InstTimesheetFormPage />} />
                   <Route path="timesheets/project"              element={<ProjTimesheetPage />} />
                   <Route path="timesheets/pending-approvals"    element={<PendingApprovalsPage />} />
+                  <Route path="timesheets/timeline"            element={<TimelinePage />} />
 
                   {/* QC */}
                   <Route path="qc"             element={<QCListPage />} />
@@ -161,6 +164,7 @@ export default function App() {
 
                   {/* Admin / System Settings */}
                   <Route path="admin/users"              element={<UsersPage />} />
+                  <Route path="admin/hod-teams"          element={<HodTeamsPage />} />
                   <Route path="admin/roles"              element={<RolesPage />} />
                   <Route path="admin/shifts"             element={<ShiftsPage />} />
                   <Route path="admin/doc-numbering"      element={<DocNumberingPage />} />

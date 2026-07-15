@@ -269,10 +269,10 @@ export class UsersService implements OnModuleInit {
       .input('userId', mssql.NVarChar(30), userId)
       .query(`
         SELECT TOP 50 id, action, performedByName, details,
-               CONVERT(VARCHAR(24), createdAt, 126) AS createdAt
+               CONVERT(VARCHAR(24), loggedAt, 126) AS createdAt
         FROM   PSTsAuditLog
         WHERE  docType = 'USER' AND docRef = @userId
-        ORDER  BY createdAt DESC
+        ORDER  BY loggedAt DESC
       `);
     return res.recordset;
   }
