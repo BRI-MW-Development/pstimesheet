@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
@@ -459,39 +459,66 @@ function EmployeeMonthModal({ emp, initialDate, type, onClose }) {
   );
 }
 
+// ── Date helpers ─────────────────────────────────────────────────────────────
+function shiftDate(dateStr, delta) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = todayStr();
+  if (dateStr === today) return 'Today';
+  if (dateStr === shiftDate(today, -1)) return 'Yesterday';
+  if (dateStr === shiftDate(today, 1)) return 'Tomorrow';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function TimelinePage() {
-  const [date, setDate]       = useState(todayStr);
-  const [department, setDept] = useState('');
-  const [type, setType]       = useState('');
-  const [search, setSearch]   = useState('');
+  const [date, setDate]     = useState(todayStr);
+  const [hodCode, setHod]   = useState('');
+  const [type, setType]     = useState('');
+  const [search, setSearch] = useState('');
   const [selectedEmp, setSelectedEmp] = useState(null);
 
-  const empListRef = useRef(null);  // left employee list — scroll follower
-  const ganttRef   = useRef(null);  // right gantt — scroll leader
-  const [tooltip, setTooltip] = useState(null); // { task, x, y }
+  const empListRef = useRef(null);
+  const ganttRef   = useRef(null);
+  const [tooltip, setTooltip] = useState(null);
 
   const handleTaskHover = (task, x, y) => setTooltip({ task, x, y });
   const handleTaskLeave = () => setTooltip(null);
 
-  // Sync left panel vertical scroll to match gantt scroll
   const onGanttScroll = () => {
-    if (empListRef.current && ganttRef.current) {
+    if (empListRef.current && ganttRef.current)
       empListRef.current.scrollTop = ganttRef.current.scrollTop;
-    }
   };
 
-  const { data: employees = [], isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['timeline', date, department, type],
-    queryFn: () => api.get('/timesheets/timeline', { params: { date, department: department || undefined, type } }).then(r => r.data),
+  // HOD teams data for the filter dropdown
+  const { data: hodAssignments = [] } = useQuery({
+    queryKey: ['hod-teams'],
+    queryFn: () => api.get('/hod-teams').then(r => r.data),
+    staleTime: 300_000,
+  });
+  const { data: allEmployees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: () => api.get('/employees').then(r => r.data),
+    staleTime: 300_000,
+  });
+  const hodOptions = useMemo(() => {
+    const empMap = new Map(allEmployees.map(e => [e.employeeNo, e.employeeName ?? e.employeeNo]));
+    const unique  = [...new Set(hodAssignments.map(h => h.hodCode))];
+    return unique.map(code => ({ code, name: empMap.get(code) || code })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [hodAssignments, allEmployees]);
+
+  const { data: employees = [], isLoading } = useQuery({
+    queryKey: ['timeline', date, hodCode, type],
+    queryFn: () => api.get('/timesheets/timeline', {
+      params: { date, hodCode: hodCode || undefined, type: type || undefined },
+    }).then(r => r.data),
     enabled: Boolean(date),
     staleTime: 60000,
-  });
-
-  const { data: depts = [] } = useQuery({
-    queryKey: ['departments'],
-    queryFn: () => api.get('/departments').then(r => r.data),
-    staleTime: Infinity,
   });
 
   const filtered = search
@@ -504,19 +531,31 @@ export default function TimelinePage() {
   const rangeStart = 0;
   const rangeEnd   = 1440;
 
+  const btnStyle = {
+    width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border2)',
+    background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer',
+    fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0, lineHeight: 1,
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)', overflow: 'hidden' }}>
       <TaskTooltip task={tooltip?.task} x={tooltip?.x} y={tooltip?.y} />
 
       {/* ── Top filter bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: '2px solid var(--border2)', background: 'var(--surface)', flexShrink: 0, flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginRight: 4 }}>Actual Timesheet</span>
+        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginRight: 4 }}>Timeline</span>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text2)', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-          📅
-          <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                 style={{ border: 'none', background: 'transparent', fontSize: 12, color: 'var(--text)', outline: 'none', cursor: 'pointer' }} />
-        </label>
+        {/* Date navigator: ‹ [label + date picker] › */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 6, padding: '2px 4px' }}>
+          <button style={btnStyle} onClick={() => setDate(d => shiftDate(d, -1))} title="Previous day">‹</button>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', padding: '0 4px', minWidth: 90, justifyContent: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>{formatDateLabel(date)}</span>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                   style={{ border: 'none', background: 'transparent', fontSize: 11, color: 'var(--text3)', outline: 'none', cursor: 'pointer', width: 22, opacity: 0.7 }} />
+          </label>
+          <button style={btnStyle} onClick={() => setDate(d => shiftDate(d, 1))} title="Next day">›</button>
+        </div>
 
         <select value={type} onChange={e => setType(e.target.value)}
                 style={{ fontSize: 12, padding: '4px 10px', border: '1px solid var(--border2)', borderRadius: 6, background: 'var(--surface2)', color: 'var(--text)', outline: 'none', cursor: 'pointer' }}>
@@ -526,13 +565,16 @@ export default function TimelinePage() {
           <option value="PROJ">Projects</option>
         </select>
 
-        <select value={department} onChange={e => setDept(e.target.value)}
-                style={{ fontSize: 12, padding: '4px 10px', border: '1px solid var(--border2)', borderRadius: 6, background: 'var(--surface2)', color: 'var(--text)', outline: 'none', cursor: 'pointer' }}>
-          <option value="">All Depts</option>
-          {depts
-            .filter(d => d.isActive !== false && d.mainDepartment && d.mainDepartment.trim())
-            .map(d => <option key={d.departmentCode || d.id} value={d.departmentCode || d.mainDepartment}>{d.mainDepartment}</option>)}
-        </select>
+        {/* HOD Team filter */}
+        {hodOptions.length > 0 && (
+          <select value={hodCode} onChange={e => setHod(e.target.value)}
+                  style={{ fontSize: 12, padding: '4px 10px', border: '1px solid var(--border2)', borderRadius: 6, background: 'var(--surface2)', color: 'var(--text)', outline: 'none', cursor: 'pointer', maxWidth: 180 }}>
+            <option value="">All HOD Teams</option>
+            {hodOptions.map(h => (
+              <option key={h.code} value={h.code}>{h.name}</option>
+            ))}
+          </select>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 6, padding: '4px 10px' }}>
           🔍
@@ -545,7 +587,6 @@ export default function TimelinePage() {
           <span><strong style={{ color: 'var(--text)' }}>{totalTasks}</strong> tasks</span>
           <span><strong style={{ color: 'var(--text)' }}>{minsToLabel(totalMins)}</strong> total</span>
         </div>
-
       </div>
 
       {/* ── Body ── */}

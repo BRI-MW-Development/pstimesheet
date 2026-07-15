@@ -133,6 +133,7 @@ export class TimesheetsController {
     @Query('date')       date: string,
     @Query('department') department?: string,
     @Query('type')       type?: string,
+    @Query('hodCode')    hodCode?: string,
     @Req() req?: any,
   ) {
     const employeeCode = req?.currentUser?.employeeCode ?? null;
@@ -140,7 +141,13 @@ export class TimesheetsController {
     const isAdmin      = ['Admin', 'Manager', 'Supervisor'].includes(roleCode);
 
     let teamCodes: string[] | null = null;
-    if (!isAdmin && employeeCode) {
+
+    if (hodCode) {
+      // Explicit HOD filter from the UI dropdown
+      const codes = await this.hodTeamsService.getTeamByHod(hodCode);
+      if (codes.length > 0) teamCodes = codes;
+    } else if (!isAdmin && employeeCode) {
+      // Non-admin: auto-restrict to their own HOD team
       const codes = await this.hodTeamsService.getTeamByHod(employeeCode);
       if (codes.length > 0) teamCodes = codes;
     }
