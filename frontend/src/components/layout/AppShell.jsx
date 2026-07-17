@@ -219,6 +219,7 @@ const NAV_GROUPS = [
       { label: 'Email Settings',    to: '/settings/email',         perm: { module: 'SETTINGS',        action: 'canRead' } },
       { label: 'Sessions',          to: '/settings/sessions',      perm: { module: 'USERS',           action: 'canRead' } },
       { label: 'Notifications',     to: '/settings/notifications', perm: { module: 'NOTIFICATIONS',   action: 'canRead' } },
+      { label: 'User Manual',        to: '/admin/user-manual',      perm: { module: 'SETTINGS',        action: 'canRead' } },
     ],
   },
 ];

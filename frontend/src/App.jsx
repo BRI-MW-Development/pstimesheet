@@ -53,6 +53,7 @@ const RolesPage              = lazy(() => import('./pages/admin/RolesPage'));
 const ShiftsPage             = lazy(() => import('./pages/admin/ShiftsPage'));
 const DocNumberingPage       = lazy(() => import('./pages/admin/DocNumberingPage'));
 const LoginHistoryPage       = lazy(() => import('./pages/admin/LoginHistoryPage'));
+const UserManualPage         = lazy(() => import('./pages/admin/UserManualPage'));
 const ApprovalSettingsPage        = lazy(() => import('./pages/settings/ApprovalSettingsPage'));
 const EmailSettingsPage           = lazy(() => import('./pages/settings/EmailSettingsPage'));
 const ChangePasswordPage          = lazy(() => import('./pages/settings/ChangePasswordPage'));
@@ -174,6 +175,7 @@ export default function App() {
                   <Route path="settings/change-password" element={<ChangePasswordPage />} />
                   <Route path="settings/sessions"        element={<LoginHistoryPage />} />
                   <Route path="settings/notifications"   element={<NotificationSettingsPage />} />
+                  <Route path="admin/user-manual"        element={<UserManualPage />} />
 
                   {/* Profile + Notifications */}
                   <Route path="profile"       element={<ProfilePage />} />
