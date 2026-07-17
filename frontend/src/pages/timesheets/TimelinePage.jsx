@@ -507,8 +507,11 @@ export default function TimelinePage() {
     staleTime: 300_000,
   });
   const hodOptions = useMemo(() => {
-    const empMap = new Map(allEmployees.map(e => [e.employeeNo, e.employeeName ?? e.employeeNo]));
-    const unique  = [...new Set(hodAssignments.map(h => h.hodCode))];
+    const empMap = new Map(allEmployees.map(e => [
+      e.employeeNo,
+      [e.firstName, e.lastname].filter(Boolean).join(' ') || e.employeeNo,
+    ]));
+    const unique = [...new Set(hodAssignments.map(h => h.hodCode))];
     return unique.map(code => ({ code, name: empMap.get(code) || code })).sort((a, b) => a.name.localeCompare(b.name));
   }, [hodAssignments, allEmployees]);
 
