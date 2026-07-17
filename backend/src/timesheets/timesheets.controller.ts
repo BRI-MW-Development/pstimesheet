@@ -152,7 +152,29 @@ export class TimesheetsController {
       if (codes.length > 0) teamCodes = [employeeCode, ...codes];
     }
 
-    return this.timesheetsService.getTimeline({ date, department, type, teamCodes });
+    const result = await this.timesheetsService.getTimeline({ date, department, type, teamCodes });
+
+    // When filtering by an HOD team, append any team members who haven't entered a timesheet
+    if (teamCodes && teamCodes.length > 0) {
+      const presentCodes = new Set(result.map((e: any) => e.employeeCode));
+      const missingCodes = teamCodes.filter(c => !presentCodes.has(c));
+      if (missingCodes.length > 0) {
+        const nameMap = await this.timesheetsService.getEmployeeNamesByCodes(missingCodes);
+        for (const code of missingCodes) {
+          result.push({
+            employeeCode:    code,
+            employeeName:    nameMap.get(code) || code,
+            totalMinutes:    0,
+            clockIn:         '',
+            clockOut:        '',
+            tasks:           [],
+            noTimeRecorded:  true,
+          });
+        }
+      }
+    }
+
+    return result;
   }
 
   @Get('pending-approvals')

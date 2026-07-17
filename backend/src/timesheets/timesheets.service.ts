@@ -785,6 +785,17 @@ export class TimesheetsService implements OnModuleInit {
     });
   }
 
+  async getEmployeeNamesByCodes(codes: string[]): Promise<Map<string, string>> {
+    if (codes.length === 0) return new Map();
+    const inList = codes.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+    const result = await this.livePool.request().query(`
+      SELECT employeeNo, LTRIM(RTRIM(ISNULL(firstName,'') + ' ' + ISNULL(lastName,''))) AS fullName
+      FROM ErpMasterEmployee
+      WHERE employeeNo IN (${inList})
+    `);
+    return new Map(result.recordset.map((r: any) => [r.employeeNo, r.fullName || r.employeeNo]));
+  }
+
   // ── Employee Month Timeline ──────────────────────────────────────
   async getEmployeeMonthTimeline(filters: { employeeCode: string; dateFrom: string; dateTo: string; type?: string }): Promise<any[]> {
     const { employeeCode, dateFrom, dateTo, type } = filters;

@@ -200,9 +200,19 @@ function GanttRow({ emp, isOdd, rangeStart, rangeEnd, rowHeight, onTaskHover, on
   const rangeDur = rangeEnd - rangeStart;
   const tasks    = computeTaskLanes(emp.tasks, rangeStart);
 
-  // Hour grid lines across the full 24h
   const hourTicks = [];
   for (let m = 0; m <= 1440; m += 60) hourTicks.push(m);
+
+  if (emp.noTimeRecorded) {
+    return (
+      <div style={{ height: rowHeight, position: 'relative', borderBottom: '1px solid var(--border)', background: 'rgba(220,38,38,0.03)', display: 'flex', alignItems: 'center', paddingLeft: 16 }}>
+        {hourTicks.map(m => (
+          <div key={m} style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(m, rangeStart, rangeDur)}%`, width: 1, background: 'var(--border)', pointerEvents: 'none' }} />
+        ))}
+        <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, opacity: 0.7, letterSpacing: 0.2, zIndex: 1 }}>— No time recorded —</span>
+      </div>
+    );
+  }
 
   return (
     <div style={{ height: rowHeight, position: 'relative', borderBottom: '1px solid var(--border)', background: isOdd ? 'var(--surface)' : 'var(--bg)' }}>
@@ -257,22 +267,23 @@ function GanttRow({ emp, isOdd, rangeStart, rangeEnd, rowHeight, onTaskHover, on
 
 // ── EmployeeCard — left panel card ─────────────────────────────────────────────
 function EmployeeCard({ emp, isOdd, rowHeight, onClick }) {
+  const missing = emp.noTimeRecorded;
   return (
     <div
       onClick={onClick}
-      style={{ height: rowHeight, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', borderBottom: '1px solid var(--border)', background: isOdd ? 'var(--surface)' : 'var(--bg)', boxSizing: 'border-box', cursor: 'pointer' }}
-      onMouseEnter={e => e.currentTarget.style.background = 'rgba(196,125,40,0.08)'}
-      onMouseLeave={e => e.currentTarget.style.background = isOdd ? 'var(--surface)' : 'var(--bg)'}
+      style={{ height: rowHeight, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', borderBottom: '1px solid var(--border)', background: missing ? 'rgba(220,38,38,0.04)' : isOdd ? 'var(--surface)' : 'var(--bg)', boxSizing: 'border-box', cursor: 'pointer' }}
+      onMouseEnter={e => e.currentTarget.style.background = missing ? 'rgba(220,38,38,0.08)' : 'rgba(196,125,40,0.08)'}
+      onMouseLeave={e => e.currentTarget.style.background = missing ? 'rgba(220,38,38,0.04)' : isOdd ? 'var(--surface)' : 'var(--bg)'}
     >
-      <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, letterSpacing: 0.5 }}>
+      <div style={{ width: 34, height: 34, borderRadius: '50%', background: missing ? 'rgba(220,38,38,0.15)' : 'var(--accent)', color: missing ? '#dc2626' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, letterSpacing: 0.5, border: missing ? '1.5px dashed #dc2626' : 'none' }}>
         {initials(emp.employeeName)}
       </div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: missing ? 'var(--text3)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {emp.employeeName}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>
-          {minsToLabel(emp.totalMinutes)} · {emp.tasks.length} task{emp.tasks.length !== 1 ? 's' : ''}
+        <div style={{ fontSize: 10, color: missing ? '#dc2626' : 'var(--text3)', marginTop: 2, fontWeight: missing ? 600 : 400 }}>
+          {missing ? 'No time recorded' : `${minsToLabel(emp.totalMinutes)} · ${emp.tasks.length} task${emp.tasks.length !== 1 ? 's' : ''}`}
         </div>
       </div>
     </div>
@@ -613,7 +624,8 @@ export default function TimelinePage() {
           {/* Employee list — hidden scrollbar, scrollTop driven by gantt */}
           <div ref={empListRef} style={{ flex: 1, overflowY: 'hidden' }}>
             {isLoading ? null : filtered.map((emp, i) => {
-              const laneCount = Math.max(1, ...computeTaskLanes(emp.tasks, rangeStart).map(t => t.lane + 1));
+              const lanes = computeTaskLanes(emp.tasks, rangeStart);
+              const laneCount = lanes.length > 0 ? Math.max(1, ...lanes.map(t => t.lane + 1)) : 1;
               return <EmployeeCard key={emp.employeeCode} emp={emp} isOdd={i % 2 === 1} rowHeight={rowHeightForLanes(laneCount)} onClick={() => setSelectedEmp(emp)} />;
             })}
           </div>
@@ -637,7 +649,8 @@ export default function TimelinePage() {
             <div style={{ position: 'relative', minWidth: 600 }}>
               <NowLine date={date} rangeStart={rangeStart} rangeEnd={rangeEnd} />
               {filtered.map((emp, i) => {
-                const laneCount = Math.max(1, ...computeTaskLanes(emp.tasks, rangeStart).map(t => t.lane + 1));
+                const lanes = computeTaskLanes(emp.tasks, rangeStart);
+              const laneCount = lanes.length > 0 ? Math.max(1, ...lanes.map(t => t.lane + 1)) : 1;
                 return <GanttRow key={emp.employeeCode} emp={emp} isOdd={i % 2 === 1} rangeStart={rangeStart} rangeEnd={rangeEnd} rowHeight={rowHeightForLanes(laneCount)} onTaskHover={handleTaskHover} onTaskLeave={handleTaskLeave} />;
               })}
             </div>
