@@ -8,7 +8,7 @@ export class AnalyticsController {
   constructor(private readonly svc: AnalyticsService) {}
 
   @UseGuards(PermissionGuard)
-  @RequirePermission('REPORTS', 'canRead')
+  @RequirePermission('ANALYTICS', 'canReport')
   @Get()
   get(@Query('from') from: string, @Query('to') to: string) {
     const now   = new Date();

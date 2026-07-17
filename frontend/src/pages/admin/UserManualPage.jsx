@@ -293,8 +293,8 @@ function ReportsSection() {
     <div>
       <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7 }}>
         The Reports section provides pre-built and filterable exports for timesheets and project activity.
-        Analytics gives a visual summary of hours and productivity. Audit Trail records every action taken
-        in the system for compliance purposes.
+        Audit Trail records every action taken in the system for compliance purposes.
+        Analytics is a separate top-level menu with visual charts across Production, Installation, QC, and WO Complete.
       </p>
 
       <SectionHeading>Reports (tabular export)</SectionHeading>
@@ -316,10 +316,27 @@ function ReportsSection() {
 
       <SectionHeading>Analytics</SectionHeading>
       <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
-        Go to <strong>Reports → Analytics</strong> for a visual breakdown of hours worked, submission
-        volumes, and approval turnaround. Charts update live based on the selected date range and filters.
-        Use this page for management reviews and capacity planning.
+        Analytics is a separate top-level menu in the sidebar. Select a date range at the top of the page,
+        then choose a sub-section. Requires the <strong>Analytics → canReport</strong> permission.
       </p>
+      <FieldRow label="Production">
+        Monthly Approval Rate % trend (line chart with visual gaps for months with no timesheets) and a
+        Status Distribution donut showing the overall Draft / Submitted / Approved / Rejected split.
+        KPI cards show totals for the period.
+      </FieldRow>
+      <FieldRow label="Installation">
+        Same layout as Production but scoped to INST-type timesheets.
+      </FieldRow>
+      <FieldRow label="QC">
+        Monthly QC trend (Passed / Failed / In Progress bars, nil months shown as zero). Below that,
+        a <em>QC Rejections by Section</em> chart shows rejection counts per ISO week for each checklist
+        section — always displayed even when there are no rejections. Click any section bar to expand
+        a per-criteria breakdown: one ComposedChart per checklist item showing weekly fail counts as
+        bars with a dashed trend line overlay.
+      </FieldRow>
+      <FieldRow label="WO Complete">
+        Monthly completion count trend for Production and Installation WO completions.
+      </FieldRow>
 
       <SectionHeading>Audit Trail</SectionHeading>
       <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>

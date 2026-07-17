@@ -324,15 +324,25 @@ This ensures cross-department employees assigned to a HOD remain visible regardl
 
 ### Analytics
 
-Route: `/reports/analytics`
+Route: `/analytics/:type` (type = `prod` | `inst` | `qc` | `woc`)
 
-Four separate tabs with dedicated charts:
-- **Production** — monthly trend, status breakdown, approval rate, departments
-- **Installation** — same as production for INST type
-- **Quality Control** — pass rate trend, section pass rates, monthly QC
-- **WO Complete** — monthly completions, cumulative chart
+Analytics is a standalone top-level nav group (not nested under Reports). Active tab is driven by the URL `type` param so browser navigation and deep-linking work correctly.
 
-Requires `REPORTS.canRead` permission.
+**Production & Installation** (shared `TSTab` component):
+- Monthly Approval Rate % — line chart, `connectNulls={false}` so months with no timesheets show as gaps not zeros
+- Status Distribution — donut showing Draft / Submitted / Approved / Rejected split with approval % in centre
+- KPI cards: total, approved, submitted, draft, rejected counts
+
+**Quality Control** (`QCTab`):
+- Monthly QC Trend — stacked bar (Passed / Failed / In Progress), nil months shown as zero with "Nil" tooltip
+- QC Rejections by Section — grouped bar chart (one bar per section per ISO week). Always rendered even if no rejections. Clicking a section bar expands per-criteria breakdown below.
+- Per-criteria breakdown — one `ComposedChart` (Bar + dashed Line trend) per checklist item for the selected section, showing weekly failure counts.
+- Sections follow the exact QCFormPage checklist order (11 sections from Letter Moulding → Sanding).
+
+**WO Complete** (`WoCTab`):
+- Monthly completion count trend for Production-type and Installation-type WO records.
+
+Requires `ANALYTICS.canReport` permission.
 
 ---
 
@@ -844,7 +854,7 @@ All endpoints require: `Authorization: Bearer <sessionToken>`
 | GET | `/hod-teams/:hodCode` | HOD_TEAMS.canRead | Team members for a specific HOD |
 | POST | `/hod-teams` | HOD_TEAMS.canWrite | Add employee to HOD team |
 | DELETE | `/hod-teams/:hodCode/:employeeCode` | HOD_TEAMS.canWrite | Remove employee from HOD team |
-| GET | `/analytics` | REPORTS.canRead | Analytics data |
+| GET | `/analytics` | ANALYTICS.canReport | Analytics data |
 | GET | `/notifications` | Authenticated | User notifications (filtered by preferences) |
 | PATCH | `/notifications/:key/read` | Authenticated | Mark one notification read |
 | PATCH | `/notifications/read-all` | Authenticated | Mark all notifications read (atomic bulk insert) |

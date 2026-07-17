@@ -205,9 +205,17 @@ const NAV_GROUPS = [
   {
     label: 'Reports', icon: '📈',
     links: [
-      { label: 'Reports',     to: '/reports',           perm: { module: 'REPORTS',     action: 'canReport' } },
-      { label: 'Analytics',   to: '/reports/analytics', perm: { module: 'REPORTS',     action: 'canReport' } },
-      { label: 'Audit Trail', to: '/reports/audit',     perm: { module: 'AUDIT_TRAIL', action: 'canRead'   } },
+      { label: 'Reports',     to: '/reports',       perm: { module: 'REPORTS',     action: 'canReport' } },
+      { label: 'Audit Trail', to: '/reports/audit', perm: { module: 'AUDIT_TRAIL', action: 'canRead'   } },
+    ],
+  },
+  {
+    label: 'Analytics', icon: '📊',
+    links: [
+      { label: 'Production',      to: '/analytics/prod', perm: { module: 'ANALYTICS', action: 'canReport' } },
+      { label: 'Installation',    to: '/analytics/inst', perm: { module: 'ANALYTICS', action: 'canReport' } },
+      { label: 'QC',              to: '/analytics/qc',   perm: { module: 'ANALYTICS', action: 'canReport' } },
+      { label: 'WO Complete',     to: '/analytics/woc',  perm: { module: 'ANALYTICS', action: 'canReport' } },
     ],
   },
   {

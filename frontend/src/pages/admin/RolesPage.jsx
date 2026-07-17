@@ -30,7 +30,7 @@ const MODULE_LABELS = {
   PROD: 'Production Timesheets', INST: 'Installation Timesheets', PROJ: 'Projects Timesheets',
   PENDING_APPROVALS: 'Pending Approvals', TIMELINE: 'Timeline',
   WO_COMPLETE: 'WO Complete', QC: 'Quality Control (QC)',
-  REPORTS: 'Reports & Analytics', AUDIT_TRAIL: 'Audit Trail',
+  REPORTS: 'Reports', AUDIT_TRAIL: 'Audit Trail', ANALYTICS: 'Analytics',
   EMPLOYEES: 'Employees', DEPARTMENTS: 'Departments', ITEMS: 'Items',
   MACHINERY: 'Machinery', VEHICLES: 'Vehicles', ACCESS_EQUIPMENT: 'Access Equipment',
   PROJECTS: 'Projects', WORK_ORDERS: 'Work Orders', TASK_TYPES: 'Task Types',
@@ -42,7 +42,7 @@ const MODULE_LABELS = {
 const MODULE_GROUPS = [
   { label: 'Timesheets',      modules: ['PROD', 'INST', 'PROJ', 'PENDING_APPROVALS', 'TIMELINE', 'WO_COMPLETE'] },
   { label: 'Quality Control', modules: ['QC'] },
-  { label: 'Reports',         modules: ['REPORTS', 'AUDIT_TRAIL'] },
+  { label: 'Reports',         modules: ['REPORTS', 'ANALYTICS', 'AUDIT_TRAIL'] },
   { label: 'Master Data',     modules: ['EMPLOYEES', 'DEPARTMENTS', 'ITEMS', 'MACHINERY', 'VEHICLES', 'ACCESS_EQUIPMENT', 'PROJECTS', 'WORK_ORDERS', 'TASK_TYPES'] },
   { label: 'Administration',  modules: ['USERS', 'ROLES', 'SHIFTS', 'DOC_NUMBERING', 'SETTINGS', 'NOTIFICATIONS', 'HOD_TEAMS'] },
 ];
