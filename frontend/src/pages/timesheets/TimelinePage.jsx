@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
+import { useAuthStore } from '../../store/authStore';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function todayStr() {
@@ -475,8 +476,13 @@ function formatDateLabel(dateStr) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+const ADMIN_ROLES = ['Admin', 'Manager', 'Supervisor'];
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function TimelinePage() {
+  const user    = useAuthStore(s => s.user);
+  const isAdmin = ADMIN_ROLES.includes(user?.roleCode ?? '');
+
   const [date, setDate]     = useState(todayStr);
   const [hodCode, setHod]   = useState('');
   const [type, setType]     = useState('');
@@ -495,25 +501,28 @@ export default function TimelinePage() {
       empListRef.current.scrollTop = ganttRef.current.scrollTop;
   };
 
-  // HOD teams data for the filter dropdown
+  // HOD teams dropdown — admin only
   const { data: hodAssignments = [] } = useQuery({
     queryKey: ['hod-teams'],
     queryFn: () => api.get('/hod-teams').then(r => r.data),
     staleTime: 300_000,
+    enabled: isAdmin,
   });
   const { data: allEmployees = [] } = useQuery({
     queryKey: ['employees'],
     queryFn: () => api.get('/employees').then(r => r.data),
     staleTime: 300_000,
+    enabled: isAdmin,
   });
   const hodOptions = useMemo(() => {
+    if (!isAdmin) return [];
     const empMap = new Map(allEmployees.map(e => [
       e.employeeNo,
       [e.firstName, e.lastname].filter(Boolean).join(' ') || e.employeeNo,
     ]));
     const unique = [...new Set(hodAssignments.map(h => h.hodCode))];
     return unique.map(code => ({ code, name: empMap.get(code) || code })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [hodAssignments, allEmployees]);
+  }, [isAdmin, hodAssignments, allEmployees]);
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['timeline', date, hodCode, type],
