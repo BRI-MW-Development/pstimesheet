@@ -1,6 +1,6 @@
 # OpsDesk — Technical Documentation
 
-**Version:** 3.9  
+**Version:** 4.0  
 **Last Updated:** July 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -264,14 +264,26 @@ Fields are arranged in 2-column pairs to reduce vertical scrolling:
 Route: `/timesheets/timeline`  
 Permission: `TIMELINE.canRead`
 
-Visual Gantt-style view of all timesheet sessions for a given date. Shows labour start/end times as horizontal bars per employee, grouped by department.
+Visual Gantt-style view of all timesheet sessions for a given date. Shows labour start/end times as horizontal bars per employee.
 
-**Overnight shifts:** Sessions starting on date D but ending past midnight are split into two visual representations:
+**Date navigation:** ‹ / › arrow buttons shift the date by one day. A date picker sits between the arrows. `shiftDate()` uses local date arithmetic (`new Date(y, m-1, d+delta)`) to avoid UTC timezone shift in UAE (UTC+4).
+
+**Overnight shifts:** Sessions crossing midnight are split into two visual bars:
 - Entry-date bar clips at midnight (23:59) and shows a `▶` indicator
 - Next-day continuation bar starts at 00:00 with a `◀` indicator and dashed border
-- Both bars are generated via a UNION ALL query — the second SELECT matches `h.entryDate = DATEADD(day, -1, TRY_CAST(@date AS DATE))` (sargable, uses index)
+- Both bars generated via UNION ALL — second SELECT matches `h.entryDate = DATEADD(day, -1, TRY_CAST(@date AS DATE))` (sargable, uses index)
 
-**HOD scoping:** If the logged-in user has an HOD team assigned, only their team members' sessions are shown (same scoping as the timesheet list).
+**HOD scoping:**
+- **Admin** sees all employees by default; HOD Team dropdown lets them filter to a specific HOD's team
+- **HOD (non-admin)** sees only their own team automatically — no dropdown shown
+- HOD is included in their own team view (`teamCodes = [employeeCode, ...memberCodes]`)
+- HOD dropdown labels show employee full name (not code), resolved by joining `/employees` API
+
+**"No time recorded" rows:** When filtering by HOD team, employees who have no timesheet entry for the selected date appear at the bottom with a red-tinted row and `— No time recorded —` label. Names resolved via `getEmployeeNamesByCodes()` querying `ErpMasterEmployee`.
+
+**Employee avatars:** Each employee card and the month-detail modal header show a circular photo avatar. Photos come from `PSTsEmployeeProfile.imageS3Key` — the backend generates a fresh 24h presigned URL per employee in `getTimeline()`. Falls back to initials circle if no photo or URL load fails (`onError` handler). The `Avatar` component handles both states.
+
+**Tooltip:** Hovering a task bar shows: Doc #, Task Type, Work Order / Non-Project Details, Project ID, Project Name, Department, Description, Start, End, Duration, Status. Rows with empty values are filtered out.
 
 ### HOD Teams
 
@@ -350,7 +362,7 @@ Requires `REPORTS.canRead` permission.
 | `PSEmailNotificationRules` | When to send emails |
 | `PSEmailTemplates` | Email body templates |
 | `PSEmailLog` | Sent email audit log |
-| `PSTsEmployeeProfile` | Employee overrides (email, category, imageS3Key) |
+| `PSTsEmployeeProfile` | Employee overrides (email, category, imageS3Key, imageUrl) — imageS3Key is the S3 key for the employee's avatar photo; imageUrl is a cached presigned URL (may be stale; always regenerated from imageS3Key at fetch time) |
 | `PSDepartmentProfile` | Department overrides (mainDepartment, isActive) |
 | `psTsDocSequence` | Auto-incrementing doc numbers |
 | `PsNotifSeen` | Notification read state (userId, notifKey) |
@@ -363,8 +375,13 @@ Added in v3.2. Stores the creator's user ID for data scoping. Auto-migrated via 
 ### Column Width: `PSTsMaterialLine.itemName`
 Widened to `NVARCHAR(500)` in v3.3 via `onModuleInit()` migration. Columns narrower than 500 chars are auto-altered on startup to prevent "transaction aborted" / string-truncation errors when saving long item descriptions.
 
+### Key Column: `PSTsShifts.allowOvernight` (v4.0)
+Added via `onModuleInit()` migration in `ShiftSetupService`. `BIT NOT NULL DEFAULT 0`. Set to `1` for the OPN (Open Shift) record automatically. Controls whether the timesheet forms allow labour lines where `endTime < startTime`.
+
 ### Auto-Schema Migration
 All tables are created automatically on first startup via `onModuleInit()` in each service. No manual migration scripts needed.
+
+> **Pattern for multi-statement migrations:** Use `IF NOT EXISTS … BEGIN … END` blocks (not bare `IF NOT EXISTS … ALTER TABLE`) so SQL Server treats the body as a conditional batch. A bare `IF NOT EXISTS ALTER TABLE` followed by a second statement in the same batch can silently skip the second statement if the column already exists from a partial run.
 
 ---
 
@@ -404,8 +421,12 @@ Approval Settings rules further restrict which specific user can approve which t
 ### Navigation Filtering
 Frontend sidebar shows only links the user has `canRead` permission for. Backend enforces the same via permission guards independently.
 
-### Shift Time Validation (v3.3)
-On save, the Production and Installation timesheet forms validate that every labour row's start and end times fall within the selected shift's configured window. Overnight shifts (where `endTime < startTime`, e.g. 18:00–06:00) are handled correctly using wrap-around comparison.
+### Shift Time Validation (v3.3 / v4.0)
+On save, the Production and Installation timesheet forms validate labour row times against the selected shift window.
+
+**Overnight entry control (v4.0):** A labour row where `endTime < startTime` (crosses midnight) is only allowed when the selected shift has `allowOvernight = true`. If the shift does not allow overnight entries, save is blocked with a toast: *"Overnight entries require Open Shift."* When overnight is allowed, a `🌙 +1 day` badge appears next to the end time field and duration is calculated correctly (adds 1440 minutes for the day wrap). The shift window range check is skipped for overnight-enabled shifts.
+
+**Standard window check:** For non-overnight shifts, start and end times must fall within the shift's `startTime`–`endTime` window. Shifts where `shiftEndTime < shiftStartTime` (e.g. 20:00–06:00 Night Shift) use wrap-around comparison.
 
 ---
 
@@ -434,6 +455,20 @@ Frontend (base64 dataURL)
   → Backend validates (≤5 MB for WOC/PROJ, image-only for QC)
   → S3Service.upload() → s3Key stored in DB, fileData = NULL
 ```
+
+### Profile Photo Sync Flow (v4.0)
+When a user uploads their profile photo via the Profile page:
+```
+POST /api/auth/profile/image
+  → S3Service.upload('users/{userId}', …) → s3Key
+  → UPDATE PSTsUsers SET profileImageKey = s3Key
+  → SELECT employeeCode FROM PSTsUsers WHERE userId = @userId
+  → MERGE PSTsEmployeeProfile: SET imageS3Key = s3Key  ← synced to employee master
+```
+
+On startup (`UsersService.onModuleInit`), a backfill MERGE syncs any existing `profileImageKey` values from `PSTsUsers` to `PSTsEmployeeProfile.imageS3Key` for all users with a linked `employeeCode`. This ensures historical photos appear in the Timeline and employee views without re-upload.
+
+When fetching employees (`EmployeesService.list()`), `imageS3Key` is read from `PSTsEmployeeProfile` and a fresh 24h presigned URL is generated. The stored `imageUrl` column is used only as a fallback when S3 fails.
 
 ### Download Flow (Attachments — QC, WOC, Project Timesheet)
 ```
@@ -893,6 +928,47 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v4.0 (July 2026)
+Open Shift overnight concept, employee profile photo linking, Timeline avatars and enhancements, Project Detail report improvements, HOD Teams department filter.
+
+**Open Shift — overnight entries**
+- New `allowOvernight BIT NOT NULL DEFAULT 0` column on `PSTsShifts`. Added via `onModuleInit()` migration using `IF NOT EXISTS … BEGIN … END` pattern. OPN shift auto-set to `allowOvernight = 1`.
+- INST & PROD timesheet forms: if a labour row has `endTime < startTime` and the selected shift does **not** have `allowOvernight`, save is blocked with: *"Overnight entries require Open Shift."*
+- When `allowOvernight = true` and `endTime < startTime`, a `🌙 +1 day` badge appears next to the end time field. Duration calculates correctly (wraps +1440 min). Shift window range check is bypassed for overnight-enabled shifts.
+- Shifts admin page: "Allow overnight entries" checkbox in the edit form; `🌙 Yes` column in the shift list table; Overnight Entries row in the view modal.
+- Eliminates the previous workaround of splitting an overnight task into two separate labour lines.
+
+**Employee profile photo linking**
+- `UsersService.uploadProfileImage()` now MERGEs the uploaded S3 key into `PSTsEmployeeProfile.imageS3Key` (keyed by the user's `employeeCode`). Login profile photo and employee master photo are now a single upload.
+- `UsersService.onModuleInit()` backfills all existing `profileImageKey` values from `PSTsUsers` → `PSTsEmployeeProfile.imageS3Key` on startup. Historical photos appear in Timeline/QC without re-upload.
+- `EmployeesService.list()` now selects `imageS3Key` from `PSTsEmployeeProfile` and calls `S3Service.presignedUrl()` at fetch time for each employee with a key, replacing stale stored `imageUrl` values.
+
+**Timeline — employee avatars**
+- `TimesheetsService.getTimeline()` fetches `imageS3Key` from `PSTsEmployeeProfile` for all employees in the result set and generates fresh 24h presigned URLs, adding `imageUrl` to each employee object.
+- New `TimesheetsService.getEmployeeImageUrls(codes)` helper — same logic for "no time recorded" employees appended in the controller.
+- Frontend: new `Avatar` component renders `<img src={emp.imageUrl}>` when available, with `onError` fallback to initials circle. Used in `EmployeeCard` (left panel) and the employee month modal header.
+
+**Timeline enhancements**
+- **HOD dropdown names:** Admin HOD filter dropdown now shows employee full name (resolved from `/employees` API via `useMemo` name map), not the raw employee code.
+- **HOD self-visibility:** `teamCodes` now includes the HOD's own code (`[hodCode, ...memberCodes]`) so HODs see their own timeline entries.
+- **"No time recorded" rows:** When an HOD team filter is active, team members with no timesheet for the selected date appear as red-tinted rows with `— No time recorded —` label. Names resolved via `getEmployeeNamesByCodes()`.
+- **Tooltip completeness:** Non-project details and Task Type now appear in bar tooltips. Empty rows are filtered out.
+- **Date arrow fix:** `shiftDate()` uses local date arithmetic (`new Date(y, m-1, d+delta)`) instead of `toISOString()` to prevent off-by-one day errors in UTC+4 timezone.
+
+**Project Detail report**
+- HOD team access control applied — same scoping logic as Timeline (non-admin HODs only see their team's timesheets).
+- New columns: Task Type, Non-Project Details, Comments.
+- WO/Project cell shows `—` for non-project labour lines (previously showed the header's WO number even when the line was `nonProjectRelated`).
+- Comments cell has a `title` tooltip so full comment text is readable even in narrow columns.
+
+**HOD Teams page**
+- Department filter added to the Add Members panel — employee list can be filtered by `departmentCode` before selecting members. Filter resets when switching between HODs.
+
+**Bug fix — `onModuleInit` migration pattern**
+- Multi-statement conditional migrations now use `BEGIN … END` blocks. Previously, bare `IF NOT EXISTS ALTER TABLE` followed by an `UPDATE` in the same batch could silently skip the second statement, causing 500 errors (e.g. `allowOvernight` column not found).
+
+---
 
 ### v3.9 (July 2026)
 HOD Teams, Timeline module, overnight shift support, and bug fixes.
