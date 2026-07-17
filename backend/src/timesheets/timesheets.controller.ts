@@ -137,8 +137,6 @@ export class TimesheetsController {
     @Req() req?: any,
   ) {
     const employeeCode = req?.currentUser?.employeeCode ?? null;
-    const roleCode     = req?.currentUser?.roleCode     ?? '';
-    const isAdmin      = ['Admin', 'Manager', 'Supervisor'].includes(roleCode);
 
     let teamCodes: string[] | null = null;
 

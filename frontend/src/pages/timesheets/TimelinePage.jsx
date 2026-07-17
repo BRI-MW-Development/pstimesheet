@@ -476,7 +476,7 @@ function formatDateLabel(dateStr) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const ADMIN_ROLES = ['Admin', 'Manager', 'Supervisor'];
+const ADMIN_ROLES = ['ROLE-001'];
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function TimelinePage() {
