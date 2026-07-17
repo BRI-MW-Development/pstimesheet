@@ -23,6 +23,7 @@ export default function HodTeamsPage() {
   const [selectedHod, setSelectedHod] = useState(null); // { employeeNo, firstName, lastname }
   const [search, setSearch] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
 
   const { data: employees = [] } = useQuery({
     queryKey: ['employees'],
@@ -83,9 +84,13 @@ export default function HodTeamsPage() {
     e.employeeNo !== selectedHod?.employeeNo
   );
 
+  const departments = [...new Set(uniqueEmployees.map(e => e.departmentCode).filter(Boolean))].sort();
+
   const filteredNonMembers = nonMembers.filter(e => {
     const name = `${e.firstName ?? ''} ${e.lastname ?? ''}`.toLowerCase();
-    return name.includes(memberSearch.toLowerCase()) || (e.employeeNo ?? '').toLowerCase().includes(memberSearch.toLowerCase());
+    const matchesSearch = name.includes(memberSearch.toLowerCase()) || (e.employeeNo ?? '').toLowerCase().includes(memberSearch.toLowerCase());
+    const matchesDept   = !deptFilter || e.departmentCode === deptFilter;
+    return matchesSearch && matchesDept;
   });
 
   return (
@@ -108,7 +113,7 @@ export default function HodTeamsPage() {
             const isSelected = selectedHod?.employeeNo === emp.employeeNo;
             return (
               <div key={emp.employeeNo}
-                   onClick={() => { setSelectedHod(emp); setMemberSearch(''); }}
+                   onClick={() => { setSelectedHod(emp); setMemberSearch(''); setDeptFilter(''); }}
                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: 'pointer', background: isSelected ? 'var(--accent)' : 'transparent', borderBottom: '1px solid var(--border)' }}>
                 <Avatar name={`${emp.firstName} ${emp.lastname}`} size={30} />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -179,8 +184,16 @@ export default function HodTeamsPage() {
                   value={memberSearch}
                   onChange={e => setMemberSearch(e.target.value)}
                   placeholder="Search to add…"
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, boxSizing: 'border-box', outline: 'none' }}
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, boxSizing: 'border-box', outline: 'none', marginBottom: 6 }}
                 />
+                <select
+                  value={deptFilter}
+                  onChange={e => setDeptFilter(e.target.value)}
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, boxSizing: 'border-box', outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="">All Departments</option>
+                  {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
               </div>
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {filteredNonMembers.map(emp => (
@@ -188,7 +201,7 @@ export default function HodTeamsPage() {
                     <Avatar name={`${emp.firstName} ${emp.lastname}`} size={28} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp.firstName} {emp.lastname}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text3)' }}>{emp.employeeNo}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text3)' }}>{emp.employeeNo}{emp.departmentCode ? ` · ${emp.departmentCode}` : ''}</div>
                     </div>
                     <button
                       onClick={() => addMutation.mutate({ hodCode: selectedHod.employeeNo, employeeCode: emp.employeeNo })}
