@@ -316,7 +316,11 @@ function DetailReport({ tsType, onBack }) {
   })();
 
   function lineDesc(r) {
-    if (r.lineType === 'LABOUR')                            return r.employeeName ?? r.employeeCode ?? '—';
+    if (r.lineType === 'LABOUR') {
+      const name = r.employeeName ?? r.employeeCode ?? '—';
+      if (r.nonProjectRelated && r.nonProjectDetails) return `${name} · Non-Project: ${r.nonProjectDetails}`;
+      return name;
+    }
     if (r.lineType === 'MATERIAL')                          return [r.itemCode, r.itemName].filter(Boolean).join(' – ') || '—';
     if (['MACHINERY','VEHICLE','ACCESS','EQUIPMENT'].includes(r.lineType)) return r.equipmentName ?? '—';
     return '—';
@@ -346,15 +350,17 @@ function DetailReport({ tsType, onBack }) {
     return '—';
   }
 
-  const colCount = isProj ? 9 : 10;
+  const colCount = isProj ? 11 : 10;
 
   function doExport() {
     if (isProj) {
       exportCSV(
-        ['Doc No', 'Date', 'WO / Project', 'Line', 'Description', 'Duration', 'Mins', 'Status'],
+        ['Doc No', 'Date', 'WO / Project', 'Line', 'Description', 'Task Type', 'Non-Project Details', 'Comments', 'Duration', 'Mins', 'Status'],
         rows.map((r) => [
           r.tsDocNo, r.entryDate, r.workOrderNo ?? r.projectId ?? '',
-          r.lineNumber, lineDesc(r), lineDuration(r), lineMins(r), r.status,
+          r.lineNumber, r.employeeName ?? lineDesc(r),
+          r.taskTypeCode ?? '', r.nonProjectRelated ? (r.nonProjectDetails ?? '') : '',
+          r.comments ?? '', lineDuration(r), lineMins(r), r.status,
         ]),
         `proj-detail-${new Date().toISOString().slice(0, 10)}.csv`
       );
@@ -436,6 +442,9 @@ function DetailReport({ tsType, onBack }) {
                   <th>WO / Project</th><th>Line</th>
                   {!isProj && <th>Type</th>}
                   <th>Description</th>
+                  {isProj && <th>Task Type</th>}
+                  {isProj && <th>Non-Project Details</th>}
+                  {isProj && <th>Comments</th>}
                   <th style={{ textAlign: 'right' }}>{isProj ? 'Duration' : 'Qty / Hours'}</th>
                   {isProj && <th style={{ textAlign: 'right' }}>Mins</th>}
                   <th>Status</th>
@@ -457,7 +466,16 @@ function DetailReport({ tsType, onBack }) {
                     <td>{r.workOrderNo ?? r.projectId ?? '—'}</td>
                     <td style={{ color: 'var(--text3)', fontSize: 11 }}>{r.lineNumber}</td>
                     {!isProj && <td><Badge variant={LINE_VARIANT[r.lineType] ?? 'draft'}>{LINE_LABEL[r.lineType] ?? r.lineType}</Badge></td>}
-                    <td>{lineDesc(r)}</td>
+                    <td>
+                      {r.lineType === 'LABOUR' ? (r.employeeName ?? r.employeeCode ?? '—') : lineDesc(r)}
+                    </td>
+                    {isProj && <td style={{ color: 'var(--text3)', fontSize: 11 }}>{r.taskTypeCode || '—'}</td>}
+                    {isProj && (
+                      <td style={{ fontSize: 11 }}>
+                        {r.nonProjectRelated ? (r.nonProjectDetails || 'Non-Project') : '—'}
+                      </td>
+                    )}
+                    {isProj && <td style={{ color: 'var(--text3)', fontSize: 11, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.comments || '—'}</td>}
                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{isProj ? lineDuration(r) : lineQty(r)}</td>
                     {isProj && <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{lineMins(r)}</td>}
                     <td><Badge variant={STATUS_VARIANT[r.status] ?? 'draft'}>{r.status}</Badge></td>

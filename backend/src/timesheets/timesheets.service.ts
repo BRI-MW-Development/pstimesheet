@@ -919,7 +919,9 @@ export class TimesheetsService implements OnModuleInit {
           END
         ) AS qty,
         NULL AS itemCode, NULL AS itemName, NULL AS uom,
-        NULL AS equipmentName, NULL AS hoursUsed
+        NULL AS equipmentName, NULL AS hoursUsed,
+        l.taskTypeCode, l.comments,
+        l.nonProjectRelated, l.nonProjectDetails
       FROM PSTsHeader h
       JOIN PSTsLabourLine l ON l.tsId = h.tsId
       ${where}
@@ -933,7 +935,9 @@ export class TimesheetsService implements OnModuleInit {
         NULL AS lineDept, NULL AS designation,
         NULL AS startTime, NULL AS endTime, m.qty,
         m.itemCode, m.itemName, m.uom,
-        NULL AS equipmentName, NULL AS hoursUsed
+        NULL AS equipmentName, NULL AS hoursUsed,
+        NULL AS taskTypeCode, NULL AS comments,
+        NULL AS nonProjectRelated, NULL AS nonProjectDetails
       FROM PSTsHeader h
       JOIN PSTsMaterialLine m ON m.tsId = h.tsId
       ${where}
@@ -947,7 +951,9 @@ export class TimesheetsService implements OnModuleInit {
         NULL AS lineDept, NULL AS designation,
         NULL AS startTime, NULL AS endTime, e.hoursUsed AS qty,
         NULL AS itemCode, e.equipmentName AS itemName, NULL AS uom,
-        e.equipmentName, e.hoursUsed
+        e.equipmentName, e.hoursUsed,
+        NULL AS taskTypeCode, NULL AS comments,
+        NULL AS nonProjectRelated, NULL AS nonProjectDetails
       FROM PSTsHeader h
       JOIN PSTsEquipmentLine e ON e.tsId = h.tsId
       ${where}
