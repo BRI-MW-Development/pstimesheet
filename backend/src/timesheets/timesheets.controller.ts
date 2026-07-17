@@ -142,16 +142,16 @@ export class TimesheetsController {
 
     let teamCodes: string[] | null = null;
 
-    if (hodCode && isAdmin) {
-      // Admin explicitly selected a specific HOD team from the dropdown
+    if (hodCode) {
+      // Explicit HOD selected from the dropdown — filter to that HOD's team
       const codes = await this.hodTeamsService.getTeamByHod(hodCode);
       if (codes.length > 0) teamCodes = codes;
     } else if (employeeCode) {
-      // Always check if the logged-in user IS an HOD — if so, restrict to their team.
-      // This applies regardless of role (an HOD who is also a Manager still sees only their team).
+      // No explicit filter: check if the logged-in user IS an HOD.
+      // If so, restrict to their own team regardless of role.
+      // Pure admins who are not HODs → teamCodes stays null → see all employees.
       const codes = await this.hodTeamsService.getTeamByHod(employeeCode);
       if (codes.length > 0) teamCodes = codes;
-      // If not an HOD and is admin → teamCodes stays null → sees all employees
     }
 
     return this.timesheetsService.getTimeline({ date, department, type, teamCodes });
