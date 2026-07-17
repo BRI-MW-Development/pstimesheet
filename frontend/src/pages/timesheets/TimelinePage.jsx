@@ -481,9 +481,13 @@ function EmployeeMonthModal({ emp, initialDate, type, onClose }) {
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
 function shiftDate(dateStr, delta) {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + delta);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + delta); // local date arithmetic, no UTC shift
+  return [
+    dt.getFullYear(),
+    String(dt.getMonth() + 1).padStart(2, '0'),
+    String(dt.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 function formatDateLabel(dateStr) {
