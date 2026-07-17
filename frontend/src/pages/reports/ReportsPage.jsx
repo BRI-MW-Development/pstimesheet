@@ -357,7 +357,8 @@ function DetailReport({ tsType, onBack }) {
       exportCSV(
         ['Doc No', 'Date', 'WO / Project', 'Line', 'Description', 'Task Type', 'Non-Project Details', 'Comments', 'Duration', 'Mins', 'Status'],
         rows.map((r) => [
-          r.tsDocNo, r.entryDate, r.workOrderNo ?? r.projectId ?? '',
+          r.tsDocNo, r.entryDate,
+          (r.lineType === 'LABOUR' && r.nonProjectRelated) ? '' : (r.workOrderNo ?? r.projectId ?? ''),
           r.lineNumber, r.employeeName ?? lineDesc(r),
           r.taskTypeCode ?? '', r.nonProjectRelated ? (r.nonProjectDetails ?? '') : '',
           r.comments ?? '', lineDuration(r), lineMins(r), r.status,
@@ -463,7 +464,7 @@ function DetailReport({ tsType, onBack }) {
                     <td><span className="wip-link">{r.tsDocNo}</span></td>
                     <td>{formatDate(r.entryDate)}</td>
                     {!isProj && <td>{r.department_code ?? '—'}</td>}
-                    <td>{r.workOrderNo ?? r.projectId ?? '—'}</td>
+                    <td>{(r.lineType === 'LABOUR' && r.nonProjectRelated) ? '—' : (r.workOrderNo ?? r.projectId ?? '—')}</td>
                     <td style={{ color: 'var(--text3)', fontSize: 11 }}>{r.lineNumber}</td>
                     {!isProj && <td><Badge variant={LINE_VARIANT[r.lineType] ?? 'draft'}>{LINE_LABEL[r.lineType] ?? r.lineType}</Badge></td>}
                     <td>
