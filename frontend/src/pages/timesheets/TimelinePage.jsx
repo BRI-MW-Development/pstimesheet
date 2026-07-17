@@ -160,19 +160,27 @@ function TaskTooltip({ task, x, y }) {
   if (!task) return null;
   const duration = task._endMins - task._startMins;
 
-  const rows = [
-    { label: 'Doc #',        value: task.tsDocNo    || '—' },
-    { label: 'Project ID',   value: task.projectId  || '—' },
-    { label: 'Project Name', value: task.projectName || '—' },
-    { label: 'Department',   value: task.department  || '—' },
-    { label: 'Start',        value: task.isContinuation ? '00:00 (prev day →)' : (task.startTime || '—') },
-    { label: 'End',          value: task.isOvernight && !task.isContinuation ? `${task.endTime} (next day)` : (task.endTime || '—') },
-    { label: 'Duration',     value: minsToLabel(duration) },
-    { label: 'Status',       value: task.status      || '—' },
-  ];
+  const headerLabel = task.nonProjectRelated
+    ? (task.nonProjectDetails || 'Non-Project')
+    : (task.workOrderNo || task.projectId || '—');
 
-  // Keep tooltip within viewport
-  const TW = 240, TH = 210;
+  const rows = [
+    { label: 'Doc #',         value: task.tsDocNo       || '—' },
+    { label: 'Task Type',     value: task.taskType       || '—' },
+    task.nonProjectRelated
+      ? { label: 'Details',   value: task.nonProjectDetails || 'Non-Project' }
+      : { label: 'Work Order', value: task.workOrderNo   || '—' },
+    { label: 'Project ID',    value: task.nonProjectRelated ? '—' : (task.projectId  || '—') },
+    { label: 'Project Name',  value: task.nonProjectRelated ? '—' : (task.projectName || '—') },
+    { label: 'Department',    value: task.department     || '—' },
+    task.taskDescription ? { label: 'Description', value: task.taskDescription } : null,
+    { label: 'Start',         value: task.isContinuation ? '00:00 (prev day →)' : (task.startTime || '—') },
+    { label: 'End',           value: task.isOvernight && !task.isContinuation ? `${task.endTime} (next day)` : (task.endTime || '—') },
+    { label: 'Duration',      value: minsToLabel(duration) },
+    { label: 'Status',        value: task.status         || '—' },
+  ].filter(r => r && r.value && r.value !== '—');
+
+  const TW = 260, TH = 240;
   const vw = window.innerWidth, vh = window.innerHeight;
   const left = x + 14 + TW > vw ? x - TW - 8 : x + 14;
   const top  = y + 10 + TH > vh ? y - TH - 8 : y + 10;
@@ -180,14 +188,14 @@ function TaskTooltip({ task, x, y }) {
   return (
     <div style={{ position: 'fixed', top, left, zIndex: 9999, width: TW, background: 'var(--surface)', border: '1.5px solid var(--border2)', borderRadius: 8, boxShadow: '0 8px 28px rgba(0,0,0,0.22)', pointerEvents: 'none', overflow: 'hidden' }}>
       <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{task.workOrderNo || task.projectId || '—'}</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{headerLabel}</div>
         <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 1 }}>{task.department}</div>
       </div>
       <div style={{ padding: '6px 12px 8px' }}>
-        {rows.map(r => r.value !== '—' && (
+        {rows.map(r => (
           <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '2px 0', borderBottom: '1px solid var(--border)' }}>
             <span style={{ fontSize: 10, color: 'var(--text3)', flexShrink: 0 }}>{r.label}</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{r.value}</span>
           </div>
         ))}
       </div>
@@ -250,7 +258,7 @@ function GanttRow({ emp, isOdd, rangeStart, rangeEnd, rowHeight, onTaskHover, on
                style={{ position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`, top: barTop, height: LANE_H - 4, borderRadius, border: `1.5px ${borderStyle} ${color.border}`, background: color.bg, display: 'flex', alignItems: 'center', paddingLeft: isContinuationBar ? 4 : 7, paddingRight: isOvernightBar ? 4 : 4, overflow: 'hidden', cursor: 'pointer', boxSizing: 'border-box', gap: 4 }}>
             {isContinuationBar && <span style={{ fontSize: 10, color: color.text, flexShrink: 0 }}>◀</span>}
             <span style={{ fontSize: 11, fontWeight: 600, color: color.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
-              {t.workOrderNo || t.projectId || '—'}
+              {t.workOrderNo || t.projectId || (t.nonProjectRelated ? (t.nonProjectDetails || 'Non-Project') : '—')}
             </span>
             {statusBadge && (
               <span style={{ fontSize: 9, fontWeight: 700, color: statusBadge.text, background: statusBadge.bg, borderRadius: 3, padding: '1px 5px', flexShrink: 0, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.5 }}>
