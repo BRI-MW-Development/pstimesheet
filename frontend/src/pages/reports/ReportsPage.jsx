@@ -476,7 +476,11 @@ function DetailReport({ tsType, onBack }) {
                         {r.nonProjectRelated ? (r.nonProjectDetails || 'Non-Project') : '—'}
                       </td>
                     )}
-                    {isProj && <td style={{ color: 'var(--text3)', fontSize: 11, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.comments || '—'}</td>}
+                    {isProj && (
+                      <td title={r.comments || ''} style={{ color: 'var(--text3)', fontSize: 11, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: r.comments ? 'help' : 'default' }}>
+                        {r.comments || '—'}
+                      </td>
+                    )}
                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{isProj ? lineDuration(r) : lineQty(r)}</td>
                     {isProj && <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{lineMins(r)}</td>}
                     <td><Badge variant={STATUS_VARIANT[r.status] ?? 'draft'}>{r.status}</Badge></td>
