@@ -28,6 +28,12 @@ function ShiftViewModal({ shift, onClose, onEdit }) {
         <div className="detail-row"><span>End Time</span><span>{shift.endTime ?? '—'}</span></div>
         <div className="detail-row"><span>Grace Period</span><span>{shift.graceMinutes ?? 0} min</span></div>
         <div className="detail-row">
+          <span>Overnight Entries</span>
+          <span style={{ color: shift.allowOvernight ? '#7c5ab8' : 'var(--text3)', fontWeight: 600, fontSize: 12 }}>
+            {shift.allowOvernight ? '🌙 Allowed' : 'Not allowed'}
+          </span>
+        </div>
+        <div className="detail-row">
           <span>Status</span>
           <Badge variant={isActive ? 'active' : 'inactive'}>{shift.status ?? '—'}</Badge>
         </div>
@@ -44,12 +50,13 @@ function ShiftForm({ initial, onSave, onClose, saving }) {
   const isEdit = Boolean(initial?.shiftCode);
   // Backend returns `status: 'Active'/'Inactive'` — map to boolean for the form
   const [form, setForm] = useState({
-    shiftCode:    initial?.shiftCode    ?? '',
-    shiftName:    initial?.shiftName    ?? '',
-    startTime:    initial?.startTime    ?? '',
-    endTime:      initial?.endTime      ?? '',
-    graceMinutes: initial?.graceMinutes ?? 10,
-    status:       initial?.status       ?? 'Active',
+    shiftCode:      initial?.shiftCode      ?? '',
+    shiftName:      initial?.shiftName      ?? '',
+    startTime:      initial?.startTime      ?? '',
+    endTime:        initial?.endTime        ?? '',
+    graceMinutes:   initial?.graceMinutes   ?? 10,
+    allowOvernight: initial?.allowOvernight ?? false,
+    status:         initial?.status         ?? 'Active',
   });
 
   function handleSubmit(e) {
@@ -106,6 +113,13 @@ function ShiftForm({ initial, onSave, onClose, saving }) {
           </select>
         </div>
       </div>
+      <div className="form-group" style={{ marginTop: 4 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text)' }}>
+          <input type="checkbox" checked={!!form.allowOvernight}
+            onChange={(e) => setForm((f) => ({ ...f, allowOvernight: e.target.checked }))} />
+          <span><strong>Allow overnight entries</strong> — employees can enter end time before start time (spans midnight)</span>
+        </label>
+      </div>
       <div className="modal-foot">
         <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
         <button type="submit" className="btn btn-primary" disabled={saving}>
@@ -157,7 +171,10 @@ export default function ShiftsPage() {
     { key: 'shiftName',   label: 'Shift Name',  sort: true },
     { key: 'startTime',   label: 'Start',       sort: true },
     { key: 'endTime',     label: 'End',         sort: true },
-    { key: 'graceMinutes',label: 'Grace',       sort: true, render: (r) => `${r.graceMinutes ?? 0} min` },
+    { key: 'graceMinutes',   label: 'Grace',     sort: true, render: (r) => `${r.graceMinutes ?? 0} min` },
+    { key: 'allowOvernight', label: 'Overnight', sort: true, render: (r) => r.allowOvernight
+        ? <span style={{ color: '#7c5ab8', fontWeight: 600, fontSize: 11 }}>🌙 Yes</span>
+        : <span style={{ color: 'var(--text3)', fontSize: 11 }}>—</span> },
     {
       key: 'status', label: 'Status', sort: true,
       render: (row) => (

@@ -57,6 +57,19 @@ export class UsersService implements OnModuleInit {
           SELECT 1 FROM sys.columns
           WHERE object_id=OBJECT_ID('PSTsPasswordHistory') AND name='passwordHash' AND max_length < 200
         ) ALTER TABLE PSTsPasswordHistory ALTER COLUMN passwordHash NVARCHAR(100) NOT NULL;
+
+        -- Backfill: sync existing profileImageKey from PSTsUsers → PSTsEmployeeProfile.imageS3Key
+        IF OBJECT_ID('PSTsEmployeeProfile') IS NOT NULL
+          MERGE PSTsEmployeeProfile AS t
+          USING (
+            SELECT employeeCode, profileImageKey
+            FROM PSTsUsers
+            WHERE employeeCode IS NOT NULL AND profileImageKey IS NOT NULL
+          ) AS s ON t.employeeNo = s.employeeCode
+          WHEN MATCHED AND (t.imageS3Key IS NULL OR t.imageS3Key <> s.profileImageKey)
+            THEN UPDATE SET imageS3Key = s.profileImageKey, updatedAt = GETDATE()
+          WHEN NOT MATCHED
+            THEN INSERT (employeeNo, imageS3Key) VALUES (s.employeeCode, s.profileImageKey);
       `);
     } catch (err) {
       this.logger.warn(`Schema init skipped (will retry on next request): ${(err as Error)?.message}`);
@@ -331,11 +344,32 @@ export class UsersService implements OnModuleInit {
 
   async uploadProfileImage(userId: string, base64: string, mimeType: string, fileName: string): Promise<{ profileImageUrl: string }> {
     const s3Key = await this.s3.upload(`users/${userId}`, fileName, base64, mimeType);
+    const url   = await this.s3.presignedUrl(s3Key, 86400); // 24 h
+
+    // Save to login user profile
     await this.pool.request()
       .input('userId', mssql.NVarChar(30), userId)
       .input('key',    mssql.NVarChar(500), s3Key)
       .query(`UPDATE PSTsUsers SET profileImageKey = @key WHERE userId = @userId`);
-    const url = await this.s3.presignedUrl(s3Key, 86400); // 24 h
+
+    // Sync to employee profile (PSTsEmployeeProfile) via the linked employeeCode
+    const empRes = await this.pool.request()
+      .input('userId', mssql.NVarChar(30), userId)
+      .query<{ employeeCode: string | null }>(`SELECT employeeCode FROM PSTsUsers WHERE userId = @userId`);
+    const employeeCode = empRes.recordset[0]?.employeeCode;
+    if (employeeCode) {
+      await this.pool.request()
+        .input('employeeNo', mssql.NVarChar(30),  employeeCode)
+        .input('s3Key',      mssql.NVarChar(500), s3Key)
+        .input('imageUrl',   mssql.NVarChar(500), url)
+        .query(`
+          MERGE PSTsEmployeeProfile AS t
+          USING (SELECT @employeeNo AS employeeNo) AS s ON t.employeeNo = s.employeeNo
+          WHEN MATCHED     THEN UPDATE SET imageS3Key = @s3Key, imageUrl = @imageUrl, updatedAt = GETDATE()
+          WHEN NOT MATCHED THEN INSERT (employeeNo, imageS3Key, imageUrl) VALUES (@employeeNo, @s3Key, @imageUrl);
+        `);
+    }
+
     return { profileImageUrl: url };
   }
 

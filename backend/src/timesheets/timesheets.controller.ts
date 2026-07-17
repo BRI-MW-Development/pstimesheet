@@ -159,11 +159,15 @@ export class TimesheetsController {
       const presentCodes = new Set(result.map((e: any) => e.employeeCode));
       const missingCodes = teamCodes.filter(c => !presentCodes.has(c));
       if (missingCodes.length > 0) {
-        const nameMap = await this.timesheetsService.getEmployeeNamesByCodes(missingCodes);
+        const [nameMap, imageMap] = await Promise.all([
+          this.timesheetsService.getEmployeeNamesByCodes(missingCodes),
+          this.timesheetsService.getEmployeeImageUrls(missingCodes),
+        ]);
         for (const code of missingCodes) {
           result.push({
             employeeCode:    code,
             employeeName:    nameMap.get(code) || code,
+            imageUrl:        imageMap.get(code) ?? null,
             totalMinutes:    0,
             clockIn:         '',
             clockOut:        '',

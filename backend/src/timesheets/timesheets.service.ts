@@ -788,6 +788,21 @@ export class TimesheetsService implements OnModuleInit {
       });
     }
 
+    // Attach employee avatar URLs from PSTsEmployeeProfile
+    const empCodes = [...empMap.keys()];
+    if (empCodes.length > 0) {
+      const inList = empCodes.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+      const profileRows = await this.devPool.request().query<{ employeeNo: string; imageS3Key: string | null }>(
+        `SELECT employeeNo, imageS3Key FROM PSTsEmployeeProfile WHERE employeeNo IN (${inList}) AND imageS3Key IS NOT NULL`
+      ).catch(() => ({ recordset: [] as any[] }));
+      await Promise.all(profileRows.recordset.map(async (p) => {
+        if (!empMap.has(p.employeeNo)) return;
+        try {
+          empMap.get(p.employeeNo).imageUrl = await this.s3.presignedUrl(p.imageS3Key!, 86400);
+        } catch { /* leave imageUrl undefined */ }
+      }));
+    }
+
     return [...empMap.values()].map(emp => {
       const totalMinutes = emp.tasks.reduce((s: number, t: any) => s + t.durationMinutes, 0);
       const withTime     = emp.tasks.filter((t: any) => t.startTime);
@@ -806,6 +821,19 @@ export class TimesheetsService implements OnModuleInit {
       WHERE employeeNo IN (${inList})
     `);
     return new Map(result.recordset.map((r: any) => [r.employeeNo, r.fullName || r.employeeNo]));
+  }
+
+  async getEmployeeImageUrls(codes: string[]): Promise<Map<string, string>> {
+    if (codes.length === 0) return new Map();
+    const inList = codes.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+    const rows = await this.devPool.request().query<{ employeeNo: string; imageS3Key: string }>(
+      `SELECT employeeNo, imageS3Key FROM PSTsEmployeeProfile WHERE employeeNo IN (${inList}) AND imageS3Key IS NOT NULL`
+    ).catch(() => ({ recordset: [] as any[] }));
+    const urlMap = new Map<string, string>();
+    await Promise.all(rows.recordset.map(async (p: any) => {
+      try { urlMap.set(p.employeeNo, await this.s3.presignedUrl(p.imageS3Key, 86400)); } catch { /* skip */ }
+    }));
+    return urlMap;
   }
 
   // ── Employee Month Timeline ──────────────────────────────────────

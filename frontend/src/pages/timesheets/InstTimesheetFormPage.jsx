@@ -294,11 +294,18 @@ export default function InstTimesheetFormPage() {
 
     // shift time window validation
     const selectedShift = shifts.find((s) => s.shiftCode === header.shift);
-    if (selectedShift?.startTime && selectedShift?.endTime) {
+    for (const r of filledLabour) {
+      if (!r.startTime || !r.endTime) continue;
+      const isOvernightEntry = r.endTime < r.startTime;
+      if (isOvernightEntry && !selectedShift?.allowOvernight) {
+        toast(`Overnight entries (end before start) require Open Shift. Select Open Shift or correct the times for employee ${r.employee}.`, 'error'); return;
+      }
+    }
+    if (selectedShift?.startTime && selectedShift?.endTime && !selectedShift?.allowOvernight) {
       const sStart = selectedShift.startTime;
       const sEnd   = selectedShift.endTime;
-      const overnight = sEnd < sStart;
-      const inWindow  = (t) => overnight ? (t >= sStart || t <= sEnd) : (t >= sStart && t <= sEnd);
+      const shiftOvernight = sEnd < sStart;
+      const inWindow = (t) => shiftOvernight ? (t >= sStart || t <= sEnd) : (t >= sStart && t <= sEnd);
       for (const r of filledLabour) {
         if (!r.startTime || !r.endTime) continue;
         if (!inWindow(r.startTime) || !inWindow(r.endTime)) {
@@ -525,7 +532,11 @@ export default function InstTimesheetFormPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {labourRows.map((row, i) => (
+                    {labourRows.map((row, i) => {
+                      const selectedShiftForRow = shifts.find((s) => s.shiftCode === header.shift);
+                      const isOvernightRow = row.startTime && row.endTime && row.endTime < row.startTime;
+                      const showMidnightBadge = isOvernightRow && selectedShiftForRow?.allowOvernight;
+                      return (
                       <tr key={i}>
                         <td>
                           <SearchSelect options={empOptions} value={row.employee}
@@ -535,7 +546,14 @@ export default function InstTimesheetFormPage() {
                           <TimeInput value={row.startTime} onChange={(v) => setLabour(i, 'startTime', v)} className="line-input" />
                         </td>
                         <td>
-                          <TimeInput value={row.endTime}   onChange={(v) => setLabour(i, 'endTime',   v)} className="line-input" />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <TimeInput value={row.endTime} onChange={(v) => setLabour(i, 'endTime', v)} className="line-input" />
+                            {showMidnightBadge && (
+                              <span title="This entry spans midnight to the next day" style={{ fontSize: 10, color: '#7c5ab8', background: 'rgba(124,90,184,0.12)', border: '1px solid rgba(124,90,184,0.3)', borderRadius: 4, padding: '1px 5px', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                                🌙 +1 day
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td>
                           <input className="line-input" value={row.durationMinutes || ''} readOnly />
@@ -549,7 +567,8 @@ export default function InstTimesheetFormPage() {
                           )}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
                 <div className="ts-section-footer">

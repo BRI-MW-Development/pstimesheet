@@ -273,6 +273,24 @@ function GanttRow({ emp, isOdd, rangeStart, rangeEnd, rowHeight, onTaskHover, on
   );
 }
 
+// ── Avatar — photo if available, else initials ────────────────────────────────
+function Avatar({ emp, size = 34, missing = false }) {
+  const [imgError, setImgError] = useState(false);
+  const showImg = emp.imageUrl && !imgError;
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', border: missing ? '1.5px dashed #dc2626' : '1.5px solid var(--border2)', background: missing ? 'rgba(220,38,38,0.15)' : 'var(--accent)' }}>
+      {showImg ? (
+        <img src={emp.imageUrl} alt={emp.employeeName} onError={() => setImgError(true)}
+             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      ) : (
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.32, fontWeight: 700, color: missing ? '#dc2626' : '#fff', letterSpacing: 0.5 }}>
+          {initials(emp.employeeName)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── EmployeeCard — left panel card ─────────────────────────────────────────────
 function EmployeeCard({ emp, isOdd, rowHeight, onClick }) {
   const missing = emp.noTimeRecorded;
@@ -283,9 +301,7 @@ function EmployeeCard({ emp, isOdd, rowHeight, onClick }) {
       onMouseEnter={e => e.currentTarget.style.background = missing ? 'rgba(220,38,38,0.08)' : 'rgba(196,125,40,0.08)'}
       onMouseLeave={e => e.currentTarget.style.background = missing ? 'rgba(220,38,38,0.04)' : isOdd ? 'var(--surface)' : 'var(--bg)'}
     >
-      <div style={{ width: 34, height: 34, borderRadius: '50%', background: missing ? 'rgba(220,38,38,0.15)' : 'var(--accent)', color: missing ? '#dc2626' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, letterSpacing: 0.5, border: missing ? '1.5px dashed #dc2626' : 'none' }}>
-        {initials(emp.employeeName)}
-      </div>
+      <Avatar emp={emp} size={34} missing={missing} />
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: missing ? 'var(--text3)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {emp.employeeName}
@@ -384,9 +400,7 @@ function EmployeeMonthModal({ emp, initialDate, type, onClose }) {
 
         {/* ── Header ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 18px', borderBottom: '2px solid var(--border2)', background: 'var(--surface2)', flexShrink: 0 }}>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-            {initials(emp.employeeName)}
-          </div>
+          <Avatar emp={emp} size={40} />
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{emp.employeeName}</div>
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>

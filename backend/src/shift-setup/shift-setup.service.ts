@@ -12,10 +12,26 @@ export class ShiftSetupService {
 
   constructor(@Inject(DEV_SQL_POOL) private readonly pool: ConnectionPool) {}
 
+  async onModuleInit() {
+    try {
+      await this.pool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsShifts') AND name='allowOvernight')
+        BEGIN
+          ALTER TABLE PSTsShifts ADD allowOvernight BIT NOT NULL DEFAULT 0;
+          UPDATE PSTsShifts SET allowOvernight = 1 WHERE shiftCode = 'OPN';
+        END
+      `);
+      this.logger.log('PSTsShifts.allowOvernight column ready');
+    } catch (err) {
+      this.logger.warn(`ShiftSetup schema init skipped: ${(err as Error)?.message}`);
+    }
+  }
+
   async findAll(): Promise<Shift[]> {
     const res = await this.pool.request()
       .query<Shift>(`
-        SELECT shiftCode, shiftName, startTime, endTime, graceMinutes, status,
+        SELECT shiftCode, shiftName, startTime, endTime, graceMinutes,
+               CAST(allowOvernight AS BIT) AS allowOvernight, status,
                CONVERT(VARCHAR(24), createdAt, 126) AS createdAt,
                CONVERT(VARCHAR(24), updatedAt, 126) AS updatedAt
         FROM   PSTsShifts
@@ -29,7 +45,8 @@ export class ShiftSetupService {
     const res  = await this.pool.request()
       .input('shiftCode', mssql.NVarChar(30), code)
       .query<Shift>(`
-        SELECT shiftCode, shiftName, startTime, endTime, graceMinutes, status,
+        SELECT shiftCode, shiftName, startTime, endTime, graceMinutes,
+               CAST(allowOvernight AS BIT) AS allowOvernight, status,
                CONVERT(VARCHAR(24), createdAt, 126) AS createdAt,
                CONVERT(VARCHAR(24), updatedAt, 126) AS updatedAt
         FROM   PSTsShifts WHERE shiftCode = @shiftCode
@@ -44,15 +61,16 @@ export class ShiftSetupService {
 
     try {
       await this.pool.request()
-        .input('shiftCode',    mssql.NVarChar(30),  code)
-        .input('shiftName',    mssql.NVarChar(100), payload.shiftName.trim())
-        .input('startTime',    mssql.NVarChar(5),   payload.startTime)
-        .input('endTime',      mssql.NVarChar(5),   payload.endTime)
-        .input('graceMinutes', mssql.Int,            payload.graceMinutes)
-        .input('status',       mssql.NVarChar(10),  payload.status)
+        .input('shiftCode',      mssql.NVarChar(30),  code)
+        .input('shiftName',      mssql.NVarChar(100), payload.shiftName.trim())
+        .input('startTime',      mssql.NVarChar(5),   payload.startTime)
+        .input('endTime',        mssql.NVarChar(5),   payload.endTime)
+        .input('graceMinutes',   mssql.Int,            payload.graceMinutes)
+        .input('allowOvernight', mssql.Bit,            payload.allowOvernight ? 1 : 0)
+        .input('status',         mssql.NVarChar(10),  payload.status)
         .query(`
-          INSERT INTO PSTsShifts (shiftCode, shiftName, startTime, endTime, graceMinutes, status)
-          VALUES (@shiftCode, @shiftName, @startTime, @endTime, @graceMinutes, @status)
+          INSERT INTO PSTsShifts (shiftCode, shiftName, startTime, endTime, graceMinutes, allowOvernight, status)
+          VALUES (@shiftCode, @shiftName, @startTime, @endTime, @graceMinutes, @allowOvernight, @status)
         `);
     } catch (err: any) {
       if (err?.number === 2627 || err?.number === 2601) {
@@ -68,21 +86,24 @@ export class ShiftSetupService {
     const existing = await this.findOne(shiftCode);
     this.validateUpdate(payload);
 
+    const allowOvernight = payload.allowOvernight !== undefined ? payload.allowOvernight : existing.allowOvernight;
     await this.pool.request()
-      .input('shiftCode',    mssql.NVarChar(30),  existing.shiftCode)
-      .input('shiftName',    mssql.NVarChar(100), payload.shiftName?.trim()   ?? existing.shiftName)
-      .input('startTime',    mssql.NVarChar(5),   payload.startTime           ?? existing.startTime)
-      .input('endTime',      mssql.NVarChar(5),   payload.endTime             ?? existing.endTime)
-      .input('graceMinutes', mssql.Int,            payload.graceMinutes        ?? existing.graceMinutes)
-      .input('status',       mssql.NVarChar(10),  payload.status              ?? existing.status)
+      .input('shiftCode',      mssql.NVarChar(30),  existing.shiftCode)
+      .input('shiftName',      mssql.NVarChar(100), payload.shiftName?.trim()   ?? existing.shiftName)
+      .input('startTime',      mssql.NVarChar(5),   payload.startTime           ?? existing.startTime)
+      .input('endTime',        mssql.NVarChar(5),   payload.endTime             ?? existing.endTime)
+      .input('graceMinutes',   mssql.Int,            payload.graceMinutes        ?? existing.graceMinutes)
+      .input('allowOvernight', mssql.Bit,            allowOvernight ? 1 : 0)
+      .input('status',         mssql.NVarChar(10),  payload.status              ?? existing.status)
       .query(`
         UPDATE PSTsShifts
-        SET    shiftName    = @shiftName,
-               startTime    = @startTime,
-               endTime      = @endTime,
-               graceMinutes = @graceMinutes,
-               status       = @status,
-               updatedAt    = GETDATE()
+        SET    shiftName      = @shiftName,
+               startTime      = @startTime,
+               endTime        = @endTime,
+               graceMinutes   = @graceMinutes,
+               allowOvernight = @allowOvernight,
+               status         = @status,
+               updatedAt      = GETDATE()
         WHERE  shiftCode = @shiftCode
       `);
 

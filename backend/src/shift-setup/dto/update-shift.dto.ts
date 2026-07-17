@@ -5,5 +5,6 @@ export interface UpdateShiftDto {
   startTime?: string;
   endTime?: string;
   graceMinutes?: number;
+  allowOvernight?: boolean;
   status?: ShiftStatus;
 }

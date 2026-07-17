@@ -6,6 +6,7 @@ export interface Shift {
   startTime: string;
   endTime: string;
   graceMinutes: number;
+  allowOvernight: boolean;
   status: ShiftStatus;
   createdAt: string;
   updatedAt: string;

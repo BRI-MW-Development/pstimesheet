@@ -109,13 +109,19 @@ export class EmployeesService implements OnModuleInit {
 
     const [erpResult, profileResult] = await Promise.all([
       request.query<any>(sql),
-      this.devPool.request().query<any>(`SELECT employeeNo, emailId, subDepartment, category, imageUrl FROM PSTsEmployeeProfile`).catch(() => ({ recordset: [] as any[] })),
+      this.devPool.request().query<any>(`SELECT employeeNo, emailId, subDepartment, category, imageUrl, imageS3Key FROM PSTsEmployeeProfile`).catch(() => ({ recordset: [] as any[] })),
     ]);
 
     const profileMap = new Map((profileResult.recordset as any[]).map((p) => [p.employeeNo, p]));
 
-    const rows: EmployeeMasterRow[] = erpResult.recordset.map((r) => {
+    const rows: EmployeeMasterRow[] = await Promise.all(erpResult.recordset.map(async (r) => {
       const profile = profileMap.get(r.employeeNo);
+      let imageUrl: string | null = null;
+      if (profile?.imageS3Key) {
+        try { imageUrl = await this.s3.presignedUrl(profile.imageS3Key, 86400); } catch { imageUrl = profile.imageUrl ?? null; }
+      } else if (profile?.imageUrl) {
+        imageUrl = profile.imageUrl;
+      }
       return {
         employeeNo:     r.employeeNo,
         firstName:      r.firstName,
@@ -129,9 +135,9 @@ export class EmployeesService implements OnModuleInit {
         emiratesOrState: r.emiratesOrState,
         city:           r.city,
         status:         r.status,
-        imageUrl:       profile?.imageUrl      ?? null,
+        imageUrl,
       };
-    });
+    }));
 
     this.logger.log(`Fetched ${rows.length} employee rows | regions=${regionIds.join(',')} | deptFilter=${filter || 'all'}`);
     return rows;
