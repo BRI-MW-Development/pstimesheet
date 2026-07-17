@@ -205,9 +205,9 @@ export default function QCPrintPage() {
   }
 
   return (
-    <>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {/* ── Screen toolbar ── */}
-      <div className="__toolbar" style={{ position: 'sticky', top: 0, zIndex: 999, background: '#0f172a', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="__toolbar" style={{ flexShrink: 0, zIndex: 999, background: '#0f172a', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => window.close()}
             style={{ padding: '7px 14px', background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -233,7 +233,7 @@ export default function QCPrintPage() {
       </div>
 
       {/* ── Scrollable preview area ── */}
-      <div className="__preview" style={{ padding: '24px 0 60px', overflowY: 'auto' }}>
+      <div className="__preview" style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '24px 0 60px' }}>
         <div ref={pageRef} className="__page" style={{ width: 794, margin: '0 auto', background: '#fff', boxShadow: '0 8px 40px rgba(0,0,0,0.18)', color: TEXT }}>
 
           {!rec ? <div style={{ padding: 80, textAlign: 'center', color: MUTED }}>Loading…</div> : (<>
@@ -383,6 +383,6 @@ export default function QCPrintPage() {
           </>)}
         </div>
       </div>
-    </>
+    </div>
   );
 }
