@@ -425,7 +425,15 @@ export class TimesheetsController {
     @Req() req?: any,
   ) {
     await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', this.typeToModule(type), 'canReport');
-    return this.timesheetsService.reportDetail({ dateFrom, dateTo, type, status, department, workOrderNo, projectId });
+
+    const employeeCode = req?.currentUser?.employeeCode ?? null;
+    let teamCodes: string[] | null = null;
+    if (employeeCode) {
+      const codes = await this.hodTeamsService.getTeamByHod(employeeCode);
+      if (codes.length > 0) teamCodes = [employeeCode, ...codes];
+    }
+
+    return this.timesheetsService.reportDetail({ dateFrom, dateTo, type, status, department, workOrderNo, projectId, teamCodes });
   }
 
   @Get('report-summary')

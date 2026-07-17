@@ -872,8 +872,9 @@ export class TimesheetsService implements OnModuleInit {
   async reportDetail(filters: {
     dateFrom?: string; dateTo?: string; type?: string;
     status?: string; department?: string; workOrderNo?: string; projectId?: string;
+    teamCodes?: string[] | null;
   }): Promise<any> {
-    const { dateFrom, dateTo, type, status, department, workOrderNo, projectId } = filters;
+    const { dateFrom, dateTo, type, status, department, workOrderNo, projectId, teamCodes } = filters;
     const req = this.devPool.request();
     if (type)        req.input('tsType',      mssql.NVarChar(20),  type);
     if (workOrderNo) req.input('workOrderNo', mssql.NVarChar(100), workOrderNo);
@@ -883,6 +884,10 @@ export class TimesheetsService implements OnModuleInit {
     if (status)      req.input('status',      mssql.NVarChar(30),  status);
     if (department)  req.input('department',  mssql.NVarChar(50),  department);
 
+    const teamFilter = teamCodes && teamCodes.length > 0
+      ? `AND h.tsId IN (SELECT DISTINCT tsId FROM PSTsLabourLine WHERE employeeCode IN (${teamCodes.map(c => `'${c.replace(/'/g, "''")}'`).join(',')}))`
+      : '';
+
     const where = `WHERE h.isDeleted = 0
       ${type        ? 'AND h.tsType          = @tsType'      : ''}
       ${workOrderNo ? 'AND h.workOrderNo     = @workOrderNo' : ''}
@@ -890,7 +895,8 @@ export class TimesheetsService implements OnModuleInit {
       ${dateFrom    ? 'AND h.entryDate      >= @dateFrom'    : ''}
       ${dateTo      ? 'AND h.entryDate      <= @dateTo'      : ''}
       ${status      ? 'AND h.status          = @status'      : ''}
-      ${department  ? 'AND h.department_code = @department'  : ''}`;
+      ${department  ? 'AND h.department_code = @department'  : ''}
+      ${teamFilter}`;
 
     const result = await req.query(`
       SELECT
