@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line,
+  ResponsiveContainer, BarChart, Bar, ComposedChart, LineChart, Line,
   PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import api from '../../api/client';
@@ -68,65 +68,99 @@ function Card({ title, children, style }) {
   );
 }
 
-/* ── Timesheet sub-tab (shared by Prod & Inst) ──── */
-function TSTab({ data, color, label, navPath }) {
+/* ── Shared month fill ───────────────────────────── */
+function fillMonths(from, to, rows, defaults = {}) {
+  const months = [];
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  let y = fy, m = fm;
+  while (y < ty || (y === ty && m <= tm)) {
+    const key   = `${y}-${String(m).padStart(2,'0')}`;
+    const found = rows.find(r => r.month === key);
+    months.push(found ?? { month: key, nil: true, ...defaults });
+    if (++m > 12) { m = 1; y++; }
+  }
+  return months;
+}
+
+/* ── Timesheet tab (shared by Prod & Inst) ────────── */
+function TSTab({ data, color, label, from, to }) {
   const navigate = useNavigate();
-  const s   = data?.summary      ?? {};
-  const mo  = data?.monthly      ?? [];
-  const dep = data?.byDepartment ?? [];
+  const s  = data?.summary ?? {};
+  const mo = fillMonths(from, to, data?.monthly ?? [], { total:0, approved:0, submitted:0, draft:0, rejected:0 });
 
   const approvalRate = s.total > 0 ? Math.round((s.approved / s.total) * 100) : 0;
+
   const statusDonut = [
-    { name:'Approved',  value: s.approved  ?? 0, fill: C.green  },
-    { name:'Submitted', value: s.submitted ?? 0, fill: C.amber  },
-    { name:'Draft',     value: s.draft     ?? 0, fill: C.gray   },
-    { name:'Rejected',  value: s.rejected  ?? 0, fill: C.red    },
+    { name:'Approved',  value: s.approved  ?? 0, fill: C.green },
+    { name:'Submitted', value: s.submitted ?? 0, fill: C.amber },
+    { name:'Draft',     value: s.draft     ?? 0, fill: C.gray  },
+    { name:'Rejected',  value: s.rejected  ?? 0, fill: C.red   },
   ].filter(d => d.value > 0);
+
+  const rateData = mo.map(r => ({
+    month: fmtM(r.month),
+    rate:  r.nil ? null : (r.total > 0 ? Math.round(r.approved / r.total * 100) : 0),
+  }));
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
       {/* KPIs */}
       <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-        <KPI label="Total"          value={s.total}     color={color}    bg={color+'20'} icon="📋" />
-        <KPI label="Approved"       value={s.approved}  color={C.green}  bg={C.greenL}   icon="✅" sub={`${approvalRate}% approval rate`} />
-        <KPI label="Pending"        value={s.submitted} color={C.amber}  bg={C.amberL}   icon="⏳"
+        <KPI label="Total"    value={s.total}     color={color}   bg={color+'20'} icon="📋" />
+        <KPI label="Approved" value={s.approved}  color={C.green} bg={C.greenL}   icon="✅" sub={`${approvalRate}% approval rate`} />
+        <KPI label="Pending"  value={s.submitted} color={C.amber} bg={C.amberL}   icon="⏳"
           sub={<button style={{background:'none',border:'none',color:C.amber,cursor:'pointer',fontSize:11,padding:0,fontWeight:600}} onClick={()=>navigate('/timesheets/pending-approvals')}>Review →</button>} />
-        <KPI label="Draft"          value={s.draft}     color={C.gray}   bg={C.grayL}    icon="📝" />
-        <KPI label="Rejected"       value={s.rejected}  color={C.red}    bg={C.redL}     icon="❌" />
+        <KPI label="Draft"    value={s.draft}     color={C.gray}  bg={C.grayL}    icon="📝" />
+        <KPI label="Rejected" value={s.rejected}  color={C.red}   bg={C.redL}     icon="❌" />
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:16 }}>
-        {/* Monthly trend */}
-        <Card title={`${label} Timesheets — Monthly Trend`}>
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={mo.map(r=>({...r,month:fmtM(r.month)}))}>
+      {/* Charts */}
+      <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:16, alignItems:'start' }}>
+
+        {/* Approval rate trend */}
+        <Card title="Monthly Approval Rate (%)">
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={rateData}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text3)'}} />
-              <YAxis tick={{fontSize:11,fill:'var(--text3)'}} allowDecimals={false} />
-              <Tooltip {...TT} />
-              <Legend wrapperStyle={{fontSize:12}} />
-              <Line type="monotone" dataKey="total"     name="Total"     stroke={color}   strokeWidth={2.5} dot={{r:3}} />
-              <Line type="monotone" dataKey="approved"  name="Approved"  stroke={C.green} strokeWidth={2}   dot={{r:3}} />
-              <Line type="monotone" dataKey="submitted" name="Submitted" stroke={C.amber} strokeWidth={1}   strokeDasharray="4 2" dot={false} />
-              <Line type="monotone" dataKey="rejected"  name="Rejected"  stroke={C.red}   strokeWidth={1}   strokeDasharray="4 2" dot={false} />
+              <YAxis domain={[0,100]} tickFormatter={v=>`${v}%`} tick={{fontSize:11,fill:'var(--text3)'}} />
+              <Tooltip {...TT} formatter={v => v === null ? ['—', 'Approval Rate'] : [`${v}%`, 'Approval Rate']} />
+              <Line
+                type="monotone" dataKey="rate" name="Approval Rate"
+                stroke={color} strokeWidth={2.5}
+                dot={(props) => {
+                  const { cx, cy, payload } = props;
+                  if (payload.rate === null) return null;
+                  return <circle key={`dot-${cx}`} cx={cx} cy={cy} r={4} fill={color} stroke="#fff" strokeWidth={1.5} />;
+                }}
+                connectNulls={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </Card>
 
-        {/* Status donut */}
+        {/* Status distribution */}
         <Card title="Status Distribution">
-          <ResponsiveContainer width="100%" height={160}>
-            <PieChart>
-              <Pie data={statusDonut} dataKey="value" innerRadius={42} outerRadius={65} paddingAngle={3}>
-                {statusDonut.map((d,i) => <Cell key={i} fill={d.fill} />)}
-              </Pie>
-              <Tooltip {...TT} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div style={{ display:'flex', flexDirection:'column', gap:5, marginTop:8 }}>
+          <div style={{ position:'relative', width:'100%', height:160 }}>
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie data={statusDonut} dataKey="value" innerRadius={44} outerRadius={68} paddingAngle={3}>
+                  {statusDonut.map((d,i) => <Cell key={i} fill={d.fill} />)}
+                </Pie>
+                <Tooltip {...TT} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',pointerEvents:'none' }}>
+              <div style={{ fontSize:22,fontWeight:900,color:approvalRate>=80?C.green:approvalRate>=60?C.amber:C.red }}>{approvalRate}%</div>
+              <div style={{ fontSize:9,color:'var(--text3)' }}>approved</div>
+            </div>
+          </div>
+          <div style={{ display:'flex',flexDirection:'column',gap:6,marginTop:10 }}>
             {statusDonut.map(d => (
-              <div key={d.name} style={{ display:'flex', justifyContent:'space-between', fontSize:12 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <div key={d.name} style={{ display:'flex',justifyContent:'space-between',fontSize:12 }}>
+                <div style={{ display:'flex',alignItems:'center',gap:6 }}>
                   <div style={{ width:10,height:10,borderRadius:2,background:d.fill }} />
                   <span style={{ color:'var(--text2)' }}>{d.name}</span>
                 </div>
@@ -135,163 +169,198 @@ function TSTab({ data, color, label, navPath }) {
             ))}
           </div>
         </Card>
+
       </div>
-
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-        {/* Stacked monthly bar */}
-        <Card title="Monthly Volume by Status">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={mo.map(r=>({...r,month:fmtM(r.month)}))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" tick={{fontSize:10,fill:'var(--text3)'}} />
-              <YAxis tick={{fontSize:10,fill:'var(--text3)'}} allowDecimals={false} />
-              <Tooltip {...TT} />
-              <Legend wrapperStyle={{fontSize:11}} />
-              <Bar dataKey="approved"  name="Approved"  fill={C.green} stackId="s" />
-              <Bar dataKey="submitted" name="Submitted" fill={C.amber} stackId="s" />
-              <Bar dataKey="rejected"  name="Rejected"  fill={C.red}   stackId="s" />
-              <Bar dataKey="draft"     name="Draft"     fill={C.gray}  stackId="s" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* Approval rate line */}
-        <Card title="Monthly Approval Rate (%)">
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={mo.map(r=>({ month:fmtM(r.month), rate: r.total>0?Math.round(r.approved/r.total*100):0 }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" tick={{fontSize:10,fill:'var(--text3)'}} />
-              <YAxis domain={[0,100]} tickFormatter={v=>`${v}%`} tick={{fontSize:10,fill:'var(--text3)'}} />
-              <Tooltip {...TT} formatter={v=>`${v}%`} />
-              <Line type="monotone" dataKey="rate" name="Approval Rate" stroke={color} strokeWidth={2.5} dot={{r:4,fill:color}} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-
-      {/* Top departments */}
-      {dep.length > 0 && (
-        <Card title="Top Departments">
-          <ResponsiveContainer width="100%" height={Math.max(160, dep.length * 30)}>
-            <BarChart data={dep} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis type="number" tick={{fontSize:10,fill:'var(--text3)'}} allowDecimals={false} />
-              <YAxis dataKey="name" type="category" width={100} tick={{fontSize:10,fill:'var(--text3)'}} />
-              <Tooltip {...TT} />
-              <Legend wrapperStyle={{fontSize:11}} />
-              <Bar dataKey="total"    name="Total"    fill={color}   radius={[0,4,4,0]} />
-              <Bar dataKey="approved" name="Approved" fill={C.green} radius={[0,4,4,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      )}
     </div>
   );
 }
 
-/* ── QC Tab ────────────────────────────────────────── */
-function QCTab({ data }) {
-  const s   = data?.summary   ?? {};
-  const mo  = data?.monthly   ?? [];
-  const sec = data?.bySection ?? [];
+/* ── QC Tab helpers ────────────────────────────────── */
 
-  const qcDonut = [
-    { name:'Passed',      value: s.passed     ?? 0, fill: C.green },
-    { name:'Failed',      value: s.failed     ?? 0, fill: C.red   },
-    { name:'In Progress', value: s.inProgress ?? 0, fill: C.amber },
-  ].filter(d => d.value > 0);
+function isoWeek(d) {
+  const day = d.getDay() || 7;
+  const t = new Date(d);
+  t.setDate(t.getDate() + 4 - day);
+  const ys = new Date(t.getFullYear(), 0, 1);
+  return Math.ceil(((t - ys) / 86400000 + 1) / 7);
+}
+
+function allWeeksInRange(from, to) {
+  const weeks = [];
+  const d = new Date(from);
+  const end = new Date(to);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
+  while (d <= end) {
+    const w = isoWeek(d);
+    if (!weeks.includes(w)) weeks.push(w);
+    d.setDate(d.getDate() + 7);
+  }
+  return weeks;
+}
+
+const QC_SECTIONS = [
+  { key: 'Letter Moulding',                   label: 'Letter Moulding',                   items: ['Workmanship', 'Surface Finish', 'Quantity', 'Depth of Material', 'Edges and Side Finish'] },
+  { key: 'Metal Fabrication',                 label: 'Metal Fabrication',                 items: ['Structural & Support', 'Material Type / Size', 'Surface Finish', 'Fixing Methods & Assembly', 'Quantity'] },
+  { key: 'CNC Laser Cutting',                 label: 'CNC Laser Cutting',                 items: ['Quantity', 'Cutting Quality', 'Verify Cutting Files', 'Material Types'] },
+  { key: 'Acrylic',                           label: 'Acrylic',                           items: ['Fixing', 'Workmanship', 'Material Specification', 'Quantity', 'Surface Finish'] },
+  { key: 'Packaging',                         label: 'Packaging',                         items: ['Cleaning', 'Physical Damages', 'Workmanship', 'Quantity'] },
+  { key: 'Electricals',                       label: 'Electricals',                       items: ['LED Brand', 'Quantity', 'KELVIN Temperature & Illumination', 'Verify Electrical Components', 'Visual Checkup (Darkspots)'] },
+  { key: 'Painting',                          label: 'Painting',                          items: ['Quantity', 'Workmanship', 'Surface Finish', 'Colour / Coat'] },
+  { key: 'Vinyl / Graphics / ScreenPrinting', label: 'Vinyl / Graphics / ScreenPrinting', items: ['Material Specification', 'Print Quality', 'Workmanship', 'Surface Finish'] },
+  { key: 'Polishing',                         label: 'Polishing',                         items: ['Surface Finish', 'Workmanship'] },
+  { key: 'Outsourced & Fixing Materials',     label: 'Outsourced & Fixing Materials',     items: ['Quantity', 'Material Specification', 'Surface Finish', 'Workmanship'] },
+  { key: 'Sanding',                           label: 'Sanding',                           items: ['Powder Coating Coat', 'Workmanship', 'Surface Finish'] },
+];
+
+/* ── QC Tab ────────────────────────────────────────── */
+function QCTab({ data, from, to }) {
+  const s   = data?.summary ?? {};
+  const mo  = fillMonths(from, to, data?.monthly ?? [], { total:0, passed:0, failed:0, inProgress:0 });
+  const wbs = data?.weeklyBySection ?? {};
+
+  const [activeSection, setActiveSection] = useState(QC_SECTIONS[0].key);
+
+  const weeks       = allWeeksInRange(from, to);
+  const secEntry    = wbs[activeSection] ?? {};
+  const secRaw      = secEntry.weekly ?? [];
+  const itemsRaw    = secEntry.items  ?? {};
+  const activeDef   = QC_SECTIONS.find(s => s.key === activeSection);
+
+  const weekData = weeks.map(w => {
+    const found = secRaw.find(r => r.week === w);
+    return found
+      ? { week: `W${w}`, passed: found.passed, inProgress: found.inProgress, failed: found.failed, total: found.total }
+      : { week: `W${w}`, passed: 0, inProgress: 0, failed: 0, total: 0, nil: true };
+  });
+
+  const sectionHasData = (key) => (wbs[key]?.weekly ?? []).length > 0;
+  const totalRejections = secRaw.reduce((s, r) => s + r.total, 0);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      {/* KPIs */}
       <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-        <KPI label="Total QC Records" value={s.total}      color={C.teal}  bg={C.tealL}  icon="🔍" />
-        <KPI label="Passed"           value={s.passed}     color={C.green} bg={C.greenL} icon="✅" />
-        <KPI label="Failed"           value={s.failed}     color={C.red}   bg={C.redL}   icon="❌" />
-        <KPI label="In Progress"      value={s.inProgress} color={C.amber} bg={C.amberL} icon="⏳" />
+        <KPI label="Total QC Records"  value={s.total}      color={C.teal}  bg={C.tealL}  icon="🔍" />
+        <KPI label="Passed"            value={s.passed}     color={C.green} bg={C.greenL} icon="✅" />
+        <KPI label="Failed"            value={s.failed}     color={C.red}   bg={C.redL}   icon="❌" />
+        <KPI label="In Progress"       value={s.inProgress} color={C.amber} bg={C.amberL} icon="⏳" />
         <KPI label="Overall Pass Rate" value={`${s.passRate??0}%`}
           color={s.passRate>=80?C.green:s.passRate>=60?C.amber:C.red}
           bg={s.passRate>=80?C.greenL:s.passRate>=60?C.amberL:C.redL} icon="📊" />
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:16 }}>
-        <Card title="Monthly QC Trend">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={mo.map(r=>({...r,month:fmtM(r.month)}))}>
+      {/* Monthly trend */}
+      <Card title="Monthly QC Trend">
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={mo.map(r=>({...r,month:fmtM(r.month)}))}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text3)'}} />
+            <YAxis tick={{fontSize:11,fill:'var(--text3)'}} allowDecimals={false} />
+            <Tooltip {...TT} formatter={(v, name, props) => props.payload?.nil ? ['Nil', name] : [v, name]} />
+            <Legend wrapperStyle={{fontSize:12}} />
+            <Bar dataKey="passed"     name="Passed"      fill={C.green} stackId="q" />
+            <Bar dataKey="inProgress" name="In Progress" fill={C.amber} stackId="q" />
+            <Bar dataKey="failed"     name="Failed"      fill={C.red}   stackId="q" radius={[4,4,0,0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* Section rejection chart */}
+      <div style={{ background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:10, overflow:'hidden' }}>
+        {/* Card header */}
+        <div style={{ padding:'10px 16px', borderBottom:'1px solid var(--border)', fontWeight:700, fontSize:13, color:'var(--text)' }}>
+          QC Rejections by Section
+        </div>
+
+        {/* Section tabs */}
+        <div style={{ display:'flex', flexWrap:'wrap', gap:4, padding:'10px 16px', borderBottom:'1px solid var(--border)', background:'var(--bg2)' }}>
+          {QC_SECTIONS.map(sec => {
+            const hasData = sectionHasData(sec.key);
+            const isActive = activeSection === sec.key;
+            return (
+              <button key={sec.key} onClick={() => setActiveSection(sec.key)}
+                style={{
+                  padding:'5px 12px', borderRadius:6, border:'1px solid', cursor:'pointer', fontSize:12, fontWeight:isActive ? 700 : 500,
+                  borderColor: isActive ? C.teal : 'var(--border2)',
+                  background:  isActive ? C.teal : 'var(--surface)',
+                  color:       isActive ? '#fff'  : hasData ? 'var(--text)' : 'var(--text3)',
+                  position: 'relative',
+                }}>
+                {sec.label}
+                {hasData && !isActive && (
+                  <span style={{ position:'absolute', top:3, right:3, width:5, height:5, borderRadius:'50%', background:C.red }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Chart */}
+        <div style={{ padding:'12px 16px 16px' }}>
+          <div style={{ fontSize:12, color:'var(--text3)', marginBottom:10 }}>
+            <strong style={{ color:'var(--text)' }}>{QC_SECTIONS.find(sec=>sec.key===activeSection)?.label}</strong>
+            {' — '}
+            {totalRejections > 0
+              ? <span>{totalRejections} rejection{totalRejections !== 1 ? 's' : ''} recorded</span>
+              : <span style={{ color:C.green }}>No rejections in this period ✓</span>}
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={weekData} barCategoryGap="30%">
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text3)'}} />
-              <YAxis tick={{fontSize:11,fill:'var(--text3)'}} allowDecimals={false} />
-              <Tooltip {...TT} />
-              <Legend wrapperStyle={{fontSize:12}} />
-              <Bar dataKey="passed"     name="Passed"      fill={C.green} stackId="q" />
-              <Bar dataKey="inProgress" name="In Progress" fill={C.amber} stackId="q" />
-              <Bar dataKey="failed"     name="Failed"      fill={C.red}   stackId="q" radius={[4,4,0,0]} />
+              <XAxis dataKey="week" tick={{fontSize:10,fill:'var(--text3)'}} />
+              <YAxis tick={{fontSize:10,fill:'var(--text3)'}} allowDecimals={false} />
+              <Tooltip {...TT} formatter={(v, name, props) => props.payload?.nil ? ['—', name] : [v, name]} />
+              <Legend wrapperStyle={{fontSize:11}} />
+              <Bar dataKey="passed"     name="Passed"      fill={C.green} stackId="s" />
+              <Bar dataKey="inProgress" name="In Progress" fill={C.amber} stackId="s" />
+              <Bar dataKey="failed"     name="Failed"      fill={C.red}   stackId="s" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
-        </Card>
 
-        <Card title="Result Distribution">
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-            <div style={{ position:'relative', width:'100%', height:150 }}>
-              <ResponsiveContainer width="100%" height={150}>
-                <PieChart>
-                  <Pie data={qcDonut} dataKey="value" innerRadius={42} outerRadius={65} paddingAngle={3}>
-                    {qcDonut.map((d,i)=><Cell key={i} fill={d.fill}/>)}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',pointerEvents:'none' }}>
-                <div style={{ fontSize:22,fontWeight:900,color:s.passRate>=80?C.green:C.amber }}>{s.passRate??0}%</div>
-                <div style={{ fontSize:9,color:'var(--text3)' }}>pass rate</div>
+          {/* Per-criteria charts */}
+          {activeDef?.items?.length > 0 && (
+            <div style={{ marginTop:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:10 }}>
+                Criteria Breakdown — {activeDef.label}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:12 }}>
+                {activeDef.items.map(item => {
+                  const raw  = itemsRaw[item] ?? [];
+                  const data = weeks.map(w => {
+                    const found = raw.find(r => r.week === w);
+                    return { week: `W${w}`, count: found?.count ?? 0, nil: !found };
+                  });
+                  const total = raw.reduce((s, r) => s + r.count, 0);
+                  return (
+                    <div key={item} style={{ background:'var(--bg2)', border:'1px solid var(--border2)', borderRadius:8, padding:'10px 12px' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                        <span style={{ fontSize:12, fontWeight:700, color:'var(--text)' }}>{item}</span>
+                        <span style={{
+                          fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:10,
+                          background: total > 0 ? C.redL : C.greenL,
+                          color:      total > 0 ? C.red  : C.green,
+                        }}>
+                          {total > 0 ? `${total} fail${total !== 1 ? 's' : ''}` : 'No fails'}
+                        </span>
+                      </div>
+                      <ResponsiveContainer width="100%" height={110}>
+                        <ComposedChart data={data} barCategoryGap="35%">
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                          <XAxis dataKey="week" tick={{fontSize:9,fill:'var(--text3)'}} tickLine={false} axisLine={false} />
+                          <YAxis tick={{fontSize:9,fill:'var(--text3)'}} allowDecimals={false} width={20} />
+                          <Tooltip {...TT} formatter={(v, name, props) => props.payload?.nil ? ['—', 'Failures'] : [v, 'Failures']} />
+                          <Bar dataKey="count" name="Failures" fill={C.red} fillOpacity={0.75} radius={[3,3,0,0]} />
+                          <Line type="monotone" dataKey="count" stroke={C.red} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            {qcDonut.map((d,i)=>(
-              <div key={d.name} style={{ display:'flex',justifyContent:'space-between',width:'100%',fontSize:12 }}>
-                <div style={{ display:'flex',alignItems:'center',gap:6 }}>
-                  <div style={{ width:10,height:10,borderRadius:2,background:d.fill }}/><span style={{ color:'var(--text2)' }}>{d.name}</span>
-                </div>
-                <strong style={{ color:d.fill }}>{d.value}</strong>
-              </div>
-            ))}
-          </div>
-        </Card>
+          )}
+        </div>
       </div>
-
-      {mo.length > 1 && (
-        <Card title="Pass Rate Trend (%)">
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={mo.map(r=>({ month:fmtM(r.month), rate:r.total>0?Math.round(r.passed/r.total*100):0, total:r.total }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text3)'}} />
-              <YAxis domain={[0,100]} tickFormatter={v=>`${v}%`} tick={{fontSize:11,fill:'var(--text3)'}} />
-              <Tooltip {...TT} formatter={v=>`${v}%`} />
-              <Legend wrapperStyle={{fontSize:12}} />
-              <Line type="monotone" dataKey="rate"  name="Pass Rate" stroke={C.teal}  strokeWidth={2.5} dot={{r:4}} />
-              <Line type="monotone" dataKey="total" name="Total QCs" stroke={C.gray}  strokeWidth={1}   strokeDasharray="4 2" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-      )}
-
-      {sec.length > 0 && (
-        <Card title="Inspection Checklist — Section Pass Rates">
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 24px' }}>
-            {sec.map(s => (
-              <div key={s.name}>
-                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:3 }}>
-                  <span style={{ color:'var(--text2)', fontWeight:500 }}>{s.name}</span>
-                  <div style={{ display:'flex', gap:8 }}>
-                    <span style={{ fontSize:11, color:'var(--text3)' }}>{s.pass}✓ {s.fail}✗</span>
-                    <span style={{ fontWeight:800, color:s.passRate>=80?C.green:s.passRate>=60?C.amber:C.red }}>{s.passRate}%</span>
-                  </div>
-                </div>
-                <div style={{ height:6, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
-                  <div style={{ height:'100%', width:`${s.passRate}%`, background:s.passRate>=80?C.green:s.passRate>=60?C.amber:C.red, borderRadius:3 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
     </div>
   );
 }
@@ -384,7 +453,11 @@ function WOCTab({ prodData, instData }) {
 
 /* ══ Main page ══════════════════════════════════════ */
 export default function AnalyticsPage() {
-  const [tab,       setTab]       = useState('prod');
+  const { type } = useParams();
+  const navigate = useNavigate();
+  const VALID_TABS = ['prod', 'inst', 'qc', 'woc'];
+  const activeType = VALID_TABS.includes(type) ? type : 'prod';
+
   const [presetIdx, setPresetIdx] = useState(2);
   const [cFrom,     setCFrom]     = useState(monthsAgo(6));
   const [cTo,       setCTo]       = useState(today());
@@ -399,31 +472,17 @@ export default function AnalyticsPage() {
     staleTime: 60_000,
   });
 
-  const activeTab = TABS.find(t => t.key === tab);
+  const activeTab = TABS.find(t => t.key === activeType);
 
   return (
     <div className="page-content">
-      <div style={{ marginBottom:20 }}>
-        <div className="page-title">Analytics</div>
-        <div className="page-sub">Separate performance reports — Production, Installation, QC, WO Complete</div>
-      </div>
-
-      {/* Tab bar + date filter */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, gap:12, flexWrap:'wrap' }}>
-        <div style={{ display:'flex', gap:0, background:'var(--surface2)', borderRadius:10, padding:4, border:'1px solid var(--border)' }}>
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              style={{
-                padding:'8px 18px', borderRadius:8, border:'none', cursor:'pointer', fontSize:13, fontWeight:700,
-                background: tab===t.key ? t.color : 'transparent',
-                color: tab===t.key ? '#fff' : 'var(--text3)',
-                display:'flex', alignItems:'center', gap:6, transition:'all 0.15s',
-                boxShadow: tab===t.key ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
-              }}>
-              {t.icon} {t.label}
-            </button>
-          ))}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:12 }}>
+        <div>
+          <div className="page-title">{activeTab?.icon} {activeTab?.label} Analytics</div>
+          <div className="page-sub">Performance overview for {activeTab?.label}</div>
         </div>
+
+        {/* Date range presets */}
         <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
           {PRESETS.map((p,i) => (
             <button key={i} onClick={() => setPresetIdx(i)}
@@ -454,10 +513,10 @@ export default function AnalyticsPage() {
       </div>
 
       {!isLoading && (
-        tab === 'prod' ? <TSTab  data={data?.production}   color={C.blue}   label="Production"   navPath="/timesheets/prod" /> :
-        tab === 'inst' ? <TSTab  data={data?.installation} color={C.sky}    label="Installation" navPath="/timesheets/inst" /> :
-        tab === 'qc'   ? <QCTab  data={data?.qc} /> :
-                         <WOCTab prodData={data?.wocProduction} instData={data?.wocInstallation} />
+        activeType === 'prod' ? <TSTab  data={data?.production}   color={C.blue}   label="Production"   from={from} to={to} /> :
+        activeType === 'inst' ? <TSTab  data={data?.installation} color={C.sky}    label="Installation" from={from} to={to} /> :
+        activeType === 'qc'   ? <QCTab  data={data?.qc} from={from} to={to} /> :
+                                <WOCTab prodData={data?.wocProduction} instData={data?.wocInstallation} />
       )}
     </div>
   );

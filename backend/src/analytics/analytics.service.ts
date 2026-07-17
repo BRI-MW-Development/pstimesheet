@@ -11,7 +11,7 @@ export class AnalyticsService {
     const [
       prodStats, prodMonthly, prodDept,
       instStats, instMonthly, instDept,
-      qcStats, qcMonthly, qcSection,
+      qcStats, qcMonthly, qcSection, qcWeeklyBySection,
       wocProdStats, wocProdMonthly,
       wocInstStats, wocInstMonthly,
     ] = await Promise.all([
@@ -24,6 +24,7 @@ export class AnalyticsService {
       this.qcStats(from, to),
       this.qcMonthly(from, to),
       this.qcSection(from, to),
+      this.qcWeeklyBySection(from, to),
       this.wocTypeStats(from, to, 'production'),
       this.wocTypeMonthly(from, to, 'production'),
       this.wocTypeStats(from, to, 'installation'),
@@ -33,7 +34,7 @@ export class AnalyticsService {
     return {
       production:   { summary: prodStats, monthly: prodMonthly, byDepartment: prodDept },
       installation: { summary: instStats, monthly: instMonthly, byDepartment: instDept },
-      qc:           { summary: qcStats,   monthly: qcMonthly,  bySection: qcSection   },
+      qc:           { summary: qcStats,   monthly: qcMonthly,  bySection: qcSection, weeklyBySection: qcWeeklyBySection },
       wocProduction:   { summary: wocProdStats, monthly: wocProdMonthly },
       wocInstallation: { summary: wocInstStats, monthly: wocInstMonthly },
     };
@@ -166,6 +167,75 @@ export class AnalyticsService {
       name, pass: c.pass, fail: c.fail, na: c.na, total: c.pass + c.fail,
       passRate: c.pass + c.fail > 0 ? Math.round(c.pass / (c.pass + c.fail) * 100) : 100,
     })).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  private isoWeek(dateStr: string): number {
+    const d = new Date(dateStr);
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() + 4 - day);
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  }
+
+  private async qcWeeklyBySection(from: string, to: string) {
+    const res = await this.pool.request()
+      .input('from', mssql.NVarChar(20), from)
+      .input('to',   mssql.NVarChar(20), to)
+      .query<{ qcDate: string; status: string; checklistData: string }>(`
+        SELECT qcDate, status, checklistData
+        FROM PsQcRecord
+        WHERE isDeleted=0 AND checklistData IS NOT NULL AND qcDate>=@from AND qcDate<=@to
+      `);
+
+    const sectionMap: Record<string, Record<number, { passed: number; failed: number; inProgress: number }>> = {};
+    const itemMap:    Record<string, Record<string, Record<number, number>>> = {};
+
+    for (const row of res.recordset) {
+      try {
+        const cl   = JSON.parse(row.checklistData);
+        const week = this.isoWeek(row.qcDate);
+
+        for (const [sec, items] of Object.entries(cl)) {
+          if (sec === '__sectionNA') continue;
+          const vals = items as Record<string, string>;
+
+          // Per-item failure counts
+          for (const [item, val] of Object.entries(vals)) {
+            if (val !== 'Fail') continue;
+            if (!itemMap[sec])       itemMap[sec]       = {};
+            if (!itemMap[sec][item]) itemMap[sec][item] = {};
+            itemMap[sec][item][week] = (itemMap[sec][item][week] ?? 0) + 1;
+          }
+
+          // Section-level (record had at least one fail in this section)
+          if (!Object.values(vals).some(v => v === 'Fail')) continue;
+          if (!sectionMap[sec])       sectionMap[sec]       = {};
+          if (!sectionMap[sec][week]) sectionMap[sec][week] = { passed: 0, failed: 0, inProgress: 0 };
+          if (row.status === 'Passed')      sectionMap[sec][week].passed++;
+          else if (row.status === 'Failed') sectionMap[sec][week].failed++;
+          else                              sectionMap[sec][week].inProgress++;
+        }
+      } catch {}
+    }
+
+    const allSections = new Set([...Object.keys(sectionMap), ...Object.keys(itemMap)]);
+    const result: Record<string, unknown> = {};
+    for (const sec of allSections) {
+      result[sec] = {
+        weekly: Object.entries(sectionMap[sec] ?? {})
+          .map(([w, c]) => ({ week: Number(w), ...c, total: c.passed + c.failed + c.inProgress }))
+          .sort((a, b) => a.week - b.week),
+        items: Object.fromEntries(
+          Object.entries(itemMap[sec] ?? {}).map(([item, weeks]) => [
+            item,
+            Object.entries(weeks)
+              .map(([w, count]) => ({ week: Number(w), count }))
+              .sort((a, b) => a.week - b.week),
+          ])
+        ),
+      };
+    }
+    return result;
   }
 
   private async qcStats(from: string, to: string) {

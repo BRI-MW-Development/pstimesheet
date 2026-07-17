@@ -161,6 +161,8 @@ export default function App() {
                   <Route path="woc"            element={<WocPage />} />
                   <Route path="reports"           element={<ReportsPage />} />
                   <Route path="reports/audit"    element={<AuditPage />} />
+                  <Route path="analytics"         element={<AnalyticsPage />} />
+                  <Route path="analytics/:type"   element={<AnalyticsPage />} />
                   <Route path="reports/analytics" element={<AnalyticsPage />} />
 
                   {/* Admin / System Settings */}
