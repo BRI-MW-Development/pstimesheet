@@ -19,6 +19,12 @@ function exportCSV(groups) {
     if (g.labour.length > 0) {
       rows.push([...hdr, 'Labour Subtotal', '', '', `${g.labour.length} employees`, `Avg ${g.avgDuration} mins`, '']);
     }
+    for (const l of g.outsource) {
+      rows.push([...hdr, 'Outsource Labour', g.entryDate, g.workOrderNo ?? '', l.employeeName ?? '', l.duration ?? 0, 'mins']);
+    }
+    if (g.outsource.length > 0) {
+      rows.push([...hdr, 'Outsource Subtotal', '', '', `${g.outsource.length} entries`, `Avg ${g.outsourceAvgDuration} mins`, '']);
+    }
     for (const m of g.materials) {
       rows.push([...hdr, 'Material', g.entryDate, g.workOrderNo ?? '', m.itemName ?? '', m.qty ?? '', m.uom ?? '']);
     }
@@ -49,13 +55,18 @@ function groupRows(rows) {
         workOrderNo: r.workOrderNo,
         status: r.status,
         labour: [],
+        outsource: [],
         materials: [],
         vehicles: [],
         access: [],
       });
     }
     const g = map.get(r.tsDocNo);
-    if (r.lineType === 'LABOUR')   g.labour.push({ employeeName: r.employeeName, duration: r.qty ?? 0 });
+    if (r.lineType === 'LABOUR') {
+      const isOutsource = (r.employeeName ?? '').toLowerCase().startsWith('labour p');
+      const entry = { employeeName: r.employeeName, duration: r.qty ?? 0 };
+      if (isOutsource) g.outsource.push(entry); else g.labour.push(entry);
+    }
     if (r.lineType === 'MATERIAL') g.materials.push({ itemName: r.itemName, qty: r.qty, uom: r.uom });
     if (r.lineType === 'VEHICLE')  g.vehicles.push({ name: r.itemName, km: r.hoursUsed ?? r.qty });
     if (r.lineType === 'ACCESS')   g.access.push({ name: r.itemName, mins: r.hoursUsed ?? r.qty });
@@ -64,6 +75,9 @@ function groupRows(rows) {
     const total = g.labour.reduce((s, l) => s + (Number(l.duration) || 0), 0);
     g.avgDuration = g.labour.length > 0 ? Math.round(total / g.labour.length) : 0;
     g.totalDuration = total;
+    const outTotal = g.outsource.reduce((s, l) => s + (Number(l.duration) || 0), 0);
+    g.outsourceAvgDuration = g.outsource.length > 0 ? Math.round(outTotal / g.outsource.length) : 0;
+    g.outsourceTotalDuration = outTotal;
   }
   return [...map.values()];
 }
@@ -142,6 +156,26 @@ function TSGroupCard({ g }) {
           }))}
           subtotal={g.labour.length > 0
             ? `${g.labour.length} employee${g.labour.length > 1 ? 's' : ''} · Total ${g.totalDuration} mins · Avg ${g.avgDuration} mins`
+            : null}
+        />
+
+        {/* Outsource Labour */}
+        <SubTable
+          label="Outsource Labour"
+          cols={[
+            { key: 'date',         label: 'Date' },
+            { key: 'workOrderNo',  label: 'Work Order' },
+            { key: 'employeeName', label: 'Name / Description' },
+            { key: 'durationFmt',  label: 'Duration (mins)', align: 'right' },
+          ]}
+          rows={g.outsource.map((l) => ({
+            date:         formatDate(g.entryDate),
+            workOrderNo:  g.workOrderNo ?? '—',
+            employeeName: l.employeeName ?? '—',
+            durationFmt:  l.duration ?? 0,
+          }))}
+          subtotal={g.outsource.length > 0
+            ? `${g.outsource.length} outsource${g.outsource.length > 1 ? ' entries' : ' entry'} · Total ${g.outsourceTotalDuration} mins · Avg ${g.outsourceAvgDuration} mins`
             : null}
         />
 
