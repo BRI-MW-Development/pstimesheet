@@ -214,15 +214,20 @@ function TSGroupCard({ g }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-export default function DataEntryReportPage() {
-  const BLANK = { dateFrom: '', dateTo: '', type: '', status: '', workOrderNo: '' };
+const TABS = [
+  { key: 'PROD', label: 'Production' },
+  { key: 'INST', label: 'Installation' },
+];
+
+// ── Tab report panel ───────────────────────────────────────────────────────────
+function TabReport({ tsType }) {
+  const BLANK = { dateFrom: '', dateTo: '', status: '', workOrderNo: '' };
   const [filters, setFilters] = useState(BLANK);
   const [submitted, setSubmitted] = useState(null);
 
   const { data: raw = [], isLoading } = useQuery({
-    queryKey: ['data-entry-report', submitted],
-    queryFn: () => api.get('/timesheets/report-detail', { params: submitted }).then((r) => r.data),
+    queryKey: ['data-entry-report', tsType, submitted],
+    queryFn: () => api.get('/timesheets/report-detail', { params: { type: tsType, ...submitted } }).then((r) => r.data),
     enabled: Boolean(submitted),
   });
 
@@ -241,19 +246,7 @@ export default function DataEntryReportPage() {
   );
 
   return (
-    <div className="page-content">
-      {/* Page header */}
-      <div className="wip-list-header">
-        <div>
-          <div className="wip-list-title">Data Entry Report</div>
-          <div className="wip-list-sub">Grouped by timesheet — employees, materials, vehicles &amp; access equipment</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline btn-sm" onClick={() => { setFilters(BLANK); setSubmitted(null); }}>Clear</button>
-          <button className="btn btn-primary btn-sm" disabled={groups.length === 0} onClick={() => exportCSV(groups)}>Export CSV</button>
-        </div>
-      </div>
-
+    <>
       {/* Filters */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-body" style={{ padding: '14px 16px' }}>
@@ -267,16 +260,6 @@ export default function DataEntryReportPage() {
               <label className="form-label">Date To</label>
               <input type="date" className="form-control form-control-sm" value={filters.dateTo}
                 onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
-            </div>
-            <div>
-              <label className="form-label">Type</label>
-              <select className="form-control form-control-sm" value={filters.type}
-                onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}>
-                <option value="">All Types</option>
-                <option value="PROD">Production</option>
-                <option value="INST">Installation</option>
-                <option value="PROJ">Project</option>
-              </select>
             </div>
             <div>
               <label className="form-label">Status</label>
@@ -294,11 +277,11 @@ export default function DataEntryReportPage() {
               <input className="form-control form-control-sm" placeholder="Work Order No" value={filters.workOrderNo}
                 onChange={(e) => setFilters((f) => ({ ...f, workOrderNo: e.target.value }))} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary btn-sm" style={{ width: '100%' }}
-                onClick={() => setSubmitted({ ...filters })}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+              <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => setSubmitted({ ...filters })}>
                 Run Report
               </button>
+              <button className="btn btn-outline btn-sm" onClick={() => { setFilters(BLANK); setSubmitted(null); }}>Clear</button>
             </div>
           </div>
         </div>
@@ -325,14 +308,12 @@ export default function DataEntryReportPage() {
         </div>
       )}
 
-      {/* Results */}
       {isLoading && (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text3)' }}>
           <div className="spinner" style={{ margin: '0 auto 12px' }} />
           Loading…
         </div>
       )}
-
       {!isLoading && submitted && groups.length === 0 && (
         <div className="card">
           <div className="card-body" style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>
@@ -340,7 +321,6 @@ export default function DataEntryReportPage() {
           </div>
         </div>
       )}
-
       {!isLoading && !submitted && (
         <div className="card">
           <div className="card-body" style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>
@@ -348,8 +328,48 @@ export default function DataEntryReportPage() {
           </div>
         </div>
       )}
-
       {!isLoading && groups.map((g) => <TSGroupCard key={g.tsDocNo} g={g} />)}
+      {groups.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+          <button className="btn btn-outline btn-sm" onClick={() => exportCSV(groups)}>Export CSV</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+export default function DataEntryReportPage() {
+  const [activeTab, setActiveTab] = useState('PROD');
+
+  return (
+    <div className="page-content">
+      {/* Page header */}
+      <div className="wip-list-header">
+        <div>
+          <div className="wip-list-title">Data Entry Report</div>
+          <div className="wip-list-sub">Grouped by timesheet — employees, materials, vehicles &amp; access equipment</div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 16 }}>
+        {TABS.map((t) => (
+          <button key={t.key} type="button"
+            onClick={() => setActiveTab(t.key)}
+            style={{
+              padding: '9px 20px', fontSize: 13, fontWeight: 600,
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              borderBottom: `3px solid ${activeTab === t.key ? 'var(--accent)' : 'transparent'}`,
+              color: activeTab === t.key ? 'var(--accent)' : 'var(--text3)',
+              marginBottom: -2,
+            }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <TabReport key={activeTab} tsType={activeTab} />
     </div>
   );
 }
