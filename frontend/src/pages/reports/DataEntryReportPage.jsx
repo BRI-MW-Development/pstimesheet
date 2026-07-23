@@ -9,24 +9,24 @@ const STATUS_VARIANT = { Draft: 'draft', Submitted: 'submitted', Approved: 'appr
 // ── CSV export ────────────────────────────────────────────────────────────────
 function exportCSV(groups) {
   const rows = [
-    ['Doc No', 'Type', 'Date', 'Work Order', 'Status', 'Section', 'Name / Item', 'Qty / Duration (mins)', 'UOM / Unit'],
+    ['Doc No', 'Type', 'Status', 'Section', 'Date', 'Work Order', 'Employee / Item', 'Qty / Duration (mins)', 'UOM / Unit'],
   ];
   for (const g of groups) {
-    const hdr = [g.tsDocNo, g.tsType, g.entryDate, g.workOrderNo ?? '', g.status];
+    const hdr = [g.tsDocNo, g.tsType, g.status];
     for (const l of g.labour) {
-      rows.push([...hdr, 'Labour', l.employeeName ?? '', l.duration ?? 0, 'mins']);
+      rows.push([...hdr, 'Labour', g.entryDate, g.workOrderNo ?? '', l.employeeName ?? '', l.duration ?? 0, 'mins']);
     }
     if (g.labour.length > 0) {
-      rows.push([...hdr, 'Labour Subtotal', `${g.labour.length} employees`, `Avg ${g.avgDuration} mins`, '']);
+      rows.push([...hdr, 'Labour Subtotal', '', '', `${g.labour.length} employees`, `Avg ${g.avgDuration} mins`, '']);
     }
     for (const m of g.materials) {
-      rows.push([...hdr, 'Material', m.itemName ?? '', m.qty ?? '', m.uom ?? '']);
+      rows.push([...hdr, 'Material', g.entryDate, g.workOrderNo ?? '', m.itemName ?? '', m.qty ?? '', m.uom ?? '']);
     }
     for (const v of g.vehicles) {
-      rows.push([...hdr, 'Vehicle', v.name ?? '', v.km ?? '', 'km']);
+      rows.push([...hdr, 'Vehicle', g.entryDate, g.workOrderNo ?? '', v.name ?? '', v.km ?? '', 'km']);
     }
     for (const a of g.access) {
-      rows.push([...hdr, 'Access Equipment', a.name ?? '', a.mins ?? '', 'mins']);
+      rows.push([...hdr, 'Access Equipment', g.entryDate, g.workOrderNo ?? '', a.name ?? '', a.mins ?? '', 'mins']);
     }
   }
   const csv = rows.map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -127,12 +127,19 @@ function TSGroupCard({ g }) {
 
         {/* Labour */}
         <SubTable
-          label="Employees"
+          label="Labour"
           cols={[
+            { key: 'date',         label: 'Date' },
+            { key: 'workOrderNo',  label: 'Work Order' },
             { key: 'employeeName', label: 'Employee' },
             { key: 'durationFmt',  label: 'Duration (mins)', align: 'right' },
           ]}
-          rows={g.labour.map((l) => ({ employeeName: l.employeeName ?? '—', durationFmt: l.duration ?? 0 }))}
+          rows={g.labour.map((l) => ({
+            date:         formatDate(g.entryDate),
+            workOrderNo:  g.workOrderNo ?? '—',
+            employeeName: l.employeeName ?? '—',
+            durationFmt:  l.duration ?? 0,
+          }))}
           subtotal={g.labour.length > 0
             ? `${g.labour.length} employee${g.labour.length > 1 ? 's' : ''} · Total ${g.totalDuration} mins · Avg ${g.avgDuration} mins`
             : null}
