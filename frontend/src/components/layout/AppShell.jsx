@@ -205,8 +205,9 @@ const NAV_GROUPS = [
   {
     label: 'Reports', icon: '📈',
     links: [
-      { label: 'Reports',     to: '/reports',       perm: { module: 'REPORTS',     action: 'canReport' } },
-      { label: 'Audit Trail', to: '/reports/audit', perm: { module: 'AUDIT_TRAIL', action: 'canRead'   } },
+      { label: 'Reports',          to: '/reports',             perm: { module: 'REPORTS',     action: 'canReport' } },
+      { label: 'Data Entry Report',to: '/reports/data-entry',  perm: { module: 'REPORTS',     action: 'canReport' } },
+      { label: 'Audit Trail',      to: '/reports/audit',       perm: { module: 'AUDIT_TRAIL', action: 'canRead'   } },
     ],
   },
   {

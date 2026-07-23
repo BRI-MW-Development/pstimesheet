@@ -43,6 +43,7 @@ const QCPrintPage            = lazy(() => import('./pages/qc/QCPrintPage'));
 // WOC + Reports
 const WocPage                = lazy(() => import('./pages/woc/WocPage'));
 const ReportsPage            = lazy(() => import('./pages/reports/ReportsPage'));
+const DataEntryReportPage    = lazy(() => import('./pages/reports/DataEntryReportPage'));
 const AuditPage              = lazy(() => import('./pages/reports/AuditPage'));
 const AnalyticsPage          = lazy(() => import('./pages/reports/AnalyticsPage'));
 
@@ -159,8 +160,9 @@ export default function App() {
                   <Route path="qc/:id/edit"    element={<QCFormPage />} />
                   <Route path="qc/:id/view"    element={<QCFormPage />} />
                   <Route path="woc"            element={<WocPage />} />
-                  <Route path="reports"           element={<ReportsPage />} />
-                  <Route path="reports/audit"    element={<AuditPage />} />
+                  <Route path="reports"                element={<ReportsPage />} />
+                  <Route path="reports/audit"         element={<AuditPage />} />
+                  <Route path="reports/data-entry"    element={<DataEntryReportPage />} />
                   <Route path="analytics"         element={<AnalyticsPage />} />
                   <Route path="analytics/:type"   element={<AnalyticsPage />} />
                   <Route path="reports/analytics" element={<AnalyticsPage />} />

@@ -1,20 +1,11 @@
 import { useRef, useState } from 'react';
 
 const EMPLOYEE_CATEGORIES = [
-  'WORKING SUPERVISOR + DRIVER',
-  'WORKING SUPERVISOR',
-  'SITE SUPERVISOR',
   'TEAM LEADER',
   'TECHNICIAN',
-  'TECHNICIAN + DRIVER',
-  'STORE + DRIVER',
-  'SUPERVISOR',
-  'SUPPORTER',
   'DRIVER',
-  'INSTALLATION COORDINATOR',
-  'INSTALLATION SUPERVISOR',
-  'PRODUCTION COORDINATOR',
-  'DIGITAL TECHNICIAN',
+  'HELPER',
+  'DIGITAL',
 ];
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
