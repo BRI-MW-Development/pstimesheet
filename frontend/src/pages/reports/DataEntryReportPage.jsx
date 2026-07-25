@@ -332,7 +332,13 @@ function TSGroupCard({ g, queryKey, tsType }) {
   const { mutate: toggleComplete, isPending } = useMutation({
     mutationFn: ({ complete, sectionNotes }) =>
       api.patch(`/timesheets/${g.tsDocNo}/data-entry-complete`, { complete, sectionNotes }),
-    onSuccess: () => { setShowModal(false); qc.invalidateQueries({ queryKey }); },
+    onSuccess: () => {
+      setShowModal(false);
+      // Invalidate all three caches so queue, partial, and completed tabs all refresh immediately
+      qc.invalidateQueries({ queryKey: ['data-entry-report-queue',     tsType] });
+      qc.invalidateQueries({ queryKey: ['data-entry-report-completed', tsType] });
+      qc.invalidateQueries({ queryKey: ['data-entry-report-partial',   tsType] });
+    },
   });
 
   return (
