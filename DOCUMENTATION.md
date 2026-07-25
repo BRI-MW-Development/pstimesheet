@@ -1,6 +1,6 @@
 # OpsDesk — Technical Documentation
 
-**Version:** 4.0  
+**Version:** 4.1  
 **Last Updated:** July 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -214,8 +214,26 @@ Route: `/woc`
 1. Required fields: Work Order, Status
 2. Completion date cannot be a future date (UI `max` attribute + backend `BadRequestException`)
 3. No duplicate WO Complete for same work order
-4. All timesheets for the WO must be Approved or Rejected
-5. **Production departments only:** WO must have a Full QC inspection
+4. All timesheets for the WO must be Approved or Rejected (scoped by role — see below)
+5. At least one Approved timesheet must exist (all-Rejected is blocked)
+6. **Production departments only:** WO must have a Full QC inspection
+
+**Role-based WO Complete scoping (v4.1):**
+
+| Role | WO List filter | Timesheet validation scope |
+|------|---------------|---------------------------|
+| ROLE-009 | Production department only | Only Production timesheets counted |
+| ROLE-010 | Installation department only | Only `tsType=INST`, `digitalTech=No` timesheets |
+| ROLE-011/012/013 | All (standard) | Only `department=Digital`, `digitalTech=Yes` timesheets |
+| All other roles | All (standard) | All timesheets for the WO |
+
+The backend enforces scoping in `assertNoPendingTimesheets()` using the caller's `roleCode` passed from the controller. Frontend queries `/timesheets` with matching params so the Timesheets tab in the view modal only shows the role's relevant subset.
+
+**View modal tabs:**
+- **Details** — core WO Complete fields and status
+- **Timesheets** — split into Approved and Rejected tables. Approved table shows a **Data Entry Status** column (Completed / Pending). Rejected table omits Data Entry Status.
+- **QC Records** — visible only for Production department WOCs. Shows all QC inspections linked to the work order (doc no, date, sign type, quantity, partial/full, inspector, status).
+- **Attachments** — uploaded files for this WO Complete record
 
 **Attachments:** Files stored in S3 (`woc/{wocId}/…`). Image attachments open in the `FileLightbox` preview; non-image files are downloaded. Preview is available in both the Edit modal and the View modal.
 
@@ -422,6 +440,25 @@ Permission fields per module: `canRead`, `canCreate`, `canWrite`, `canDelete`, `
 **Auto-grant rule:** Roles with `PROD` or `INST` canRead automatically receive `QC` permissions if no explicit QC row exists.
 
 **Timesheets controller (v3.3):** Uses `TimesheetsService.assertPermission()` inline (not the decorator) because the module must be resolved dynamically from the request type (`PROD`/`INST`/`PROJ`). The `typeFromDocNo()` helper derives the module from the document number prefix (`TS-INST-*` → `INST`, `TS-PROJ-*` → `PROJ`, default `PROD`).
+
+**Data Entry Report modules (v4.1):** The three Data Entry report pages each check a dedicated permission module so access can be granted independently per role:
+
+| Module | Report page | Backend check |
+|--------|-------------|---------------|
+| `DATA_ENTRY_PROD` | Data Entry — Production | `type=PROD` requests to `/timesheets/report-detail` |
+| `DATA_ENTRY_INST` | Data Entry — Installation | `type=INST` + `digitalTech≠Yes` |
+| `DATA_ENTRY_INSTD` | Data Entry — Installation Digital | `type=INST` + `digitalTech=Yes` |
+
+The sidebar link for each page is hidden unless the role has `canReport` on the matching module. The `REPORTS` module still controls access to the general Reports summary page.
+
+**`INSTD` timesheet module (v4.1):** Added alongside `PROD`/`INST`/`PROJ` in the Roles permission matrix under the Timesheets group. Controls access to Installation Digital timesheets.
+
+**WO Scope column (v4.1):** The Roles list table shows a **WO Scope** badge for roles with WO Complete restrictions:
+- Amber **Production** badge for ROLE-009
+- Blue **Installation / No DT** badge for ROLE-010
+- Purple **Digital / DT Yes** badge for ROLE-011/012/013
+
+Hovering the badge shows the full restriction description.
 
 ### Approval Authorization
 Approve/Reject timesheets requires `canWrite` on PROD/INST/PROJ (checked via `isTimesheetApprover()` DB query, not hardcoded role names). Pending Approvals list is accessible to any role with `canWrite` on at least one timesheet type.

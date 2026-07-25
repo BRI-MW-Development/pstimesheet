@@ -21,6 +21,12 @@ const SECTIONS = [
     content: <QCSection />,
   },
   {
+    id: 'woc',
+    icon: '✅',
+    title: 'WO Complete',
+    content: <WocSection />,
+  },
+  {
     id: 'reports',
     icon: '📈',
     title: 'Reports & Analytics',
@@ -288,6 +294,48 @@ function QCSection() {
   );
 }
 
+function WocSection() {
+  return (
+    <div>
+      <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7 }}>
+        WO Complete records mark a Work Order as finished. Go to <strong>Timesheets → WO Complete</strong>.
+        Requires <code>WO_COMPLETE.canRead</code> permission.
+      </p>
+
+      <SectionHeading>Creating a WO Complete record</SectionHeading>
+      <Step n={1}>Click <em>+ Mark Complete</em>.</Step>
+      <Step n={2}>Select the <strong>Work Order</strong> from the dropdown. Only WOs not already completed appear.</Step>
+      <Step n={3}>Set the <strong>Completed Date</strong>, <strong>Department</strong>, <strong>Status</strong>, and optional remarks.</Step>
+      <Step n={4}>Click <em>Mark Complete</em>. The system validates before saving (see rules below).</Step>
+
+      <SectionHeading>Validation rules</SectionHeading>
+      <FieldRow label="All timesheets finalised">Every timesheet linked to the WO must be Approved or Rejected. Draft or Submitted timesheets block the save.</FieldRow>
+      <FieldRow label="At least one Approved">At least one timesheet must be Approved. An all-Rejected WO cannot be marked complete.</FieldRow>
+      <FieldRow label="Full QC required">Production department WOs must have at least one Full QC inspection before completion.</FieldRow>
+      <FieldRow label="No duplicate WO">Each Work Order can only have one WO Complete record.</FieldRow>
+
+      <SectionHeading>Role-based WO Complete scope</SectionHeading>
+      <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+        Certain roles see a restricted subset of WO Complete records and timesheets:
+      </p>
+      <FieldRow label="ROLE-009 — Production">WO Complete list shows Production department records only. Timesheet validation counts only Production timesheets.</FieldRow>
+      <FieldRow label="ROLE-010 — Installation">WO Complete list shows Installation department records only. Timesheet validation counts INST timesheets with Digital Tech = No.</FieldRow>
+      <FieldRow label="ROLE-011/012/013 — Digital">Timesheet validation counts Digital department timesheets with Digital Tech = Yes.</FieldRow>
+
+      <SectionHeading>View modal tabs</SectionHeading>
+      <FieldRow label="Details">Core fields: doc no, work order, project, customer, department, WO Completion Status, NetSuite WO Status, completed date, entered by, remarks.</FieldRow>
+      <FieldRow label="Timesheets">Shows Approved and Rejected timesheets in separate tables. Approved table includes a <strong>Data Entry</strong> column (Completed / Pending). Scoped to the user's role if applicable.</FieldRow>
+      <FieldRow label="QC Records">Visible for Production department WOCs only. Lists all QC inspections for the work order.</FieldRow>
+      <FieldRow label="Attachments">File attachments for this WO Complete record. Upload by dragging or clicking.</FieldRow>
+
+      <Tip>
+        The WO Complete status badge in the view modal uses the label <em>WO Completion Status</em> (not
+        "Status") to distinguish it from the NetSuite Work Order Status shown on the same screen.
+      </Tip>
+    </div>
+  );
+}
+
 function ReportsSection() {
   return (
     <div>
@@ -312,6 +360,32 @@ function ReportsSection() {
       <Tip>
         The report respects your data scope. HOD-scoped users only see records from their departments.
         Admins with All scope see the full dataset.
+      </Tip>
+
+      <SectionHeading>Data Entry Reports</SectionHeading>
+      <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+        Three dedicated Data Entry report pages track which timesheets have been fully entered into the
+        system and which are still pending. Each page is independently access-controlled — a role must
+        have <strong>canReport</strong> on the matching module to see the link.
+      </p>
+      <FieldRow label="Data Entry — Production">
+        Shows Production timesheets grouped by document number. Requires <code>DATA_ENTRY_PROD</code> canReport.
+        Each card shows Labour, Outsource Labour, Materials, Machinery, Vehicles, and Access Equipment sections
+        with a collapsed summary view and an expandable full-detail view.
+      </FieldRow>
+      <FieldRow label="Data Entry — Installation">
+        Same layout as Production but for Installation timesheets where <strong>Digital Tech = No</strong>.
+        Requires <code>DATA_ENTRY_INST</code> canReport.
+      </FieldRow>
+      <FieldRow label="Data Entry — Installation Digital">
+        Installation timesheets where <strong>Digital Tech = Yes</strong>. Labour summary shows per-category
+        breakdown (employee category). Requires <code>DATA_ENTRY_INSTD</code> canReport.
+      </FieldRow>
+
+      <Tip>
+        The card header shows Department, Digital Tech, Entry Person, Approver, and Status.
+        Use the <em>Mark Complete</em> button to flag a timesheet's data entry as done. Completed
+        timesheets move to the Completed sub-tab and show the completor's name and timestamp.
       </Tip>
 
       <SectionHeading>Analytics</SectionHeading>
@@ -467,11 +541,38 @@ function RolesSection() {
 
       <SectionHeading>Understanding permissions</SectionHeading>
       <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 10 }}>
-        Each module (e.g. PROD, INST, QC, REPORTS) has up to three permission flags:
+        Each module (e.g. PROD, INST, QC, REPORTS) has up to six permission flags:
       </p>
       <FieldRow label="Can Read">User can view the list and open records. Without this, the menu link is hidden.</FieldRow>
-      <FieldRow label="Can Write">User can create and edit records. Editing is blocked in view-only mode if this is off.</FieldRow>
+      <FieldRow label="Can Create">User can create new records.</FieldRow>
+      <FieldRow label="Can Write">User can edit existing records.</FieldRow>
+      <FieldRow label="Can Delete">User can delete records.</FieldRow>
       <FieldRow label="Can Report">User can access the Reports and Analytics pages for this module.</FieldRow>
+      <FieldRow label="Can Approve">User can approve or reject timesheets for this module.</FieldRow>
+
+      <SectionHeading>Data Entry Report modules</SectionHeading>
+      <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+        The three Data Entry report pages each have their own permission module under the <strong>Reports</strong> group.
+        Grant <strong>canReport</strong> on the relevant module to give a role access to that specific report page.
+      </p>
+      <FieldRow label="DATA_ENTRY_PROD">Controls access to Data Entry — Production.</FieldRow>
+      <FieldRow label="DATA_ENTRY_INST">Controls access to Data Entry — Installation (Digital Tech = No).</FieldRow>
+      <FieldRow label="DATA_ENTRY_INSTD">Controls access to Data Entry — Installation Digital (Digital Tech = Yes).</FieldRow>
+
+      <SectionHeading>WO Complete scope</SectionHeading>
+      <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+        Certain roles have a fixed WO Complete scope — they can only see and validate WO Complete records
+        for a specific department or timesheet type. The <strong>WO Scope</strong> column in the Roles list
+        shows this restriction at a glance (hover the badge for full details).
+      </p>
+      <FieldRow label="Production only (ROLE-009)">WO Complete list filtered to Production department. Pending/Approved check counts only Production timesheets.</FieldRow>
+      <FieldRow label="Installation / No DT (ROLE-010)">WO Complete list filtered to Installation department. Timesheet check scoped to INST type with Digital Tech = No.</FieldRow>
+      <FieldRow label="Digital / DT Yes (ROLE-011/012/013)">Timesheet check scoped to Digital department with Digital Tech = Yes.</FieldRow>
+
+      <Tip>
+        WO Complete scope restrictions are enforced on both the frontend (list filtering, timesheets tab)
+        and the backend (save validation). They cannot be bypassed by API calls.
+      </Tip>
 
       <SectionHeading>Creating a role</SectionHeading>
       <Step n={1}>Click <em>+ Add Role</em> and give the role a code (e.g. <code>ROLE-EMP</code>) and a descriptive name.</Step>
