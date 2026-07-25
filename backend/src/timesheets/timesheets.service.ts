@@ -176,6 +176,16 @@ export class TimesheetsService implements OnModuleInit {
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='digitalTech')
           ALTER TABLE PSTsHeader ADD digitalTech NVARCHAR(5) NULL;
       `);
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='dataEntryCompleted')
+          ALTER TABLE PSTsHeader ADD dataEntryCompleted BIT NOT NULL DEFAULT 0;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='dataEntryCompletedAt')
+          ALTER TABLE PSTsHeader ADD dataEntryCompletedAt DATETIME NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='dataEntryCompletedBy')
+          ALTER TABLE PSTsHeader ADD dataEntryCompletedBy NVARCHAR(150) NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsHeader') AND name='dataEntrySectionNotes')
+          ALTER TABLE PSTsHeader ADD dataEntrySectionNotes NVARCHAR(MAX) NULL;
+      `);
     } catch (err) {
       this.logger.warn(`Schema init skipped (will retry on next request): ${(err as Error)?.message}`);
     }
@@ -567,6 +577,7 @@ export class TimesheetsService implements OnModuleInit {
     employeeCode?: string | null,
     deptCode?: string | null,
     teamCodes?: string[] | null,
+    digitalTech?: string,
   ): Promise<any[]> {
     const req = this.devPool.request();
     if (type)        req.input('tsType',      mssql.NVarChar(20),  type);
@@ -575,6 +586,7 @@ export class TimesheetsService implements OnModuleInit {
     if (dateTo)      req.input('dateTo',      mssql.NVarChar(20),  dateTo);
     if (status)      req.input('status',      mssql.NVarChar(30),  status);
     if (department)  req.input('department',  mssql.NVarChar(50),  department);
+    if (digitalTech) req.input('digitalTech', mssql.NVarChar(5),   digitalTech);
 
     let scopeSql = '';
 
@@ -616,7 +628,8 @@ export class TimesheetsService implements OnModuleInit {
         (SELECT COUNT(*)  FROM PSTsEquipmentLine WHERE tsId = h.tsId) AS equipmentCount,
         (SELECT TOP 1 employeeName FROM PSTsLabourLine WHERE tsId = h.tsId ORDER BY lineNumber) AS employeeName,
         (SELECT TOP 1 employeeCode FROM PSTsLabourLine WHERE tsId = h.tsId ORDER BY lineNumber) AS employeeCode,
-        (SELECT COALESCE(SUM(durationMinutes),0) FROM PSTsLabourLine WHERE tsId = h.tsId) AS totalDuration
+        (SELECT COALESCE(SUM(durationMinutes),0) FROM PSTsLabourLine WHERE tsId = h.tsId) AS totalDuration,
+        h.dataEntryCompleted, h.dataEntryCompletedAt, h.dataEntryCompletedBy
       FROM PSTsHeader h
       WHERE h.isDeleted = 0
         ${type        ? 'AND h.tsType          = @tsType'      : ''}
@@ -625,6 +638,7 @@ export class TimesheetsService implements OnModuleInit {
         ${dateTo      ? 'AND h.entryDate       <= @dateTo'      : ''}
         ${status      ? 'AND h.status           = @status'      : ''}
         ${department  ? 'AND h.department_code  = @department'  : ''}
+        ${digitalTech ? "AND ISNULL(h.digitalTech, 'No') = @digitalTech" : ''}
         ${scopeSql}
       ORDER BY h.entryDate DESC, h.createdAt DESC
     `);
@@ -900,30 +914,40 @@ export class TimesheetsService implements OnModuleInit {
   async reportDetail(filters: {
     dateFrom?: string; dateTo?: string; type?: string;
     status?: string; department?: string; workOrderNo?: string; projectId?: string;
-    teamCodes?: string[] | null;
+    teamCodes?: string[] | null; dataEntryCompleted?: boolean | null;
+    completedDateFrom?: string; completedDateTo?: string;
+    digitalTech?: string;
   }): Promise<any> {
-    const { dateFrom, dateTo, type, status, department, workOrderNo, projectId, teamCodes } = filters;
+    const { dateFrom, dateTo, type, status, department, workOrderNo, projectId, teamCodes, dataEntryCompleted, completedDateFrom, completedDateTo, digitalTech } = filters;
     const req = this.devPool.request();
-    if (type)        req.input('tsType',      mssql.NVarChar(20),  type);
-    if (workOrderNo) req.input('workOrderNo', mssql.NVarChar(100), workOrderNo);
-    if (projectId)   req.input('projectId',   mssql.NVarChar(100), projectId);
-    if (dateFrom)    req.input('dateFrom',    mssql.NVarChar(20),  dateFrom);
-    if (dateTo)      req.input('dateTo',      mssql.NVarChar(20),  dateTo);
-    if (status)      req.input('status',      mssql.NVarChar(30),  status);
-    if (department)  req.input('department',  mssql.NVarChar(50),  department);
+    if (type)               req.input('tsType',             mssql.NVarChar(20),  type);
+    if (workOrderNo)        req.input('workOrderNo',        mssql.NVarChar(100), workOrderNo);
+    if (projectId)          req.input('projectId',          mssql.NVarChar(100), projectId);
+    if (dateFrom)           req.input('dateFrom',           mssql.NVarChar(20),  dateFrom);
+    if (dateTo)             req.input('dateTo',             mssql.NVarChar(20),  dateTo);
+    if (status)             req.input('status',             mssql.NVarChar(30),  status);
+    if (department)         req.input('department',         mssql.NVarChar(50),  department);
+    if (completedDateFrom)  req.input('completedDateFrom',  mssql.NVarChar(20),  completedDateFrom);
+    if (completedDateTo)    req.input('completedDateTo',    mssql.NVarChar(20),  completedDateTo);
+    if (digitalTech)        req.input('digitalTech',        mssql.NVarChar(5),   digitalTech);
 
     const teamFilter = teamCodes && teamCodes.length > 0
       ? `AND h.tsId IN (SELECT DISTINCT tsId FROM PSTsLabourLine WHERE employeeCode IN (${teamCodes.map(c => `'${c.replace(/'/g, "''")}'`).join(',')}))`
       : '';
 
     const where = `WHERE h.isDeleted = 0
-      ${type        ? 'AND h.tsType          = @tsType'      : ''}
-      ${workOrderNo ? 'AND h.workOrderNo     = @workOrderNo' : ''}
-      ${projectId   ? 'AND h.projectId       = @projectId'   : ''}
-      ${dateFrom    ? 'AND h.entryDate      >= @dateFrom'    : ''}
-      ${dateTo      ? 'AND h.entryDate      <= @dateTo'      : ''}
-      ${status      ? 'AND h.status          = @status'      : ''}
-      ${department  ? 'AND h.department_code = @department'  : ''}
+      ${type               ? 'AND h.tsType                                   = @tsType'           : ''}
+      ${workOrderNo        ? 'AND h.workOrderNo                              = @workOrderNo'       : ''}
+      ${projectId          ? 'AND h.projectId                                = @projectId'         : ''}
+      ${dateFrom           ? 'AND h.entryDate                               >= @dateFrom'          : ''}
+      ${dateTo             ? 'AND h.entryDate                               <= @dateTo'            : ''}
+      ${status             ? 'AND h.status                                   = @status'            : ''}
+      ${department         ? 'AND h.department_code                          = @department'        : ''}
+      ${dataEntryCompleted === true  ? 'AND h.dataEntryCompleted = 1' : ''}
+      ${dataEntryCompleted === false ? 'AND h.dataEntryCompleted = 0' : ''}
+      ${completedDateFrom  ? 'AND CONVERT(DATE, h.dataEntryCompletedAt)     >= @completedDateFrom' : ''}
+      ${completedDateTo    ? 'AND CONVERT(DATE, h.dataEntryCompletedAt)     <= @completedDateTo'   : ''}
+      ${digitalTech        ? 'AND ISNULL(h.digitalTech, \'No\')              = @digitalTech'       : ''}
       ${teamFilter}`;
 
     const result = await req.query(`
@@ -949,9 +973,14 @@ export class TimesheetsService implements OnModuleInit {
         NULL AS itemCode, NULL AS itemName, NULL AS uom,
         NULL AS equipmentName, NULL AS hoursUsed,
         l.taskTypeCode, l.comments,
-        l.nonProjectRelated, l.nonProjectDetails
+        l.nonProjectRelated, l.nonProjectDetails,
+        h.dataEntryCompleted, h.dataEntryCompletedAt, h.dataEntryCompletedBy,
+        h.dataEntrySectionNotes,
+        ep.category AS employeeCategory,
+        h.digitalTech, h.approvedBy
       FROM PSTsHeader h
       JOIN PSTsLabourLine l ON l.tsId = h.tsId
+      LEFT JOIN PSTsEmployeeProfile ep ON ep.employeeNo = l.employeeCode
       ${where}
       UNION ALL
       SELECT
@@ -965,7 +994,11 @@ export class TimesheetsService implements OnModuleInit {
         m.itemCode, m.itemName, m.uom,
         NULL AS equipmentName, NULL AS hoursUsed,
         NULL AS taskTypeCode, NULL AS comments,
-        NULL AS nonProjectRelated, NULL AS nonProjectDetails
+        NULL AS nonProjectRelated, NULL AS nonProjectDetails,
+        h.dataEntryCompleted, h.dataEntryCompletedAt, h.dataEntryCompletedBy,
+        h.dataEntrySectionNotes,
+        NULL AS employeeCategory,
+        h.digitalTech, h.approvedBy
       FROM PSTsHeader h
       JOIN PSTsMaterialLine m ON m.tsId = h.tsId
       ${where}
@@ -981,7 +1014,11 @@ export class TimesheetsService implements OnModuleInit {
         NULL AS itemCode, e.equipmentName AS itemName, NULL AS uom,
         e.equipmentName, e.hoursUsed,
         NULL AS taskTypeCode, NULL AS comments,
-        NULL AS nonProjectRelated, NULL AS nonProjectDetails
+        NULL AS nonProjectRelated, NULL AS nonProjectDetails,
+        h.dataEntryCompleted, h.dataEntryCompletedAt, h.dataEntryCompletedBy,
+        h.dataEntrySectionNotes,
+        NULL AS employeeCategory,
+        h.digitalTech, h.approvedBy
       FROM PSTsHeader h
       JOIN PSTsEquipmentLine e ON e.tsId = h.tsId
       ${where}
@@ -1577,5 +1614,27 @@ export class TimesheetsService implements OnModuleInit {
       .query(`UPDATE PSTsHeader SET isDeleted = 1, updatedAt = SYSUTCDATETIME() WHERE tsDocNo = @tsDocNo`);
     if (res.rowsAffected[0] === 0) throw new Error(`Timesheet ${docNo} not found`);
     this.logger.log(`Soft-deleted timesheet ${docNo}`);
+  }
+
+  async markDataEntryComplete(
+    docNo: string, completedBy: string, complete: boolean,
+    sectionNotes?: Record<string, { issue?: string; completion?: string }>,
+  ): Promise<void> {
+    const notesJson = complete && sectionNotes ? JSON.stringify(sectionNotes) : null;
+    const req = this.devPool.request()
+      .input('tsDocNo', mssql.NVarChar(40), docNo)
+      .input('completedBy', mssql.NVarChar(150), completedBy)
+      .input('complete', mssql.Bit, complete ? 1 : 0)
+      .input('sectionNotes', mssql.NVarChar(mssql.MAX), notesJson);
+    const result = await req.query(`
+      UPDATE PSTsHeader
+      SET
+        dataEntryCompleted    = @complete,
+        dataEntryCompletedAt  = CASE WHEN @complete = 1 THEN SYSUTCDATETIME() ELSE NULL END,
+        dataEntryCompletedBy  = CASE WHEN @complete = 1 THEN @completedBy ELSE NULL END,
+        dataEntrySectionNotes = CASE WHEN @complete = 1 THEN @sectionNotes ELSE NULL END
+      WHERE tsDocNo = @tsDocNo AND isDeleted = 0
+    `);
+    if (result.rowsAffected[0] === 0) throw new Error(`Timesheet ${docNo} not found`);
   }
 }

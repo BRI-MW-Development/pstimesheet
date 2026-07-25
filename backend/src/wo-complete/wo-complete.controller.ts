@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpException, HttpStatus, NotFoundException, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpException, HttpStatus, NotFoundException, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { WoCompleteService } from './wo-complete.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
@@ -23,8 +23,14 @@ export class WoCompleteController {
   @Get()
   @UseGuards(PermissionGuard)
   @RequirePermission('WO_COMPLETE', 'canRead')
-  list() {
-    return this.svc.list();
+  list(@Query('department') department?: string, @Req() req?: any) {
+    const roleCode = req?.currentUser?.roleCode ?? '';
+    // Role-scoped department filters
+    let deptFilter: string | undefined;
+    if (roleCode === 'ROLE-009') deptFilter = '%production%';
+    else if (roleCode === 'ROLE-010') deptFilter = '%installation%';
+    else deptFilter = department?.toLowerCase() || undefined;
+    return this.svc.list({ department: deptFilter });
   }
 
   @Post()
@@ -32,7 +38,7 @@ export class WoCompleteController {
   @RequirePermission('WO_COMPLETE', 'canCreate')
   async create(@Body() body: any, @Req() req: any) {
     try {
-    const result = await this.svc.create(body);
+    const result = await this.svc.create(body, req.currentUser?.roleCode);
     this.auditService.log({ docType: 'WO-COMPLETE', docRef: result.docNo || String(result.id), action: 'CREATE', performedBy: req.currentUser?.userId, performedByName: req.currentUser?.displayName, details: `WO: ${body.workOrderNumber || '—'}, Project: ${body.projectId || '—'}` });
     // Email notification for WO Complete
     if (body.notifyEmail) {
@@ -72,7 +78,7 @@ export class WoCompleteController {
   async update(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     try {
       const before = await this.svc.getById(Number(id)).catch(() => null);
-      await this.svc.update(Number(id), body);
+      await this.svc.update(Number(id), body, req.currentUser?.roleCode);
       const details = before
         ? this.auditService.diff(before, body, ['completedDate', 'projectId', 'workOrderNumber', 'department', 'status'])
         : 'Updated WO complete record';

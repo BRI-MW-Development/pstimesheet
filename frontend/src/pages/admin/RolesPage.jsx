@@ -27,10 +27,11 @@ const PM = [
 ];
 
 const MODULE_LABELS = {
-  PROD: 'Production Timesheets', INST: 'Installation Timesheets', PROJ: 'Projects Timesheets',
+  PROD: 'Production Timesheets', INST: 'Installation Timesheets', INSTD: 'Installation Digital Timesheets', PROJ: 'Projects Timesheets',
   PENDING_APPROVALS: 'Pending Approvals', TIMELINE: 'Timeline',
   WO_COMPLETE: 'WO Complete', QC: 'Quality Control (QC)',
   REPORTS: 'Reports', AUDIT_TRAIL: 'Audit Trail', ANALYTICS: 'Analytics',
+  DATA_ENTRY_PROD: 'Data Entry — Production', DATA_ENTRY_INST: 'Data Entry — Installation', DATA_ENTRY_INSTD: 'Data Entry — Installation Digital',
   EMPLOYEES: 'Employees', DEPARTMENTS: 'Departments', ITEMS: 'Items',
   MACHINERY: 'Machinery', VEHICLES: 'Vehicles', ACCESS_EQUIPMENT: 'Access Equipment',
   PROJECTS: 'Projects', WORK_ORDERS: 'Work Orders', TASK_TYPES: 'Task Types',
@@ -40,9 +41,9 @@ const MODULE_LABELS = {
 };
 
 const MODULE_GROUPS = [
-  { label: 'Timesheets',      modules: ['PROD', 'INST', 'PROJ', 'PENDING_APPROVALS', 'TIMELINE', 'WO_COMPLETE'] },
+  { label: 'Timesheets',      modules: ['PROD', 'INST', 'INSTD', 'PROJ', 'PENDING_APPROVALS', 'TIMELINE', 'WO_COMPLETE'] },
   { label: 'Quality Control', modules: ['QC'] },
-  { label: 'Reports',         modules: ['REPORTS', 'ANALYTICS', 'AUDIT_TRAIL'] },
+  { label: 'Reports',         modules: ['REPORTS', 'DATA_ENTRY_PROD', 'DATA_ENTRY_INST', 'DATA_ENTRY_INSTD', 'ANALYTICS', 'AUDIT_TRAIL'] },
   { label: 'Master Data',     modules: ['EMPLOYEES', 'DEPARTMENTS', 'ITEMS', 'MACHINERY', 'VEHICLES', 'ACCESS_EQUIPMENT', 'PROJECTS', 'WORK_ORDERS', 'TASK_TYPES'] },
   { label: 'Administration',  modules: ['USERS', 'ROLES', 'SHIFTS', 'DOC_NUMBERING', 'SETTINGS', 'NOTIFICATIONS', 'HOD_TEAMS'] },
 ];
@@ -459,6 +460,25 @@ export default function RolesPage() {
         const bg    = r.dataScope === 'Own' ? '#ede9fe' : r.dataScope === 'OwnDept' ? '#e0f2fe' : '#f3f4f6';
         const title = r.dataScope === 'Own' ? 'Only records entered by the user' : r.dataScope === 'OwnDept' ? 'All records in their assigned department' : 'All records';
         return <span title={title} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, color, background: bg, cursor: 'help' }}>{label}</span>;
+      },
+    },
+    {
+      key: 'wocScope', label: 'WO Scope', sort: false,
+      render: (r) => {
+        const WOC_SCOPE = {
+          'ROLE-009': { label: 'Production',          title: 'WO Complete: Production department only',                          color: '#b45309', bg: '#fef3c7' },
+          'ROLE-010': { label: 'Installation / No DT', title: 'WO Complete: Installation department, Digital Tech = No',          color: '#0369a1', bg: '#e0f2fe' },
+          'ROLE-011': { label: 'Digital / DT Yes',    title: 'WO Complete: Digital department, Digital Tech = Yes',              color: '#7c3aed', bg: '#ede9fe' },
+          'ROLE-012': { label: 'Digital / DT Yes',    title: 'WO Complete: Digital department, Digital Tech = Yes',              color: '#7c3aed', bg: '#ede9fe' },
+          'ROLE-013': { label: 'Digital / DT Yes',    title: 'WO Complete: Digital department, Digital Tech = Yes',              color: '#7c3aed', bg: '#ede9fe' },
+        };
+        const scope = WOC_SCOPE[r.roleCode];
+        if (!scope) return <span style={{ fontSize: 11, color: 'var(--border2)', fontStyle: 'italic' }}>—</span>;
+        return (
+          <span title={scope.title} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, color: scope.color, background: scope.bg, cursor: 'help', whiteSpace: 'nowrap' }}>
+            {scope.label}
+          </span>
+        );
       },
     },
     {

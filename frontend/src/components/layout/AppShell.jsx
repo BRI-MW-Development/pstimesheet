@@ -205,9 +205,11 @@ const NAV_GROUPS = [
   {
     label: 'Reports', icon: '📈',
     links: [
-      { label: 'Reports',          to: '/reports',             perm: { module: 'REPORTS',     action: 'canReport' } },
-      { label: 'Data Entry Report',to: '/reports/data-entry',  perm: { module: 'REPORTS',     action: 'canReport' } },
-      { label: 'Audit Trail',      to: '/reports/audit',       perm: { module: 'AUDIT_TRAIL', action: 'canRead'   } },
+      { label: 'Reports',                           to: '/reports',                  perm: { module: 'REPORTS',         action: 'canReport' } },
+      { label: 'Data Entry - Production',           to: '/reports/data-entry/prod',  perm: { module: 'DATA_ENTRY_PROD',  action: 'canReport' } },
+      { label: 'Data Entry - Installation',         to: '/reports/data-entry/inst',  perm: { module: 'DATA_ENTRY_INST',  action: 'canReport' } },
+      { label: 'Data Entry - Installation Digital', to: '/reports/data-entry/instd', perm: { module: 'DATA_ENTRY_INSTD', action: 'canReport' } },
+      { label: 'Audit Trail',                       to: '/reports/audit',            perm: { module: 'AUDIT_TRAIL',      action: 'canRead'   } },
     ],
   },
   {
@@ -690,7 +692,7 @@ export default function AppShell() {
         } : undefined}
       >
         {NAV_GROUPS.map((group) => {
-          // Filter links by permission — show only links the user can access
+          // Filter links by permission
           const visibleLinks = group.links.filter(link => {
             if (!link.perm) return true;
             return permissions.some(p => p.module === link.perm.module && p[link.perm.action]);

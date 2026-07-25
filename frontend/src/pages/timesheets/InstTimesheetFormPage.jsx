@@ -359,7 +359,7 @@ export default function InstTimesheetFormPage() {
       if (d.isActive === false || d.isActive === 0) return false;
       const md = (d.mainDepartment ?? '').toLowerCase();
       const dc = (d.departmentCode ?? '').toLowerCase();
-      return md.includes('install') || dc.includes('install');
+      return md.includes('install') || dc.includes('install') || md.includes('digital') || dc.includes('digital');
     })
     .map((d) => ({ value: d.departmentCode ?? String(d.departmentId), label: d.departmentCode ?? String(d.departmentId) })), [departments]);
   const shiftOptions = useMemo(() => shifts

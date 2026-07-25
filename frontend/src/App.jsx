@@ -162,7 +162,9 @@ export default function App() {
                   <Route path="woc"            element={<WocPage />} />
                   <Route path="reports"                element={<ReportsPage />} />
                   <Route path="reports/audit"         element={<AuditPage />} />
-                  <Route path="reports/data-entry"    element={<DataEntryReportPage />} />
+                  <Route path="reports/data-entry/prod"  element={<DataEntryReportPage tsType="PROD"  />} />
+                  <Route path="reports/data-entry/inst"  element={<DataEntryReportPage tsType="INST"  />} />
+                  <Route path="reports/data-entry/instd" element={<DataEntryReportPage tsType="INSTD" />} />
                   <Route path="analytics"         element={<AnalyticsPage />} />
                   <Route path="analytics/:type"   element={<AnalyticsPage />} />
                   <Route path="reports/analytics" element={<AnalyticsPage />} />

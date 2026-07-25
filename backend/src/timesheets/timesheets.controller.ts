@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Logger, NotFoundException, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Logger, NotFoundException, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermission } from '../auth/permission.decorator';
 import { TimesheetsService } from './timesheets.service';
@@ -83,6 +83,7 @@ export class TimesheetsController {
     @Query('dateTo')      dateTo?: string,
     @Query('status')      status?: string,
     @Query('department')  department?: string,
+    @Query('digitalTech') digitalTech?: string,
     @Req() req?: any,
   ) {
     const roleCode      = req?.currentUser?.roleCode      ?? '';
@@ -113,7 +114,7 @@ export class TimesheetsController {
     // This handles employees from different departments assigned to the same HOD
     const deptCode = (!teamCodes && dataScope === 'OwnDept') ? departmentCode : null;
 
-    return this.timesheetsService.list(type, workOrderNo, dateFrom, dateTo, status, department, userId, seeAll, employeeCode, deptCode, teamCodes);
+    return this.timesheetsService.list(type, workOrderNo, dateFrom, dateTo, status, department, userId, seeAll, employeeCode, deptCode, teamCodes, digitalTech);
   }
 
   @Get('employee-timeline')
@@ -419,16 +420,27 @@ export class TimesheetsController {
 
   @Get('report-detail')
   async reportDetail(
-    @Query('dateFrom')    dateFrom?: string,
-    @Query('dateTo')      dateTo?: string,
-    @Query('type')        type?: string,
-    @Query('status')      status?: string,
-    @Query('department')  department?: string,
-    @Query('workOrderNo') workOrderNo?: string,
-    @Query('projectId')   projectId?: string,
+    @Query('dateFrom')           dateFrom?: string,
+    @Query('dateTo')             dateTo?: string,
+    @Query('type')               type?: string,
+    @Query('status')             status?: string,
+    @Query('department')         department?: string,
+    @Query('workOrderNo')        workOrderNo?: string,
+    @Query('projectId')          projectId?: string,
+    @Query('dataEntryCompleted')  dataEntryCompletedRaw?: string,
+    @Query('completedDateFrom')   completedDateFrom?: string,
+    @Query('completedDateTo')     completedDateTo?: string,
+    @Query('digitalTech')         digitalTech?: string,
     @Req() req?: any,
   ) {
-    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', this.typeToModule(type), 'canReport');
+    // Derive the specific Data Entry module for permission check
+    // INST + digitalTech=Yes → DATA_ENTRY_INSTD, INST → DATA_ENTRY_INST, PROD → DATA_ENTRY_PROD
+    const deModule = type?.toUpperCase() === 'INST' && digitalTech === 'Yes'
+      ? 'DATA_ENTRY_INSTD'
+      : type?.toUpperCase() === 'INST'
+      ? 'DATA_ENTRY_INST'
+      : 'DATA_ENTRY_PROD';
+    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', deModule, 'canReport');
 
     const employeeCode = req?.currentUser?.employeeCode ?? null;
     let teamCodes: string[] | null = null;
@@ -437,7 +449,8 @@ export class TimesheetsController {
       if (codes.length > 0) teamCodes = [employeeCode, ...codes];
     }
 
-    return this.timesheetsService.reportDetail({ dateFrom, dateTo, type, status, department, workOrderNo, projectId, teamCodes });
+    const dataEntryCompleted = dataEntryCompletedRaw === 'true' ? true : dataEntryCompletedRaw === 'false' ? false : null;
+    return this.timesheetsService.reportDetail({ dateFrom, dateTo, type, status, department, workOrderNo, projectId, teamCodes, dataEntryCompleted, completedDateFrom, completedDateTo, digitalTech });
   }
 
   @Get('report-summary')
@@ -449,7 +462,8 @@ export class TimesheetsController {
     @Query('department') department?: string,
     @Req() req?: any,
   ) {
-    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', this.typeToModule(type), 'canReport');
+    const deModule = type?.toUpperCase() === 'INST' ? 'DATA_ENTRY_INST' : 'DATA_ENTRY_PROD';
+    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', deModule, 'canReport');
     return this.timesheetsService.reportSummary({ dateFrom, dateTo, type, status, department });
   }
 
@@ -606,6 +620,18 @@ export class TimesheetsController {
     } catch (err) {
       this.logger.error('Batch create failed', err);
       throw new HttpException({ message: err?.message || 'Batch create failed', detail: err?.originalError?.message || '' }, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Patch(':docNo/data-entry-complete')
+  async markDataEntryComplete(@Param('docNo') docNo: string, @Body() body: { complete: boolean; sectionNotes?: Record<string, { issue?: string; completion?: string }> }, @Req() req: any) {
+    try {
+      await this.timesheetsService.markDataEntryComplete(docNo, req.currentUser?.displayName ?? '', body.complete ?? true, body.sectionNotes);
+      this.auditService.log({ docType: 'TIMESHEET', docRef: docNo, action: 'UPDATE', performedBy: req.currentUser?.userId, performedByName: req.currentUser?.displayName, details: body.complete ? 'Marked data entry completed' : 'Unmarked data entry completed' });
+      return { ok: true };
+    } catch (err) {
+      this.logger.error(`Mark data entry complete for ${docNo} failed`, err);
+      throw new HttpException({ message: err?.message || 'Update failed' }, err?.message?.includes('not found') ? HttpStatus.NOT_FOUND : HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

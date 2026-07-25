@@ -12,7 +12,7 @@ import { usePermission } from '../../hooks/usePermission';
 import { formatDate } from '../../utils/format';
 import FileLightbox from '../../components/ui/FileLightbox';
 
-const STATUS_VARIANT = { 'WO Completed': 'approved', 'Data Entry Completed': 'submitted', Draft: 'draft' };
+const STATUS_VARIANT = { 'WO Completed': 'approved', 'Data Entry Completed': 'submitted', 'In Progress': 'info', Draft: 'draft' };
 const WOC_STATUSES   = ['WO Completed', 'Data Entry Completed'];
 
 function fmt(bytes) {
@@ -67,6 +67,17 @@ function FilterPanel({ filters, setFilters, onClear }) {
       )}
     </div>
   );
+}
+
+// ── Role-scoped timesheet params ──────────────────────────────────────────────
+const DIGITAL_ROLES = ['ROLE-011', 'ROLE-012', 'ROLE-013'];
+
+function getTsParamsByRole(roleCode, workOrderNumber) {
+  if (DIGITAL_ROLES.includes(roleCode))
+    return { workOrderNo: workOrderNumber, department: 'Digital', digitalTech: 'Yes' };
+  if (roleCode === 'ROLE-010')
+    return { workOrderNo: workOrderNumber, type: 'INST', digitalTech: 'No' };
+  return { workOrderNo: workOrderNumber };
 }
 
 // ── WOC Form Modal ────────────────────────────────────────────────────────────
@@ -140,14 +151,15 @@ function WocFormModal({ initial, onClose, onSaved }) {
   }, [isEdit, initial?.id]);
 
   // Load timesheets when WO changes
+  const formRoleCode = user?.roleCode ?? '';
   useEffect(() => {
     const wo = form.workOrderNumber;
     if (!wo) { setTsRows(null); return; }
     setTsRows('loading');
-    api.get('/timesheets', { params: { workOrderNo: wo } })
+    api.get('/timesheets', { params: getTsParamsByRole(formRoleCode, wo) })
       .then(r => setTsRows(r.data))
       .catch(() => setTsRows([]));
-  }, [form.workOrderNumber]);
+  }, [form.workOrderNumber, formRoleCode]);
 
   const depts = [...new Set(allWorkOrders
     .map(w => (w.departmentName || w.parentDepartmentName || '').trim())
@@ -489,8 +501,12 @@ function WocFormModal({ initial, onClose, onSaved }) {
 function WocViewModal({ record, onClose }) {
   const toast       = useToast();
   const queryClient = useQueryClient();
+  const user        = useAuthStore(s => s.user);
   const [tab, setTab] = useState('details');
   const [viewLightbox, setViewLightbox] = useState(null); // { src, name, mimeType }
+
+  const roleCode      = user?.roleCode ?? '';
+  const isDigitalRole = DIGITAL_ROLES.includes(roleCode);
 
   const { data: attachments = [], isLoading: loadingAttach } = useQuery({
     queryKey: ['woc-attachments', record.id],
@@ -498,10 +514,18 @@ function WocViewModal({ record, onClose }) {
     enabled: tab === 'attachments',
   });
 
+  const tsParams = getTsParamsByRole(roleCode, record.workOrderNumber);
   const { data: tsRows = [] } = useQuery({
-    queryKey: ['woc-timesheets', record.workOrderNumber],
-    queryFn: () => api.get('/timesheets', { params: { workOrderNo: record.workOrderNumber } }).then(r => r.data),
+    queryKey: ['woc-timesheets', record.workOrderNumber, roleCode],
+    queryFn: () => api.get('/timesheets', { params: tsParams }).then(r => r.data),
     enabled: tab === 'timesheets' && Boolean(record.workOrderNumber),
+  });
+
+  const isProduction = record.department?.toLowerCase().includes('production');
+  const { data: qcRows = [] } = useQuery({
+    queryKey: ['woc-qc', record.workOrderNumber],
+    queryFn: () => api.get('/qc', { params: { workOrderNo: record.workOrderNumber } }).then(r => r.data),
+    enabled: (tab === 'timesheets' || tab === 'qc') && Boolean(record.workOrderNumber) && isProduction,
   });
 
   const { mutate: deleteAttach } = useMutation({
@@ -520,9 +544,16 @@ function WocViewModal({ record, onClose }) {
         />
       )}
       <div className="woc-modal-tabs" style={{ padding: '0 0 12px' }}>
-        {[['details','Details'],['timesheets','Timesheets'],['attachments','Attachments']].map(([k, label]) => (
+        {[
+          ['details', 'Details'],
+          ['timesheets', 'Timesheets'],
+          ...(isProduction ? [['qc', 'QC Records']] : []),
+          ['attachments', 'Attachments'],
+        ].map(([k, label]) => (
           <button key={k} className={`woc-modal-tab${tab === k ? ' active' : ''}`} onClick={() => setTab(k)}>
             {label}
+            {k === 'timesheets' && tsRows.length > 0 && <span className="woc-tab-badge">{tsRows.length}</span>}
+            {k === 'qc' && qcRows.length > 0 && <span className="woc-tab-badge">{qcRows.length}</span>}
           </button>
         ))}
       </div>
@@ -536,16 +567,16 @@ function WocViewModal({ record, onClose }) {
             ['Customer',      record.customerName ?? record.projectName ?? '—'],
             ['Department',    record.department ?? '—'],
             ...(record.department?.toLowerCase().includes('production') ? [['Full Outsource', record.fullOutsource ?? '—']] : []),
-            ['WO Status',     record.workOrderStatus ?? '—'],
-            ['Status',        null],
+            ['WO Completion Status', null],
+            ['NetSuite WO Status',  record.workOrderStatus ?? '—'],
             ['Completed Date',formatDate(record.completedDate)],
             ['Entered By',    record.enteredBy ?? '—'],
             ['Remarks',       record.remarks ?? '—'],
           ].map(([label, val]) => (
             <div className="detail-row" key={label}>
               <span>{label}</span>
-              {label === 'Status'
-                ? <Badge variant={STATUS_VARIANT[record.status] ?? 'default'}>{record.status ?? '—'}</Badge>
+              {label === 'WO Completion Status'
+                ? <Badge variant={STATUS_VARIANT[record.status] ?? 'draft'}>{record.status ?? '—'}</Badge>
                 : <span>{val}</span>}
             </div>
           ))}
@@ -555,20 +586,126 @@ function WocViewModal({ record, onClose }) {
       {tab === 'timesheets' && (
         !record.workOrderNumber ? (
           <p className="woc-ts-empty">No work order linked.</p>
-        ) : tsRows.length === 0 ? (
-          <p className="woc-ts-empty">No timesheet entries found.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* ── Approved Timesheets ── */}
+            {(() => {
+              const approved = tsRows.filter(r => r.status === 'Approved');
+              return (
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Approved ({approved.length})
+                  </div>
+                  {approved.length === 0 ? (
+                    <p className="woc-ts-empty" style={{ margin: 0 }}>No approved timesheets.</p>
+                  ) : (
+                    <table className="woc-ts-table">
+                      <thead><tr><th>#</th><th>Doc No</th><th>Date</th><th>Department</th><th>Entered By</th><th>Status</th><th>Data Entry</th></tr></thead>
+                      <tbody>
+                        {approved.map((r, i) => (
+                          <tr key={r.docNo ?? i}>
+                            <td>{i + 1}</td>
+                            <td><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.docNo}</span></td>
+                            <td>{formatDate(r.entryDate)}</td>
+                            <td style={{ color: 'var(--text2)' }}>{r.department_code || '—'}</td>
+                            <td>{r.entered_by_name || '—'}</td>
+                            <td><Badge variant="approved">{r.status}</Badge></td>
+                            <td>
+                              <Badge variant={r.dataEntryCompleted ? 'approved' : 'draft'}>
+                                {r.dataEntryCompleted ? 'Completed' : 'Pending'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── Rejected Timesheets ── */}
+            {(() => {
+              const rejected = tsRows.filter(r => r.status === 'Rejected');
+              if (rejected.length === 0) return null;
+              return (
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Rejected ({rejected.length})
+                  </div>
+                  <table className="woc-ts-table">
+                    <thead><tr><th>#</th><th>Doc No</th><th>Date</th><th>Department</th><th>Entered By</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {rejected.map((r, i) => (
+                        <tr key={r.docNo ?? i}>
+                          <td>{i + 1}</td>
+                          <td><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.docNo}</span></td>
+                          <td>{formatDate(r.entryDate)}</td>
+                          <td style={{ color: 'var(--text2)' }}>{r.department_code || '—'}</td>
+                          <td>{r.entered_by_name || '—'}</td>
+                          <td><Badge variant="rejected">{r.status}</Badge></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+
+            {/* ── Other statuses (Draft / Submitted) ── */}
+            {(() => {
+              const others = tsRows.filter(r => r.status !== 'Approved' && r.status !== 'Rejected');
+              if (others.length === 0) return null;
+              return (
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Other ({others.length})
+                  </div>
+                  <table className="woc-ts-table">
+                    <thead><tr><th>#</th><th>Doc No</th><th>Date</th><th>Department</th><th>Entered By</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {others.map((r, i) => (
+                        <tr key={r.docNo ?? i}>
+                          <td>{i + 1}</td>
+                          <td><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.docNo}</span></td>
+                          <td>{formatDate(r.entryDate)}</td>
+                          <td style={{ color: 'var(--text2)' }}>{r.department_code || '—'}</td>
+                          <td>{r.entered_by_name || '—'}</td>
+                          <td><Badge variant={({ Draft:'draft',Submitted:'submitted' })[r.status] ?? 'draft'}>{r.status}</Badge></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+
+            {tsRows.length === 0 && (
+              <p className="woc-ts-empty" style={{ margin: 0 }}>No timesheet entries found.</p>
+            )}
+          </div>
+        )
+      )}
+
+      {tab === 'qc' && (
+        !record.workOrderNumber ? (
+          <p className="woc-ts-empty">No work order linked.</p>
+        ) : qcRows.length === 0 ? (
+          <p className="woc-ts-empty">No QC records for this work order.</p>
         ) : (
           <table className="woc-ts-table">
-            <thead><tr><th>#</th><th>Doc No</th><th>Date</th><th>Department</th><th>Entered By</th><th>Status</th></tr></thead>
+            <thead><tr><th>#</th><th>Doc No</th><th>QC Date</th><th>Sign Type</th><th>Qty</th><th>Partial/Full</th><th>Inspector</th><th>Status</th></tr></thead>
             <tbody>
-              {tsRows.map((r, i) => (
-                <tr key={r.docNo ?? i}>
+              {qcRows.map((q, i) => (
+                <tr key={q.id ?? i}>
                   <td>{i + 1}</td>
-                  <td><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.docNo}</span></td>
-                  <td>{formatDate(r.entryDate)}</td>
-                  <td style={{ color: '#6b7280' }}>{r.department_code || '—'}</td>
-                  <td>{r.entered_by_name || '—'}</td>
-                  <td><Badge variant={({ Draft:'draft',Submitted:'submitted',Approved:'approved',Rejected:'rejected' })[r.status] ?? 'draft'}>{r.status}</Badge></td>
+                  <td><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{q.docNo}</span></td>
+                  <td>{formatDate(q.qcDate)}</td>
+                  <td>{q.signType || '—'}</td>
+                  <td style={{ textAlign: 'right' }}>{q.quantity ?? '—'}</td>
+                  <td>{q.partialFull || '—'}</td>
+                  <td>{q.qcInspector || '—'}</td>
+                  <td><Badge variant={({ Draft:'draft',Submitted:'submitted',Approved:'approved',Rejected:'rejected' })[q.status] ?? 'draft'}>{q.status}</Badge></td>
                 </tr>
               ))}
             </tbody>

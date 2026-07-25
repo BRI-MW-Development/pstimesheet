@@ -89,12 +89,15 @@ export class WoCompleteService implements OnModuleInit {
     return { docNo: `${prefix}-${year}-${String(next).padStart(digits, '0')}` };
   }
 
-  async list(): Promise<any[]> {
-    const res = await this.pool.request().query(`
+  async list(filters: { department?: string } = {}): Promise<any[]> {
+    const req = this.pool.request();
+    if (filters.department) req.input('department', mssql.NVarChar(100), filters.department);
+    const res = await req.query(`
       SELECT id, docNo, completedDate, projectId, projectName, customerName, department,
              workOrderNumber, workOrderStatus, sourceType, status, enteredBy, remarks, fullOutsource, createdAt
       FROM PsWoComplete
       WHERE isDeleted = 0
+        ${filters.department ? 'AND LOWER(department) LIKE @department' : ''}
       ORDER BY createdAt DESC
     `);
     return res.recordset;
@@ -112,10 +115,10 @@ export class WoCompleteService implements OnModuleInit {
     return res.recordset[0] ?? null;
   }
 
-  async update(id: number, body: any): Promise<void> {
+  async update(id: number, body: any, roleCode?: string): Promise<void> {
     this.assertWocFields(body);
     await this.assertNoDuplicateWo(body.workOrderNumber, id);
-    await this.assertNoPendingTimesheets(body.workOrderNumber, body.fullOutsource);
+    await this.assertNoPendingTimesheets(body.workOrderNumber, body.fullOutsource, roleCode);
     await this.assertQcFullCompleted(body.workOrderNumber, body.department);
     await this.pool.request()
       .input('id',              mssql.BigInt,        id)
@@ -149,22 +152,35 @@ export class WoCompleteService implements OnModuleInit {
       `);
   }
 
-  private async assertNoPendingTimesheets(workOrderNumber: string, fullOutsource?: string): Promise<void> {
+  private async assertNoPendingTimesheets(workOrderNumber: string, fullOutsource?: string, roleCode?: string): Promise<void> {
     if (!workOrderNumber) return;
     // Outsourced WOs have no internal timesheets — skip this check
     if (fullOutsource === 'Yes') return;
-    const res = await this.pool.request()
-      .input('wo', mssql.NVarChar(100), workOrderNumber)
-      .query(`
-        SELECT COUNT(*) AS cnt
-        FROM PSTsHeader
-        WHERE workOrderNo = @wo AND isDeleted = 0
-          AND status NOT IN ('Approved', 'Rejected')
-      `);
-    const cnt = res.recordset[0]?.cnt ?? 0;
-    if (cnt > 0) {
+
+    const DIGITAL_ROLES = ['ROLE-011', 'ROLE-012', 'ROLE-013'];
+    const isDigitalRole = roleCode && DIGITAL_ROLES.includes(roleCode);
+    const isInstRole    = roleCode === 'ROLE-010';
+
+    const req = this.pool.request().input('wo', mssql.NVarChar(100), workOrderNumber);
+    const res = await req.query(`
+      SELECT
+        SUM(CASE WHEN status NOT IN ('Approved', 'Rejected') THEN 1 ELSE 0 END) AS pendingCnt,
+        SUM(CASE WHEN status = 'Approved'                   THEN 1 ELSE 0 END) AS approvedCnt
+      FROM PSTsHeader
+      WHERE workOrderNo = @wo AND isDeleted = 0
+        ${isDigitalRole ? "AND department_code = 'Digital' AND ISNULL(digitalTech, 'No') = 'Yes'" : ''}
+        ${isInstRole    ? "AND tsType = 'INST' AND ISNULL(digitalTech, 'No') = 'No'" : ''}
+    `);
+    const { pendingCnt = 0, approvedCnt = 0 } = res.recordset[0] ?? {};
+
+    if (pendingCnt > 0) {
       throw new BadRequestException(
-        `Cannot save WO Complete: ${cnt} timesheet${cnt > 1 ? 's' : ''} for Work Order "${workOrderNumber}" ${cnt > 1 ? 'are' : 'is'} not yet finalised. All timesheets must be Approved or Rejected before marking this Work Order as complete.`
+        `Cannot save WO Complete: ${pendingCnt} timesheet${pendingCnt > 1 ? 's' : ''} for Work Order "${workOrderNumber}" ${pendingCnt > 1 ? 'are' : 'is'} not yet finalised. All timesheets must be Approved or Rejected before marking this Work Order as complete.`
+      );
+    }
+    if (approvedCnt === 0) {
+      throw new BadRequestException(
+        `Cannot save WO Complete: Work Order "${workOrderNumber}" has no Approved timesheets. At least one timesheet must be Approved before marking this Work Order as complete.`
       );
     }
   }
@@ -220,10 +236,10 @@ export class WoCompleteService implements OnModuleInit {
       throw new BadRequestException('Full Outsource (Yes/No) is required for Production Work Orders.');
   }
 
-  async create(body: any): Promise<{ docNo: string; id: number }> {
+  async create(body: any, roleCode?: string): Promise<{ docNo: string; id: number }> {
     this.assertWocFields(body);
     await this.assertNoDuplicateWo(body.workOrderNumber);
-    await this.assertNoPendingTimesheets(body.workOrderNumber, body.fullOutsource);
+    await this.assertNoPendingTimesheets(body.workOrderNumber, body.fullOutsource, roleCode);
     await this.assertQcFullCompleted(body.workOrderNumber, body.department);
     const year = new Date().getFullYear();
     const upd = await this.pool.request()
