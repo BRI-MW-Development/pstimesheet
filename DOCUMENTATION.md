@@ -1,6 +1,6 @@
 # OpsDesk — Technical Documentation
 
-**Version:** 4.1  
+**Version:** 4.2  
 **Last Updated:** July 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
@@ -224,10 +224,14 @@ Route: `/woc`
 |------|---------------|---------------------------|
 | ROLE-009 | Production department only | Only Production timesheets counted |
 | ROLE-010 | Installation department only | Only `tsType=INST`, `digitalTech=No` timesheets |
-| ROLE-011/012/013 | All (standard) | Only `department=Digital`, `digitalTech=Yes` timesheets |
+| ROLE-011/012/013 | Digital department only | Only `department=Digital`, `digitalTech=Yes` timesheets |
 | All other roles | All (standard) | All timesheets for the WO |
 
 The backend enforces scoping in `assertNoPendingTimesheets()` using the caller's `roleCode` passed from the controller. Frontend queries `/timesheets` with matching params so the Timesheets tab in the view modal only shows the role's relevant subset.
+
+For ROLE-011/012/013 the `GET /timesheets` list endpoint hard-overrides `department = 'Digital'` and `digitalTech = 'Yes'` server-side regardless of query params, so these roles can never retrieve records from other departments. The WO Complete Timesheets tab also sends `type: 'INST'` for these roles so the permission check resolves against `INST` (not the default `PROD`).
+
+**WO Complete filters:** The list endpoint accepts `dateFrom`, `dateTo`, `status`, and `department` query params. All four are applied server-side (`completedDate` range for dates, exact match for status, `LIKE` for department). Role-based department overrides (ROLE-009/010) take precedence over the user-supplied department filter.
 
 **View modal tabs:**
 - **Details** — core WO Complete fields and status
@@ -975,6 +979,33 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v4.2 (July 2026)
+Bug fixes: WOC NULL bypass, read-only keyboard bypass, WO filter, ROLE-011 timesheets scope, Project Timesheet edit window.
+
+**WOC — `assertNoPendingTimesheets` NULL bypass fix**
+- SQL `SUM()` on an empty result set returns `NULL`, not `0`. The TypeScript destructuring default (`approvedCnt = 0`) only applies to `undefined`, not `null`, so `null === 0` evaluated to `false` — allowing Work Orders with zero timesheets to bypass the "at least one Approved" guard. Fixed by wrapping both SUM columns with `ISNULL(SUM(…), 0)`.
+
+**WOC — `getById` missing `fullOutsource`**
+- The single-record GET query was missing `fullOutsource` in its SELECT. Added to match the list query.
+
+**WOC — filters now working end-to-end**
+- The filter panel sent `dateFrom`, `dateTo`, and `status` query params but the backend controller only read `department`, silently ignoring the others. Fixed: controller now reads all four params and passes them to `list()`; service applies `CONVERT(DATE, completedDate) >= @dateFrom`, `<= @dateTo`, and `status = @status` WHERE clauses.
+
+**Read-only forms — keyboard bypass fix**
+- All four timesheet/QC form pages used `pointerEvents: none` to block editing on Approved/Rejected records. This only prevents mouse interaction — keyboard Tab + Enter could still trigger `onSubmit`. Fixed in all four pages:
+  - `ProdTimesheetFormPage`, `InstTimesheetFormPage`, `QCFormPage`, `ProjTimesheetPage` (DailyForm): added `if (isReadonly) return` as the first line of each submit handler.
+  - Added HTML `inert` attribute to the form body wrapper on all four pages. `inert` is a DOM-level attribute that blocks both mouse and keyboard on all descendants regardless of CSS `display` setting.
+  - `ProjTimesheetPage`: the existing `pointerEvents: none` was on a `display: contents` wrapper — CSS `pointer-events` requires a rendered box and is silently ignored on `display: contents` elements. The `inert` attribute works correctly on `display: contents` as it is DOM-level, not CSS-level.
+
+**Project Timesheets — Draft edit window**
+- The Edit button condition was `isWithin24h(row.createdAt) && row.status !== 'Approved'`, blocking Draft timesheets older than 24 h from being edited. Changed to `(row.status === 'Draft' || isWithin24h(row.createdAt)) && row.status !== 'Approved'` — Draft timesheets are now always editable regardless of age.
+
+**ROLE-011/012/013 — timesheets scope hardened**
+- `GET /timesheets` list now unconditionally forces `department = 'Digital'` (was `department || 'Digital'`, which could be overridden by the frontend) and `digitalTech = 'Yes'` for DIGITAL_ROLES. Also sets `type = 'INST'` when no type is supplied, ensuring the permission check resolves to `INST` (not the default `PROD`).
+- `getTsParamsByRole()` on the frontend now includes `type: 'INST'` for DIGITAL_ROLES (was omitted, causing the WOC Timesheets tab to pass no type → backend defaulted to PROD → `assertPermission(ROLE-011, 'PROD', 'canRead')` failed with 403).
+
+---
 
 ### v4.0 (July 2026)
 Open Shift overnight concept, employee profile photo linking, Timeline avatars and enhancements, Project Detail report improvements, HOD Teams department filter.

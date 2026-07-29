@@ -511,7 +511,7 @@ export default function QCFormPage() {
         </div>
       </div>
 
-      <form onSubmit={e => { e.preventDefault(); if (validate()) save({ ...header, checklistData: { ...checklist, __sectionNA: sectionNA } }); }}
+      <form onSubmit={e => { e.preventDefault(); if (isReadonly) return; if (validate()) save({ ...header, checklistData: { ...checklist, __sectionNA: sectionNA } }); }}
         data-qc-tab={mobQcTab}
         style={isNarrow
           ? { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, width: '100%', overflow: 'hidden' }
@@ -533,7 +533,8 @@ export default function QCFormPage() {
         {/* ── Three-panel row ── */}
         <div style={isNarrow
           ? { flex: 1, display: 'flex', overflowY: 'auto', WebkitOverflowScrolling: 'touch', minHeight: 0 }
-          : { flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+          : { flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}
+          {...(isReadonly ? { inert: '' } : {})}>
 
         {/* Left panel */}
         <div className="ts-form-panel qc-panel-details" style={{ ...(isNarrow ? { flex: '0 0 auto', width: '100%' } : { flexShrink: 0 }), borderRight: isNarrow ? 'none' : '1px solid var(--border)', overflowY: isNarrow ? 'visible' : 'auto', display: isNarrow && mobQcTab !== 'details' ? 'none' : undefined }}>

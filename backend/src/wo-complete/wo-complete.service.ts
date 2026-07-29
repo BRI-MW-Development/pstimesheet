@@ -89,15 +89,22 @@ export class WoCompleteService implements OnModuleInit {
     return { docNo: `${prefix}-${year}-${String(next).padStart(digits, '0')}` };
   }
 
-  async list(filters: { department?: string } = {}): Promise<any[]> {
+  async list(filters: { department?: string; dateFrom?: string; dateTo?: string; status?: string } = {}): Promise<any[]> {
+    const { department, dateFrom, dateTo, status } = filters;
     const req = this.pool.request();
-    if (filters.department) req.input('department', mssql.NVarChar(100), filters.department);
+    if (department) req.input('department', mssql.NVarChar(100), department);
+    if (dateFrom)   req.input('dateFrom',   mssql.NVarChar(20),  dateFrom);
+    if (dateTo)     req.input('dateTo',     mssql.NVarChar(20),  dateTo);
+    if (status)     req.input('status',     mssql.NVarChar(60),  status);
     const res = await req.query(`
       SELECT id, docNo, completedDate, projectId, projectName, customerName, department,
              workOrderNumber, workOrderStatus, sourceType, status, enteredBy, remarks, fullOutsource, createdAt
       FROM PsWoComplete
       WHERE isDeleted = 0
-        ${filters.department ? 'AND LOWER(department) LIKE @department' : ''}
+        ${department ? 'AND LOWER(department) LIKE @department'        : ''}
+        ${dateFrom   ? 'AND CONVERT(DATE, completedDate) >= @dateFrom' : ''}
+        ${dateTo     ? 'AND CONVERT(DATE, completedDate) <= @dateTo'   : ''}
+        ${status     ? 'AND status = @status'                          : ''}
       ORDER BY createdAt DESC
     `);
     return res.recordset;
@@ -108,7 +115,7 @@ export class WoCompleteService implements OnModuleInit {
       .input('id', mssql.BigInt, id)
       .query(`
         SELECT id, docNo, completedDate, projectId, projectName, customerName, department,
-               workOrderNumber, workOrderStatus, sourceType, status, enteredBy, remarks, createdAt
+               workOrderNumber, workOrderStatus, sourceType, status, enteredBy, remarks, fullOutsource, createdAt
         FROM PsWoComplete
         WHERE id = @id AND isDeleted = 0
       `);
@@ -164,8 +171,8 @@ export class WoCompleteService implements OnModuleInit {
     const req = this.pool.request().input('wo', mssql.NVarChar(100), workOrderNumber);
     const res = await req.query(`
       SELECT
-        SUM(CASE WHEN status NOT IN ('Approved', 'Rejected') THEN 1 ELSE 0 END) AS pendingCnt,
-        SUM(CASE WHEN status = 'Approved'                   THEN 1 ELSE 0 END) AS approvedCnt
+        ISNULL(SUM(CASE WHEN status NOT IN ('Approved', 'Rejected') THEN 1 ELSE 0 END), 0) AS pendingCnt,
+        ISNULL(SUM(CASE WHEN status = 'Approved'                   THEN 1 ELSE 0 END), 0) AS approvedCnt
       FROM PSTsHeader
       WHERE workOrderNo = @wo AND isDeleted = 0
         ${isDigitalRole ? "AND department_code = 'Digital' AND ISNULL(digitalTech, 'No') = 'Yes'" : ''}

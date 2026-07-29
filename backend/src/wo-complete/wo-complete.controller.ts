@@ -23,14 +23,20 @@ export class WoCompleteController {
   @Get()
   @UseGuards(PermissionGuard)
   @RequirePermission('WO_COMPLETE', 'canRead')
-  list(@Query('department') department?: string, @Req() req?: any) {
+  list(
+    @Query('department') department?: string,
+    @Query('dateFrom')   dateFrom?: string,
+    @Query('dateTo')     dateTo?: string,
+    @Query('status')     status?: string,
+    @Req() req?: any,
+  ) {
     const roleCode = req?.currentUser?.roleCode ?? '';
     // Role-scoped department filters
     let deptFilter: string | undefined;
     if (roleCode === 'ROLE-009') deptFilter = '%production%';
     else if (roleCode === 'ROLE-010') deptFilter = '%installation%';
     else deptFilter = department?.toLowerCase() || undefined;
-    return this.svc.list({ department: deptFilter });
+    return this.svc.list({ department: deptFilter, dateFrom, dateTo, status });
   }
 
   @Post()

@@ -199,6 +199,17 @@ function TimesheetsSection() {
         reject it — the employee can then correct and resubmit.
       </Tip>
 
+      <SectionHeading>Editing a Draft timesheet</SectionHeading>
+      <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+        Draft timesheets can be edited at any time regardless of when they were created. Find the record
+        in the list and click the <strong>Edit</strong> (pencil) icon. Non-draft timesheets (Submitted,
+        Rejected) are only editable within 24 hours of creation.
+      </p>
+      <Tip>
+        Approved or Rejected timesheets open in read-only mode. All fields and the save button are
+        disabled — keyboard shortcuts will not bypass this restriction.
+      </Tip>
+
       <SectionHeading>Labour rows — key fields</SectionHeading>
       <FieldRow label="Employee">Select from the active employee list. Only employees linked to the current department appear unless the user has full scope.</FieldRow>
       <FieldRow label="Start / End Time">HH:MM format. For OPN (Open Shift) end time can be earlier than start time — the system treats it as the following day and shows a 🌙 +1 day badge.</FieldRow>
@@ -320,13 +331,18 @@ function WocSection() {
       </p>
       <FieldRow label="ROLE-009 — Production">WO Complete list shows Production department records only. Timesheet validation counts only Production timesheets.</FieldRow>
       <FieldRow label="ROLE-010 — Installation">WO Complete list shows Installation department records only. Timesheet validation counts INST timesheets with Digital Tech = No.</FieldRow>
-      <FieldRow label="ROLE-011/012/013 — Digital">Timesheet validation counts Digital department timesheets with Digital Tech = Yes.</FieldRow>
+      <FieldRow label="ROLE-011/012/013 — Digital">WO Complete list shows Digital department records only. Timesheet validation counts Digital department timesheets with Digital Tech = Yes. The timesheets list is hard-scoped server-side — these roles can never see records from other departments regardless of filters.</FieldRow>
 
       <SectionHeading>View modal tabs</SectionHeading>
       <FieldRow label="Details">Core fields: doc no, work order, project, customer, department, WO Completion Status, NetSuite WO Status, completed date, entered by, remarks.</FieldRow>
       <FieldRow label="Timesheets">Shows Approved and Rejected timesheets in separate tables. Approved table includes a <strong>Data Entry</strong> column (Completed / Pending). Scoped to the user's role if applicable.</FieldRow>
       <FieldRow label="QC Records">Visible for Production department WOCs only. Lists all QC inspections for the work order.</FieldRow>
       <FieldRow label="Attachments">File attachments for this WO Complete record. Upload by dragging or clicking.</FieldRow>
+
+      <SectionHeading>Filtering the WO Complete list</SectionHeading>
+      <FieldRow label="Date From / Date To">Filters by the <strong>Completion Date</strong> entered on the record.</FieldRow>
+      <FieldRow label="Status">Narrows to a specific WO Completion Status (e.g. WO Completed, In Progress).</FieldRow>
+      <FieldRow label="Department">Filters by department name. Role-based restrictions always take precedence — ROLE-009 is locked to Production, ROLE-010 to Installation, ROLE-011/012/013 to Digital.</FieldRow>
 
       <Tip>
         The WO Complete status badge in the view modal uses the label <em>WO Completion Status</em> (not

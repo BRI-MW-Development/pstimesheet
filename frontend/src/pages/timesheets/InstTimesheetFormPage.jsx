@@ -222,6 +222,7 @@ export default function InstTimesheetFormPage() {
 
   function handleSubmit(e) {
     e.preventDefault();
+    if (isReadonly) return;
     if (wocWarning) { toast('Cannot save: work order is already complete.', 'error'); return; }
     if (!header.projectId?.trim())  { toast('Project ID is required.',  'error'); return; }
     if (!header.workOrder?.trim())  { toast('Work Order is required.',  'error'); return; }
@@ -408,7 +409,7 @@ export default function InstTimesheetFormPage() {
           </div>
         )}
 
-        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : undefined }}>
+        <div className="ts-modal-body" style={{ flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : undefined }} {...(isReadonly ? { inert: '' } : {})}>
           {/* Left panel — header fields */}
           <div className="ts-form-panel" style={{ pointerEvents: isReadonly ? 'none' : undefined, display: isMobile && mobTab === 'entries' ? 'none' : undefined }}>
             <div className="ts-field-group">

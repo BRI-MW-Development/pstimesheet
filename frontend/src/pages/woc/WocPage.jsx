@@ -74,7 +74,7 @@ const DIGITAL_ROLES = ['ROLE-011', 'ROLE-012', 'ROLE-013'];
 
 function getTsParamsByRole(roleCode, workOrderNumber) {
   if (DIGITAL_ROLES.includes(roleCode))
-    return { workOrderNo: workOrderNumber, department: 'Digital', digitalTech: 'Yes' };
+    return { workOrderNo: workOrderNumber, type: 'INST', department: 'Digital', digitalTech: 'Yes' };
   if (roleCode === 'ROLE-010')
     return { workOrderNo: workOrderNumber, type: 'INST', digitalTech: 'No' };
   return { workOrderNo: workOrderNumber };
