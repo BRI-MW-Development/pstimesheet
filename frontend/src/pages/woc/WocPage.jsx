@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
@@ -188,9 +188,9 @@ function WocFormModal({ initial, onClose, onSaved }) {
   }));
 
   function onProjectChange(pid) {
-    const proj = tsProjects.find(p => p.projectId === pid);
+    const proj = woProjects.find(p => p.projectId === pid);
     const raw  = proj?.projectName ?? '';
-    const customer = raw.includes(':') ? raw.split(':').slice(1).join(':').trim() : raw;
+    const customer = proj?.customerName || (raw.includes(':') ? raw.split(':').slice(1).join(':').trim() : raw);
     setForm(f => ({ ...f, projectId: pid, customerName: customer, workOrderNumber: '', workOrderStatus: '', sourceType: '', department: '' }));
     setTsRows(null);
   }
@@ -267,7 +267,21 @@ function WocFormModal({ initial, onClose, onSaved }) {
     save(form);
   }
 
-  const projOptions = tsProjects.map(p => ({ value: p.projectId, label: p.projectId }));
+  // Build project list from ERP work orders so outsourced projects (no timesheets) also appear
+  const woProjects = useMemo(() => {
+    const map = new Map();
+    allWorkOrders.forEach(w => {
+      if (w.projectCode && !map.has(w.projectCode)) {
+        map.set(w.projectCode, { projectId: w.projectCode, projectName: w.projectName ?? '', customerName: w.customerName ?? '' });
+      }
+    });
+    // Merge in any timesheet-only projects not in ERP WOs
+    tsProjects.forEach(p => {
+      if (!map.has(p.projectId)) map.set(p.projectId, { projectId: p.projectId, projectName: p.projectName ?? '', customerName: '' });
+    });
+    return [...map.values()].sort((a, b) => a.projectId.localeCompare(b.projectId));
+  }, [allWorkOrders, tsProjects]);
+  const projOptions = woProjects.map(p => ({ value: p.projectId, label: p.projectId }));
 
   return (
     <Modal title="" onClose={onClose} size="lg">
