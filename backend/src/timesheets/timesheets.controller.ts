@@ -97,13 +97,14 @@ export class TimesheetsController {
     ]);
     const isAdmin = ['Admin', 'Manager', 'Supervisor'].includes(roleCode);
 
-    // Role-based WO scope overrides — hard-enforced server-side, frontend cannot override
+    // Role-based WO scope overrides — only applied to INST type (digital scope is INST-specific)
     const DIGITAL_ROLES = ['ROLE-011', 'ROLE-012', 'ROLE-013'];
-    if (DIGITAL_ROLES.includes(roleCode)) {
+    const effectiveType = type?.toUpperCase();
+    if (DIGITAL_ROLES.includes(roleCode) && (!effectiveType || effectiveType === 'INST')) {
       digitalTech = 'Yes';
       department  = 'Digital';
-      if (!type) type = 'INST'; // digital timesheets are INST type — ensure correct permission check
-    } else if (roleCode === 'ROLE-010') {
+      if (!type) type = 'INST'; // ensure correct permission check when type omitted
+    } else if (roleCode === 'ROLE-010' && (!effectiveType || effectiveType === 'INST')) {
       digitalTech = 'No';
     }
 
