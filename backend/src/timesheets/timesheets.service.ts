@@ -1674,7 +1674,7 @@ export class TimesheetsService implements OnModuleInit {
         ) AS durationMinutes,
         ep.netsuiteId
       FROM PSTsHeader h
-      JOIN PSTsLabourLine l ON l.tsId = h.tsId
+      JOIN PSTsLabourLine l ON l.tsId = h.tsId AND (l.nonProjectRelated = 0 OR l.nonProjectRelated IS NULL)
       LEFT JOIN PSTsEmployeeProfile ep ON ep.employeeNo = l.employeeCode
       ${where}
       ORDER BY h.entryDate, h.tsDocNo, l.lineNumber
