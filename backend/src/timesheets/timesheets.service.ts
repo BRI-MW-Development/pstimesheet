@@ -1704,13 +1704,13 @@ export class TimesheetsService implements OnModuleInit {
     return rows.map((r) => ({
       externalId:       `${r.tsDocNo}-${r.lineNumber}`,
       employee:         r.netsuiteId ?? '',
-      date:             r.entryDate ?? '',
+      date:             r.entryDate ? r.entryDate.split('-').reverse().join('/') : '',
       customer:         r.projectId ?? '',
       branch:           '115',
       documentLocation: '1038',
       department:       '21',
       duration:         (() => { const m = Number(r.durationMinutes) || 0; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })(),
-      memo:             projectNameMap.get(r.projectId) ?? r.projectName ?? '',
+      memo:             (() => { const n = projectNameMap.get(r.projectId) ?? r.projectName ?? ''; const idx = n.indexOf(':'); return idx !== -1 ? n.slice(idx + 1).trim() : n; })(),
       serviceItem:      '37239',
       // extra context for the preview table
       _tsDocNo:       r.tsDocNo,
