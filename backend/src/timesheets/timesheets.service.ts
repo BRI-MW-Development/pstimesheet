@@ -1657,7 +1657,7 @@ export class TimesheetsService implements OnModuleInit {
       SELECT
         h.tsDocNo,
         CONVERT(VARCHAR(10), h.entryDate, 120) AS entryDate,
-        h.projectId,
+        COALESCE(l.projectId, h.projectId) AS projectId,
         h.projectName,
         h.status,
         l.lineNumber,
