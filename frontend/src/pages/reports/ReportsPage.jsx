@@ -495,18 +495,164 @@ function DetailReport({ tsType, onBack }) {
   );
 }
 
+// ── NetSuite Projects Export ───────────────────────────────────────────────────
+function NetsuiteExportReport({ onBack }) {
+  const BLANK = { dateFrom: '', dateTo: '', status: '' };
+  const [filters, setFilters] = useState(BLANK);
+  const [submitted, setSubmitted] = useState(null);
+
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ['rpt-netsuite-proj', submitted],
+    queryFn: () => api.get('/timesheets/report-netsuite-proj', { params: submitted }).then((r) => r.data),
+    enabled: Boolean(submitted),
+  });
+
+  const missingNetsuite = rows.filter((r) => !r._hasNetsuiteId);
+
+  function doExport() {
+    const headers = ['External ID', 'Employee', 'Date', 'Customer', 'Branch', 'Document Location', 'Department', 'Duration', 'Memo', 'Service Item'];
+    const data = rows.map((r) => [r.externalId, r.employee, r.date, r.customer, r.branch, r.documentLocation, r.department, r.duration, r.memo, r.serviceItem]);
+    exportCSV(headers, data, `netsuite-proj-export-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+
+  return (
+    <div className="page-content">
+      <ReportHeader
+        title="NetSuite Export — Projects Team"
+        sub="Approved PROJ timesheets formatted for NetSuite import · one row per labour line"
+        onBack={onBack}
+        onClear={() => { setFilters(BLANK); setSubmitted(null); }}
+        onExport={doExport}
+        hasData={rows.length > 0}
+      />
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-body" style={{ padding: '14px 16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, alignItems: 'end' }}>
+            <div>
+              <label className="form-label">Date From</label>
+              <input type="date" className="form-control form-control-sm" value={filters.dateFrom}
+                onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} />
+            </div>
+            <div>
+              <label className="form-label">Date To</label>
+              <input type="date" className="form-control form-control-sm" value={filters.dateTo}
+                onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
+            </div>
+            <div>
+              <label className="form-label">Status</label>
+              <select className="form-control form-control-sm" value={filters.status}
+                onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
+                <option value="">All Statuses</option>
+                <option>Draft</option>
+                <option>Submitted</option>
+                <option>Approved</option>
+                <option>Rejected</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button className="btn btn-primary btn-sm" style={{ width: '100%' }} onClick={() => setSubmitted({ ...filters })}>
+                Run Report
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {missingNetsuite.length > 0 && submitted && (
+        <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b', fontSize: 12, color: '#b45309' }}>
+          <strong>Warning:</strong> {missingNetsuite.length} line{missingNetsuite.length !== 1 ? 's' : ''} have no NetSuite ID set for their employee.
+          Go to <strong>Masters → Employees</strong> to set the NetSuite ID for each employee before exporting.
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+          {[
+            { label: 'Total Lines',   value: rows.length },
+            { label: 'Timesheets',    value: new Set(rows.map((r) => r._tsDocNo)).size },
+            { label: 'Missing NS ID', value: missingNetsuite.length },
+          ].map((k) => (
+            <div key={k.label} className="card" style={{ marginBottom: 0, flex: 1, minWidth: 110 }}>
+              <div className="card-body" style={{ padding: '12px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: k.label === 'Missing NS ID' && k.value > 0 ? '#f59e0b' : 'var(--accent)' }}>{k.value}</div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>{k.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="card" style={{ marginBottom: 0 }}>
+        <div className="card-body" style={{ padding: 0 }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="wip-table" style={{ minWidth: 900 }}>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>External ID</th>
+                  <th>Employee (NS ID)</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th style={{ textAlign: 'right' }}>Duration</th>
+                  <th>Memo (Project)</th>
+                  <th>Branch</th>
+                  <th>Doc Location</th>
+                  <th>Dept</th>
+                  <th>Service Item</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  <tr><td colSpan={12} style={{ textAlign: 'center', color: 'var(--text3)', padding: 40 }}>Loading…</td></tr>
+                ) : rows.length === 0 ? (
+                  <tr><td colSpan={12} style={{ textAlign: 'center', color: 'var(--text3)', padding: 40 }}>
+                    {submitted ? 'No records found.' : 'Select filters and click Run Report'}
+                  </td></tr>
+                ) : rows.map((r, i) => (
+                  <tr key={r.externalId}>
+                    <td style={{ color: 'var(--text3)', fontSize: 11 }}>{i + 1}</td>
+                    <td><span className="doc-no" style={{ fontSize: 11 }}>{r.externalId}</span></td>
+                    <td>
+                      {r._hasNetsuiteId
+                        ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{r.employee}</span>
+                        : <span style={{ color: '#f59e0b', fontSize: 11 }} title={r._employeeName}>⚠ {r._employeeName ?? '—'}</span>}
+                    </td>
+                    <td>{formatDate(r.date)}</td>
+                    <td>{r.customer || '—'}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.duration}h</td>
+                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.memo}>{r.memo || '—'}</td>
+                    <td style={{ color: 'var(--text3)' }}>{r.branch}</td>
+                    <td style={{ color: 'var(--text3)' }}>{r.documentLocation}</td>
+                    <td style={{ color: 'var(--text3)' }}>{r.department}</td>
+                    <td style={{ color: 'var(--text3)' }}>{r.serviceItem}</td>
+                    <td><Badge variant={STATUS_VARIANT[r._status] ?? 'draft'}>{r._status}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Report Cards (main) ────────────────────────────────────────────────────────
 const REPORT_CARDS = [
-  { id: 'summary', icon: '📊', title: 'Timesheet Summary',   desc: 'Timesheet list with labour counts, duration and status by date range' },
-  { id: 'PROD',    icon: '🔧', title: 'Production Detail',   desc: 'Line-level breakdown for Production timesheets' },
-  { id: 'INST',    icon: '🏗️', title: 'Installation Detail', desc: 'Line-level breakdown for Installation timesheets' },
-  { id: 'PROJ',    icon: '📁', title: 'Project Detail',      desc: 'Line-level breakdown for Project timesheets' },
+  { id: 'summary',  icon: '📊', title: 'Timesheet Summary',         desc: 'Timesheet list with labour counts, duration and status by date range' },
+  { id: 'PROD',     icon: '🔧', title: 'Production Detail',         desc: 'Line-level breakdown for Production timesheets' },
+  { id: 'INST',     icon: '🏗️', title: 'Installation Detail',       desc: 'Line-level breakdown for Installation timesheets' },
+  { id: 'PROJ',     icon: '📁', title: 'Project Detail',            desc: 'Line-level breakdown for Project timesheets' },
+  { id: 'netsuite', icon: '📤', title: 'NetSuite Export — Projects', desc: 'Export approved Project timesheets in NetSuite import format (CSV)' },
 ];
 
 export default function ReportsPage() {
-  const [view, setView] = useState('cards'); // 'cards' | 'summary' | 'PROD' | 'INST' | 'PROJ'
+  const [view, setView] = useState('cards'); // 'cards' | 'summary' | 'PROD' | 'INST' | 'PROJ' | 'netsuite'
 
   if (view === 'summary') return <SummaryReport onBack={() => setView('cards')} />;
+  if (view === 'netsuite') return <NetsuiteExportReport onBack={() => setView('cards')} />;
   if (['PROD', 'INST', 'PROJ'].includes(view)) return <DetailReport tsType={view} onBack={() => setView('cards')} />;
 
   return (

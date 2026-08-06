@@ -61,6 +61,7 @@ function EmployeeDetail({ emp, onClose, onEdit }) {
         <div className="detail-row"><span>Sub-Department</span><span>{emp.subDepartment ?? '—'}</span></div>
         <div className="detail-row"><span>Category</span><span>{emp.category ?? '—'}</span></div>
         <div className="detail-row"><span>Email</span><span>{emp.emailId ?? '—'}</span></div>
+        <div className="detail-row"><span>NetSuite ID</span><span>{emp.netsuiteId ?? '—'}</span></div>
         <div className="detail-row"><span>Subsidiary</span><span>{emp.subsidiaryCode ?? '—'}</span></div>
         <div className="detail-row"><span>Location</span><span>{[emp.city, emp.emiratesOrState].filter(Boolean).join(', ') || '—'}</span></div>
         <div className="detail-row"><span>Status</span><Badge variant={emp.status === 'Active' ? 'active' : 'inactive'}>{emp.status ?? '—'}</Badge></div>
@@ -83,6 +84,7 @@ function EmployeeEditModal({ emp, onClose }) {
 
   const [form, setForm] = useState({
     emailId: emp.emailId ?? '', subDepartment: emp.subDepartment ?? '', category: emp.category ?? '',
+    netsuiteId: emp.netsuiteId ?? '',
   });
 
   const { mutate: save, isPending: saving } = useMutation({
@@ -164,6 +166,11 @@ function EmployeeEditModal({ emp, onClose }) {
               ))}
             </select>
           </div>
+          <div className="form-group">
+            <label className="form-label">NetSuite ID</label>
+            <input className="form-control" placeholder="e.g. 1234"
+              value={form.netsuiteId} onChange={(e) => setForm((f) => ({ ...f, netsuiteId: e.target.value }))} />
+          </div>
         </div>
 
         <div className="modal-foot">
@@ -215,6 +222,7 @@ export default function EmployeesPage() {
     { key: 'subDepartment',  label: 'Sub-Dept',        sort: true,  render: (r) => r.subDepartment ?? '—' },
     { key: 'category',       label: 'Category',        sort: true,  render: (r) => r.category ?? '—' },
     { key: 'emailId',        label: 'Email',           sort: true,  render: (r) => r.emailId ?? '—' },
+    { key: 'netsuiteId',     label: 'NetSuite ID',     sort: true,  render: (r) => r.netsuiteId ?? '—' },
     {
       key: 'status', label: 'Status', sort: true,
       render: (row) => (

@@ -19,6 +19,7 @@ export interface EmployeeMasterRow {
   city: string | null;
   status: string | null;
   imageUrl: string | null;
+  netsuiteId: string | null;
 }
 
 @Injectable()
@@ -47,6 +48,10 @@ export class EmployeesService implements OnModuleInit {
       await this.devPool.request().query(`
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsEmployeeProfile') AND name='imageS3Key')
           ALTER TABLE PSTsEmployeeProfile ADD imageS3Key NVARCHAR(500) NULL
+      `);
+      await this.devPool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('PSTsEmployeeProfile') AND name='netsuiteId')
+          ALTER TABLE PSTsEmployeeProfile ADD netsuiteId NVARCHAR(50) NULL
       `);
       this.logger.log('PSTsEmployeeProfile table ready');
     } catch (err) {
@@ -109,7 +114,7 @@ export class EmployeesService implements OnModuleInit {
 
     const [erpResult, profileResult] = await Promise.all([
       request.query<any>(sql),
-      this.devPool.request().query<any>(`SELECT employeeNo, emailId, subDepartment, category, imageUrl, imageS3Key FROM PSTsEmployeeProfile`).catch(() => ({ recordset: [] as any[] })),
+      this.devPool.request().query<any>(`SELECT employeeNo, emailId, subDepartment, category, imageUrl, imageS3Key, netsuiteId FROM PSTsEmployeeProfile`).catch(() => ({ recordset: [] as any[] })),
     ]);
 
     const profileMap = new Map((profileResult.recordset as any[]).map((p) => [p.employeeNo, p]));
@@ -136,6 +141,7 @@ export class EmployeesService implements OnModuleInit {
         city:           r.city,
         status:         r.status,
         imageUrl,
+        netsuiteId:     profile?.netsuiteId   ?? null,
       };
     }));
 
@@ -144,7 +150,7 @@ export class EmployeesService implements OnModuleInit {
   }
 
   async updateProfile(employeeNo: string, body: {
-    emailId?: string; subDepartment?: string; category?: string; imageUrl?: string;
+    emailId?: string; subDepartment?: string; category?: string; imageUrl?: string; netsuiteId?: string;
   }): Promise<void> {
     await this.devPool.request()
       .input('employeeNo',    mssql.NVarChar(30),  employeeNo)
@@ -152,15 +158,16 @@ export class EmployeesService implements OnModuleInit {
       .input('subDepartment', mssql.NVarChar(100), body.subDepartment ?? null)
       .input('category',      mssql.NVarChar(100), body.category      ?? null)
       .input('imageUrl',      mssql.NVarChar(500), body.imageUrl      ?? null)
+      .input('netsuiteId',    mssql.NVarChar(50),  body.netsuiteId    ?? null)
       .query(`
         MERGE PSTsEmployeeProfile AS target
         USING (SELECT @employeeNo AS employeeNo) AS source ON target.employeeNo = source.employeeNo
         WHEN MATCHED THEN
           UPDATE SET emailId=@emailId, subDepartment=@subDepartment,
-                     category=@category, imageUrl=@imageUrl, updatedAt=GETDATE()
+                     category=@category, imageUrl=@imageUrl, netsuiteId=@netsuiteId, updatedAt=GETDATE()
         WHEN NOT MATCHED THEN
-          INSERT (employeeNo, emailId, subDepartment, category, imageUrl)
-          VALUES (@employeeNo, @emailId, @subDepartment, @category, @imageUrl);
+          INSERT (employeeNo, emailId, subDepartment, category, imageUrl, netsuiteId)
+          VALUES (@employeeNo, @emailId, @subDepartment, @category, @imageUrl, @netsuiteId);
       `);
     this.logger.log(`Updated PSTsEmployeeProfile for employeeNo=${employeeNo}`);
   }

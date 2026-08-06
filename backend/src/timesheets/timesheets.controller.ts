@@ -464,6 +464,17 @@ export class TimesheetsController {
     return this.timesheetsService.reportDetail({ dateFrom, dateTo, type, status, department, workOrderNo, projectId, teamCodes, dataEntryCompleted, completedDateFrom, completedDateTo, digitalTech });
   }
 
+  @Get('report-netsuite-proj')
+  async reportNetsuiteProj(
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo')   dateTo?: string,
+    @Query('status')   status?: string,
+    @Req() req?: any,
+  ) {
+    await this.timesheetsService.assertPermission(req?.currentUser?.roleCode ?? '', 'PROJ', 'canReport');
+    return this.timesheetsService.netsuiteExportProj({ dateFrom, dateTo, status });
+  }
+
   @Get('report-summary')
   async reportSummary(
     @Query('dateFrom')   dateFrom?: string,

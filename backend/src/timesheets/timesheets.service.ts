@@ -1637,4 +1637,66 @@ export class TimesheetsService implements OnModuleInit {
     `);
     if (result.rowsAffected[0] === 0) throw new Error(`Timesheet ${docNo} not found`);
   }
+
+  // ── NetSuite PROJ export ────────────────────────────────────────
+  async netsuiteExportProj(params: { dateFrom?: string; dateTo?: string; status?: string }): Promise<any[]> {
+    const { dateFrom, dateTo, status } = params;
+    const req = this.devPool.request();
+    if (dateFrom) req.input('dateFrom', mssql.NVarChar(20), dateFrom);
+    if (dateTo)   req.input('dateTo',   mssql.NVarChar(20), dateTo);
+    if (status)   req.input('status',   mssql.NVarChar(20), status);
+
+    const where = `
+      WHERE h.isDeleted = 0
+        AND h.tsType = 'PROJ'
+        ${dateFrom ? 'AND CONVERT(DATE, h.entryDate) >= @dateFrom' : ''}
+        ${dateTo   ? 'AND CONVERT(DATE, h.entryDate) <= @dateTo'   : ''}
+        ${status   ? 'AND h.status = @status'                       : ''}`;
+
+    const result = await req.query(`
+      SELECT
+        h.tsDocNo,
+        CONVERT(VARCHAR(10), h.entryDate, 120) AS entryDate,
+        h.projectId,
+        h.projectName,
+        h.status,
+        l.lineNumber,
+        l.employeeName,
+        l.employeeCode,
+        ISNULL(
+          NULLIF(l.durationMinutes, 0),
+          CASE
+            WHEN l.startTime IS NOT NULL AND l.startTime <> ''
+             AND l.endTime   IS NOT NULL AND l.endTime   <> ''
+            THEN DATEDIFF(MINUTE, TRY_CAST(l.startTime AS TIME), TRY_CAST(l.endTime AS TIME))
+            ELSE 0
+          END
+        ) AS durationMinutes,
+        ep.netsuiteId
+      FROM PSTsHeader h
+      JOIN PSTsLabourLine l ON l.tsId = h.tsId
+      LEFT JOIN PSTsEmployeeProfile ep ON ep.employeeNo = l.employeeCode
+      ${where}
+      ORDER BY h.entryDate, h.tsDocNo, l.lineNumber
+    `);
+
+    return result.recordset.map((r) => ({
+      externalId:       `${r.tsDocNo}-${r.lineNumber}`,
+      employee:         r.netsuiteId ?? '',
+      date:             r.entryDate ?? '',
+      customer:         r.projectId ?? '',
+      branch:           '115',
+      documentLocation: '1038',
+      department:       '21',
+      duration:         r.durationMinutes > 0 ? (r.durationMinutes / 60).toFixed(2) : '0.00',
+      memo:             r.projectName ?? '',
+      serviceItem:      '37239',
+      // extra context for the preview table
+      _tsDocNo:    r.tsDocNo,
+      _lineNumber: r.lineNumber,
+      _employeeName: r.employeeName,
+      _status:     r.status,
+      _hasNetsuiteId: Boolean(r.netsuiteId),
+    }));
+  }
 }
