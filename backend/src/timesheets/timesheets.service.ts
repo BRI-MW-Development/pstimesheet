@@ -1680,7 +1680,28 @@ export class TimesheetsService implements OnModuleInit {
       ORDER BY h.entryDate, h.tsDocNo, l.lineNumber
     `);
 
-    return result.recordset.map((r) => ({
+    const rows = result.recordset;
+
+    // Enrich with project names from ERP using the resolved projectId
+    const projectIds = [...new Set(rows.map((r) => r.projectId).filter(Boolean))];
+    let projectNameMap = new Map<string, string>();
+    if (projectIds.length > 0) {
+      try {
+        const projReq = this.livePool.request();
+        projectIds.forEach((id, i) => projReq.input(`pid${i}`, mssql.NVarChar(50), id));
+        const inClause = projectIds.map((_, i) => `@pid${i}`).join(',');
+        const projRes = await projReq.query(`
+          SELECT CAST(projectCode AS NVARCHAR(50)) AS projectCode, projectName
+          FROM ErpMasterProject
+          WHERE projectCode IN (${inClause})
+        `);
+        projectNameMap = new Map(projRes.recordset.map((r) => [r.projectCode, r.projectName]));
+      } catch {
+        // ERP unavailable — fall back to header projectName
+      }
+    }
+
+    return rows.map((r) => ({
       externalId:       `${r.tsDocNo}-${r.lineNumber}`,
       employee:         r.netsuiteId ?? '',
       date:             r.entryDate ?? '',
@@ -1689,13 +1710,13 @@ export class TimesheetsService implements OnModuleInit {
       documentLocation: '1038',
       department:       '21',
       duration:         (() => { const m = Number(r.durationMinutes) || 0; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })(),
-      memo:             r.projectName ?? '',
+      memo:             projectNameMap.get(r.projectId) ?? r.projectName ?? '',
       serviceItem:      '37239',
       // extra context for the preview table
-      _tsDocNo:    r.tsDocNo,
-      _lineNumber: r.lineNumber,
-      _employeeName: r.employeeName,
-      _status:     r.status,
+      _tsDocNo:       r.tsDocNo,
+      _lineNumber:    r.lineNumber,
+      _employeeName:  r.employeeName,
+      _status:        r.status,
       _hasNetsuiteId: Boolean(r.netsuiteId),
     }));
   }
