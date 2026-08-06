@@ -404,6 +404,23 @@ function ReportsSection() {
         timesheets move to the Completed sub-tab and show the completor's name and timestamp.
       </Tip>
 
+      <SectionHeading>NetSuite Export — Projects Team</SectionHeading>
+      <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+        Go to <strong>Reports → NetSuite Export — Projects</strong>. Generates a CSV formatted for direct
+        import into NetSuite. Each row represents one labour line from an approved Project timesheet.
+        Non-project-related lines are automatically excluded.
+      </p>
+      <FieldRow label="Before exporting">
+        Each employee must have a <strong>NetSuite ID</strong> set in <strong>Masters → Employees</strong>.
+        The preview table highlights any lines with a missing NetSuite ID with a warning badge — set
+        those IDs first, then re-run the report.
+      </FieldRow>
+      <FieldRow label="Filters">Date From / Date To filter by timesheet entry date. Status defaults to all — typically run with <strong>Approved</strong> selected.</FieldRow>
+      <FieldRow label="CSV columns">External ID · Employee (NetSuite ID) · Date (DD/MM/YYYY) · Customer (Project ID) · Branch · Document Location · Department · Duration (HH:MM) · Memo (Project Name) · Service Item.</FieldRow>
+      <FieldRow label="Fixed values">Branch = 115 · Document Location = 1038 · Department = 21 · Service Item = 37239.</FieldRow>
+      <FieldRow label="External ID">Combination of the timesheet document number and the labour line number — e.g. <code>TS-PROJ-2026-0310-1</code>.</FieldRow>
+      <FieldRow label="Permission">Requires <code>PROJ → canReport</code>.</FieldRow>
+
       <SectionHeading>Analytics</SectionHeading>
       <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
         Analytics is a separate top-level menu in the sidebar. Select a date range at the top of the page,

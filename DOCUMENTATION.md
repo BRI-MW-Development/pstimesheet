@@ -1,7 +1,7 @@
 # OpsDesk — Technical Documentation
 
-**Version:** 4.2  
-**Last Updated:** July 2026  
+**Version:** 4.3  
+**Last Updated:** August 2026  
 **Repository:** https://github.com/BRI-MW-Development/pstimesheet  
 **Company:** Professional Signs LLC (BRI)
 
@@ -979,6 +979,34 @@ curl http://localhost:3000/api/auth/login \
 ---
 
 ## Changelog
+
+### v4.3 (August 2026)
+New feature: NetSuite Export report for Projects Team timesheets. Employee master NetSuite ID field. Bug fixes for NetSuite export accuracy.
+
+**NetSuite Export — Projects Team (new report)**
+- New report card under **Reports** → **NetSuite Export — Projects**. Generates a 10-column CSV formatted for direct NetSuite import.
+- Output columns: `External ID`, `Employee`, `Date`, `Customer`, `Branch`, `Document Location`, `Department`, `Duration`, `Memo`, `Service Item`.
+- One CSV row per labour line per PROJ timesheet. External ID = `{tsDocNo}-{lineNumber}`.
+- Non-project-related labour lines are excluded from the export.
+- Fixed values per client spec: Branch = `115`, Document Location = `1038`, Department = `21`, Service Item = `37239`.
+- Duration output in `HH:MM` format. Date output in `DD/MM/YYYY` format.
+- Customer = per-line `projectId` (falls back to header `projectId`). Memo = project name from `ErpMasterProject` lookup (part after `:` only), falling back to `PSTsHeader.projectName` if ERP is unavailable.
+- Preview table warns which lines have employees with no NetSuite ID set, with a badge count of missing records.
+- Backend: `GET /timesheets/report-netsuite-proj` accepts `dateFrom`, `dateTo`, `status`. Requires `PROJ → canReport` permission.
+
+**Employee Master — NetSuite ID field**
+- New `netsuiteId NVARCHAR(50)` column added to `PSTsEmployeeProfile` via `onModuleInit()` migration.
+- `PATCH /employees/:employeeNo` now reads and saves `netsuiteId`.
+- `GET /employees` now returns `netsuiteId` in each employee row.
+- **Masters → Employees**: NetSuite ID is visible in the employee detail panel, table column, and editable in the edit modal. Set this before running the NetSuite export.
+
+**NetSuite export bug fixes**
+- `projectId` (Customer column): was blank when project was selected at the labour-line level rather than the header. Fixed with `COALESCE(l.projectId, h.projectId)`.
+- `projectName` (Memo column): was blank for the same reason — header `projectName` only reflects the header-level project. Now resolved via a batch `ErpMasterProject` lookup keyed by the resolved `projectId`.
+- Project name truncated: full ERP project name contains a `prefix : actual-name` pattern. Only the part after `:` is now used for the Memo column.
+- Date "Invalid Date" / day-month swap: the preview table was passing the pre-formatted `DD/MM/YYYY` string into `formatDate()`, which re-parsed it as `MM/DD/YYYY`. Now displayed as-is.
+
+---
 
 ### v4.2 (July 2026)
 Bug fixes: WOC NULL bypass, read-only keyboard bypass, WO filter, ROLE-011 timesheets scope, Project Timesheet edit window.
