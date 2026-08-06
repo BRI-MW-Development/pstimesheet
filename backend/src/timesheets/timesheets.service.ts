@@ -1688,7 +1688,7 @@ export class TimesheetsService implements OnModuleInit {
       branch:           '115',
       documentLocation: '1038',
       department:       '21',
-      duration:         r.durationMinutes > 0 ? (r.durationMinutes / 60).toFixed(2) : '0.00',
+      duration:         (() => { const m = Number(r.durationMinutes) || 0; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })(),
       memo:             r.projectName ?? '',
       serviceItem:      '37239',
       // extra context for the preview table

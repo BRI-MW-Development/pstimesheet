@@ -621,7 +621,7 @@ function NetsuiteExportReport({ onBack }) {
                     </td>
                     <td>{formatDate(r.date)}</td>
                     <td>{r.customer || '—'}</td>
-                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.duration}h</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.duration}</td>
                     <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.memo}>{r.memo || '—'}</td>
                     <td style={{ color: 'var(--text3)' }}>{r.branch}</td>
                     <td style={{ color: 'var(--text3)' }}>{r.documentLocation}</td>
