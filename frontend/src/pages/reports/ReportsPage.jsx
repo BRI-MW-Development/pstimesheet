@@ -619,7 +619,7 @@ function NetsuiteExportReport({ onBack }) {
                         ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{r.employee}</span>
                         : <span style={{ color: '#f59e0b', fontSize: 11 }} title={r._employeeName}>⚠ {r._employeeName ?? '—'}</span>}
                     </td>
-                    <td>{formatDate(r.date)}</td>
+                    <td>{r.date}</td>
                     <td>{r.customer || '—'}</td>
                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.duration}</td>
                     <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.memo}>{r.memo || '—'}</td>
