@@ -103,6 +103,9 @@ html, body { height: 100%; overflow: hidden; }
   grid-template-columns: repeat(3, 1fr);
   gap: 18px;
 }
+@media (max-width: 1100px) {
+  .form-row { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+}
 
 /* Lines-table alias (legacy uses .line-table, React uses .lines-table) */
 .lines-table { width: 100%; border-collapse: collapse; }
@@ -738,9 +741,13 @@ html, body { height: 100%; overflow: hidden; }
   width: 100% !important;
   min-width: 0;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
   padding: 24px 32px 40px;
   background: var(--bg);
+}
+
+@media (max-width: 1400px) {
+  .main-content { padding: 16px 20px 32px; }
 }
 
 /* Misc page styles */
@@ -1311,6 +1318,11 @@ html, body { height: 100%; overflow: hidden; }
 /* Desktop: fixed widths for the three panels */
 .qc-panel-details { width: 300px; flex-shrink: 0; }
 .qc-panel-info    { width: 280px; flex-shrink: 0; }
+
+@media (max-width: 1400px) {
+  .qc-panel-details { width: 260px; }
+  .qc-panel-info    { width: 240px; }
+}
 
 /* ≤ 768px (mobile): tighter padding in checklist panel */
 @media (max-width: 768px) {

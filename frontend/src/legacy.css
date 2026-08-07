@@ -1777,6 +1777,24 @@ body.mobile-menu-open .mobile-menu-backdrop { display: block; }
 /* ══════════════════════════════════════════════════════════════
    MOBILE  ≤ 768px
 ══════════════════════════════════════════════════════════════ */
+/* ── 13-inch / laptop breakpoint (1280–1400px) ───────────── */
+@media (max-width: 1400px) {
+  /* Nav: allow items to overflow-scroll rather than clip */
+  .top-group-menu { overflow-x: auto; }
+
+  /* Timesheet form: slightly narrower side panel */
+  .ts-form-panel { width: 220px; }
+
+  /* Page headers: allow action buttons to wrap */
+  .wip-list-header { flex-wrap: wrap; gap: 10px; }
+
+  /* Card bodies: tighter padding */
+  .card-body { padding: 14px 16px; }
+
+  /* Modals: use more screen width */
+  .modal-lg { width: 96%; max-width: 96%; }
+}
+
 @media (max-width: 768px) {
   :root { --header-h: 52px; --top-menu-h: 0px; }
 
@@ -2314,6 +2332,7 @@ body.mobile-menu-open .mobile-menu-backdrop { display: block; }
 /* ── Left: form panel ── */
 .ts-form-panel {
   width: 250px;
+  min-width: 200px;
   flex-shrink: 0;
   border-right: 1px solid #e5e7eb;
   padding: 16px 14px;
@@ -2556,6 +2575,7 @@ body.mobile-menu-open .mobile-menu-backdrop { display: block; }
 .ts-scroll-panel {
   flex: 1;
   overflow-y: auto;
+  overflow-x: auto;
   padding: 14px 16px 20px;
   display: flex;
   flex-direction: column;
