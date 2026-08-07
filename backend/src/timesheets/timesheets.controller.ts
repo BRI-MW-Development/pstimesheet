@@ -118,7 +118,7 @@ export class TimesheetsController {
     let teamCodes: string[] | null = null;
     if (!seeAll && employeeCode) {
       const codes = await this.hodTeamsService.getTeamByHod(employeeCode);
-      if (codes.length > 0) teamCodes = codes;
+      if (codes.length > 0) teamCodes = [employeeCode, ...codes];
     }
 
     // HOD team takes full priority — ignore department scope when team is assigned
